@@ -15,7 +15,7 @@ def get_resnet(model: int, pretrained: bool) -> torchvision.models.resnet.ResNet
     Output:
      torchvision.models.resnet[18,34,50,101,152]
 
-    Parameters:
+    Hyperparameters:
     - model: Resnet model from torchvision.models (number of layers): [18,34,50,101,152]
     - pretrained: Load model pretrained weights
     """
@@ -43,7 +43,7 @@ class EncoderCNN(nn.Module):
     Output:
      torch.tensor [batch_size, embedded_size]
 
-    Parameters:
+    Hyperparameters:
     - embedded_size: Size of the feature vectors
     - dropout_cnn: dropout probability for the CNN layers
     - dropout_cnn_out: dropout probability for the CNN representations (output layer)
@@ -99,7 +99,7 @@ class PackFeatureVectors(nn.Module):
     Output:
      torch.tensor [batch_size/sequence_size, sequence_size, embedded_size]
 
-    Parameters:
+    Hyperparameters:
     - sequence_size: Length of each series of features
     """
 
@@ -132,7 +132,7 @@ class EncoderRNN(nn.Module):
      torch.tensor if bidirectional [batch_size, hidden_size*2]
                  else [batch_size, hidden_size]
 
-     Parameters:
+     Hyperparameters:
     - embedded_size: Size of the input feature vectors
     - hidden_size: LSTM hidden size
     - num_layers: number of layers in the LSTM
@@ -193,7 +193,7 @@ class OutputLayer(nn.Module):
      Forward: torch.tensor [batch_size, 12] (output values without softmax)
      Predict: torch.tensor [batch_size, 1] (index of the max value after softmax)
 
-    Parameters:
+    Hyperparameters:
     - hidden_size: Size of the input feature vectors
     - layers: list of integer, for each integer i a linear layer with i neurons will be added.
     """
@@ -249,7 +249,7 @@ class TEDD1104(nn.Module):
      Forward: torch.tensor [batch_size, 12] (output values without softmax)
      Predict: torch.tensor [batch_size, 1] (index of the max value after softmax)
 
-    Parameters:
+    Hyperparameters:
     - resnet: resnet module to use [18,34,50,101,152]
     - pretrained_resnet: Load pretrained resnet weights
     - sequence_size: Length of each series of features
