@@ -16,7 +16,7 @@ video game.
 </p>
 
 ## Architecture
-Most previous models that attempt to achieve self-driving consists of a deep convolutional neural network 
+Most previous models that attempt to achieve self-driving in video games consists of a deep convolutional neural network 
 (usually Inception or Resnet). The models take as input a single image.
  Would you be able to know what to do if I give you this image?
  
