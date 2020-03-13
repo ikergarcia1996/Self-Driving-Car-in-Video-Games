@@ -1,9 +1,8 @@
 # Grabber.py https://gist.github.com/tzickel/5c2c51ddde7a8f5d87be730046612cd0
-
 # Author: tzickel (https://gist.github.com/tzickel)
-
 # A port of https://github.com/phoboslab/jsmpeg-vnc/blob/master/source/grabber.c to python
 # License information (GPLv3) is here https://github.com/phoboslab/jsmpeg-vnc/blob/master/README.md
+
 from ctypes import Structure, c_int, POINTER, WINFUNCTYPE, windll, WinError, sizeof
 from ctypes.wintypes import (
     BOOL,

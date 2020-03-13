@@ -149,7 +149,7 @@ class EncoderRNN(nn.Module):
         num_layers: int,
         bidirectional_lstm: bool,
         dropout_lstm: float,
-        dropout_cnn_out: float,
+        dropout_lstm_out: float,
     ):
         super(EncoderRNN, self).__init__()
 
@@ -162,14 +162,16 @@ class EncoderRNN(nn.Module):
             batch_first=True,
         )
 
-        self.dropout: nn.Dropout = nn.Dropout(p=dropout_cnn_out)
+        self.bidirectional_lstm = bidirectional_lstm
+
+        self.dropout: nn.Dropout = nn.Dropout(p=dropout_lstm_out)
 
     def forward(self, features: torch.tensor):
         output, (h_n, c_n) = self.lstm(features)
         if self.bidirectional_lstm:
             x = torch.cat((h_n[-2], h_n[-1]), 1)
         else:
-            x = self.fc(h_n[-1])
+            x = h_n[-1]
         return self.dropout(x)
 
     def predict(self, features):
@@ -178,7 +180,7 @@ class EncoderRNN(nn.Module):
             if self.bidirectional_lstm:
                 x = torch.cat((h_n[-2], h_n[-1]), 1)
             else:
-                x = self.fc(h_n[-1])
+                x = h_n[-1]
             return x
 
 
@@ -265,11 +267,6 @@ class TEDD1104(nn.Module):
 
     """
 
-    EncoderCNN: nn.Module = EncoderCNN
-    PackFeatureVectors: nn.Module = PackFeatureVectors
-    EncoderRNN: nn.Module = EncoderCNN
-    OutputLayer: nn.Module = OutputLayer
-
     def __init__(
         self,
         resnet: int,
@@ -297,21 +294,21 @@ class TEDD1104(nn.Module):
         self.bidirectional_lstm: bool = bidirectional_lstm
         self.layers_out: List[int] = layers_out
         self.dropout_cnn: float = dropout_cnn
-        self.dropout_fc: float = dropout_cnn_out
+        self.dropout_cnn_out: float = dropout_cnn_out
         self.dropout_lstm: float = dropout_lstm
         self.dropout_lstm_out: float = dropout_lstm_out
 
-        self.EncoderCNN = self.EncoderCNN(
+        self.EncoderCNN = EncoderCNN(
             embedded_size=embedded_size,
             dropout_cnn=dropout_cnn,
-            dropout_fc=dropout_cnn_out,
+            dropout_cnn_out=dropout_cnn_out,
             resnet=resnet,
             pretrained_resnet=pretrained_resnet,
         )
 
-        self.PackFeatureVectors = self.PackFeatureVectors(sequence_size=sequence_size)
+        self.PackFeatureVectors = PackFeatureVectors(sequence_size=sequence_size)
 
-        self.EncoderRNN = self.EncoderRNN(
+        self.EncoderRNN = EncoderRNN(
             embedded_size=embedded_size,
             hidden_size=hidden_size,
             num_layers=num_layers_lstm,
@@ -320,9 +317,9 @@ class TEDD1104(nn.Module):
             dropout_lstm_out=dropout_lstm_out,
         )
 
-        self.OutputLayer = self.OutputLayer(
+        self.OutputLayer = OutputLayer(
             hidden_size=int(hidden_size * 2) if bidirectional_lstm else hidden_size,
-            layers_out=layers_out,
+            layers=layers_out,
         )
 
     def forward(self, x):
@@ -339,7 +336,7 @@ class TEDD1104(nn.Module):
             return self.OutputLayer.predict(x)
 
 
-def save_model(model: TEDD1104, save_dir: str, fp16, amp_opt_level=None) -> None:
+def save_model(model: TEDD1104, save_dir: str, fp16, amp_opt_level: str = None) -> None:
     """
     Save model to a directory. This function stores two files, the hyperparameters and the weights.
 
@@ -367,13 +364,14 @@ def save_model(model: TEDD1104, save_dir: str, fp16, amp_opt_level=None) -> None
     dict_hyperparams: dict = {
         "resnet": model.resnet,
         "pretrained_resnet": model.pretrained_resnet,
+        "sequence_size": model.sequence_size,
         "embedded_size": model.embedded_size,
         "hidden_size": model.hidden_size,
         "num_layers_lstm": model.num_layers_lstm,
         "bidirectional_lstm": model.bidirectional_lstm,
         "layers_out": model.layers_out,
         "dropout_cnn": model.dropout_cnn,
-        "dropout_cnn_out": model.dropout_fc,
+        "dropout_cnn_out": model.dropout_cnn_out,
         "dropout_lstm": model.dropout_lstm,
         "dropout_lstm_out": model.dropout_lstm_out,
         "fp16": fp16,
@@ -391,7 +389,7 @@ def save_model(model: TEDD1104, save_dir: str, fp16, amp_opt_level=None) -> None
     torch.save(obj=model_weights, f=os.path.join(save_dir, "model.bin"))
 
 
-def load_model(save_dir: str) -> (TEDD1104, int):
+def load_model(save_dir: str, decive: torch.device) -> (TEDD1104, int):
     """
     Load a model from directory. The directory should contain a json with the model hyperparameters and a bin file
     with the model weights.
@@ -420,8 +418,8 @@ def load_model(save_dir: str) -> (TEDD1104, int):
         dropout_cnn=dict_hyperparams["dropout_cnn"],
         dropout_cnn_out=dict_hyperparams["dropout_cnn_out"],
         dropout_lstm=dict_hyperparams["dropout_lstm"],
-        dropout_lstm_out=dict_hyperparams["dropout_cnn_out"],
-    )
+        dropout_lstm_out=dict_hyperparams["dropout_lstm_out"],
+    ).to(device=decive)
 
     model_weights = torch.load(f=os.path.join(save_dir, "model.bin"))
 
@@ -434,14 +432,12 @@ def load_model(save_dir: str) -> (TEDD1104, int):
                 "Please install apex from https://www.github.com/nvidia/apex"
             )
 
-        model, optimizer = amp.initialize(
-            model, opt_level=dict_hyperparams["amp_opt_level"]
-        )
+        model = amp.initialize(model, opt_level=dict_hyperparams["amp_opt_level"])
         amp.load_state_dict(model_weights["amp"])
 
     model.load_state_dict(model_weights["model"])
 
-    return model, dict_hyperparams["FP16"]
+    return model, dict_hyperparams["fp16"]
 
 
 def save_checkpoint(
@@ -488,7 +484,7 @@ def save_checkpoint(
         "bidirectional_lstm": model.bidirectional_lstm,
         "layers_out": model.layers_out,
         "dropout_cnn": model.dropout_cnn,
-        "dropout_cnn_out": model.dropout_fc,
+        "dropout_cnn_out": model.dropout_cnn_out,
         "dropout_lstm": model.dropout_lstm,
         "dropout_lstm_out": model.dropout_lstm_out,
         "fp16": fp16,
@@ -509,7 +505,9 @@ def save_checkpoint(
     torch.save(checkpoint, path)
 
 
-def load_checkpoint(path: str) -> (TEDD1104, str, torch.optim, float, int, bool, str):
+def load_checkpoint(
+    path: str, device: torch.device
+) -> (TEDD1104, str, torch.optim, float, int, bool, str):
 
     """
     Restore checkpoint
@@ -553,7 +551,7 @@ def load_checkpoint(path: str) -> (TEDD1104, str, torch.optim, float, int, bool,
         dropout_cnn_out=dict_hyperparams["dropout_cnn_out"],
         dropout_lstm=dict_hyperparams["dropout_lstm"],
         dropout_lstm_out=dict_hyperparams["dropout_lstm_out"],
-    )
+    ).to(device=device)
 
     if optimizer_name == "SGD":
         optimizer = torch.optim.SGD(model.parameters(), lr=0.01, momentum=0.9)

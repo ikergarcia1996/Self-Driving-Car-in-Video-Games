@@ -1,4 +1,5 @@
 import os
+
 from torch.nn import CrossEntropyLoss
 from utils import *
 from model import TEDD1104, save_model, load_checkpoint, save_checkpoint
@@ -9,10 +10,12 @@ import time
 import argparse
 
 if torch.cuda.is_available():
-    device = torch.device("cuda:0")
+    device: torch.device = torch.device("cuda:0")
 else:
-    device = torch.device("cpu")
-    logging.warning("GPU not found, using CPU, training will be very slow")
+    device: torch.device = torch.device("cpu")
+    logging.warning(
+        "GPU not found, using CPU, training will be very slow. CPU NOT COMPATIBLE WITH FP16"
+    )
 
 
 def train(
@@ -68,26 +71,27 @@ def train(
             )
 
     criterion: CrossEntropyLoss = torch.nn.CrossEntropyLoss()
-    X_dev, y_dev = load_dataset(dev_dir, fp=32 if fp16 else 16)
-    X_dev, y_dev = torch.from_numpy(X_dev), torch.from_numpy(y_dev)
+    X_dev, y_dev = load_dataset(dev_dir, fp=16 if fp16 else 31)
+    X_dev = torch.from_numpy(X_dev)
 
-    X_test, y_test = load_dataset(test_dir, fp=32 if fp16 else 16)
-    X_test, y_test = torch.from_numpy(X_test), torch.from_numpy(y_test)
+    X_test, y_test = load_dataset(test_dir, fp=16 if fp16 else 21)
+    X_test = torch.from_numpy(X_test)
 
     acc_dev: float = 0.0
 
     printTrace("Training...")
     for epoch in range(num_epoch):
-        for file_t in glob.glob(train_dir + "*.npz"):
+
+        for file_t in glob.glob(os.path.join(train_dir, "*.npz")):
             model.train()
             start_time: float = time.time()
-            X, y = load_file(path=file_t, fp=32 if fp16 else 16)
+            X, y = load_file(path=file_t, fp=16 if fp16 else 32)
             running_loss = 0.0
             num_batchs = 0
 
             for X_bacth, y_batch in nn_batchs(X, y, batch_size):
                 X_bacth, y_batch = (
-                    torch.from_numpy(X_bacth).half().to(device),
+                    torch.from_numpy(X_bacth).to(device),
                     torch.from_numpy(y_batch).long().to(device),
                 )
                 optimizer.zero_grad()
@@ -112,23 +116,19 @@ def train(
             acc_train = evaluate(
                 model=model,
                 X=torch.from_numpy(X),
-                golds=torch.from_numpy(y),
+                golds=y,
                 device=device,
                 batch_size=batch_size,
             )
 
             acc_dev = evaluate(
-                model=model,
-                X=torch.from_numpy(X_dev),
-                golds=torch.from_numpy(y_dev),
-                device=device,
-                batch_size=batch_size,
+                model=model, X=X_dev, golds=y_dev, device=device, batch_size=batch_size,
             )
 
             acc_test = evaluate(
                 model=model,
-                X=torch.from_numpy(X_test),
-                golds=torch.from_numpy(y_test),
+                X=X_test,
+                golds=y_test,
                 device=device,
                 batch_size=batch_size,
             )
@@ -143,6 +143,7 @@ def train(
             )
 
             if acc_dev > max_acc and save_best:
+                max_acc = acc_dev
                 printTrace(f"New max acc in dev set {max_acc}. Saving model...")
                 save_model(
                     model=model,
@@ -184,7 +185,7 @@ def train_new_model(
     bidirectional_lstm: bool = False,
     layers_out: List[int] = None,
     dropout_cnn: float = 0.1,
-    dropout_fc: float = 0.1,
+    dropout_cnn_out: float = 0.1,
     dropout_lstm: float = 0.1,
     dropout_lstm_out: float = 0.1,
     fp16=True,
@@ -245,10 +246,10 @@ def train_new_model(
         bidirectional_lstm=bidirectional_lstm,
         layers_out=layers_out,
         dropout_cnn=dropout_cnn,
-        dropout_cnn_out=dropout_fc,
+        dropout_cnn_out=dropout_cnn_out,
         dropout_lstm=dropout_lstm,
         dropout_lstm_out=dropout_lstm_out,
-    )
+    ).to(device)
 
     if optimizer_name == "SGD":
         optimizer = optim.SGD(model.parameters(), lr=0.01, momentum=0.9)
@@ -324,8 +325,9 @@ def continue_training(
     """
 
     model, optimizer_name, optimizer, acc_dev, epoch, fp16, opt_level = load_checkpoint(
-        checkpoint_path
+        checkpoint_path, device
     )
+    model = model.to(device)
 
     max_acc = train(
         model=model,
@@ -522,7 +524,6 @@ if __name__ == "__main__":
 
     parser.add_argument(
         "--checkpoint_path",
-        required=True,
         type=str,
         help="[continue_training] Path of the checkpoint to load for continue training it",
     )
@@ -547,7 +548,7 @@ if __name__ == "__main__":
             bidirectional_lstm=args.bidirectional_lstm,
             layers_out=args.layers_out,
             dropout_cnn=args.dropout_cnn,
-            dropout_fc=args.dropout_fc,
+            dropout_cnn_out=args.dropout_cnn_out,
             dropout_lstm=args.dropout_lstm,
             dropout_lstm_out=args.dropout_lstm_out,
             fp16=args.fp16,

@@ -5,70 +5,100 @@
 from keyboard.game_control import ReleaseKey, PressKey
 
 
-def noKey():
+def noKey() -> None:
+    """
+    Release all keys
+    """
     ReleaseKey(0x11)
     ReleaseKey(0x1E)
     ReleaseKey(0x1F)
     ReleaseKey(0x20)
 
 
-def W():
+def W() -> None:
+    """
+    Release all keys and push W
+    """
     PressKey(0x11)
     ReleaseKey(0x1E)
     ReleaseKey(0x1F)
     ReleaseKey(0x20)
 
 
-def A():
+def A() -> None:
+    """
+    Release all keys and push A
+    """
     ReleaseKey(0x11)
     PressKey(0x1E)
     ReleaseKey(0x1F)
     ReleaseKey(0x20)
 
 
-def S():
+def S() -> None:
+    """
+    Release all keys and push S
+    """
     ReleaseKey(0x11)
     ReleaseKey(0x1E)
     PressKey(0x1F)
     ReleaseKey(0x20)
 
 
-def D():
+def D() -> None:
+    """
+    Release all keys and push D
+    """
     ReleaseKey(0x11)
     ReleaseKey(0x1E)
     ReleaseKey(0x1F)
     PressKey(0x20)
 
 
-def WA():
+def WA() -> None:
+    """
+    Release all keys and push W and A
+    """
     PressKey(0x11)
     PressKey(0x1E)
     ReleaseKey(0x1F)
     ReleaseKey(0x20)
 
 
-def WD():
+def WD() -> None:
+    """
+    Release all keys and push W and D
+    """
     PressKey(0x11)
     ReleaseKey(0x1E)
     ReleaseKey(0x1F)
     PressKey(0x20)
 
 
-def SA():
+def SA() -> None:
+    """
+    Release all keys and push S and A
+    """
     ReleaseKey(0x11)
     PressKey(0x1E)
     PressKey(0x1F)
     ReleaseKey(0x20)
 
 
-def SD():
+def SD() -> None:
+    """
+    Release all keys and push S and D
+    """
     ReleaseKey(0x11)
     ReleaseKey(0x1E)
     PressKey(0x1F)
     PressKey(0x20)
 
 
-def select_key(key):
+def select_key(key: int) -> None:
+    """
+    Given a ket in integer format, send to windows the virtual ket push
+    """
     if key == 0:
         noKey()
     elif key == 1:
