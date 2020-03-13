@@ -11,15 +11,15 @@ is used to train the model.
 While we focus on self-driving cars and the video game Grand Theft Auto V this model can be adapted to play any existing
 video game. 
 
-  ![alt text](github_images/demo.gif "Setup Example")
 <p align="center">
-  <img src="github_images/choices.png" alt="gotta go fast!"/>
+  <img src="github_images/demo.gif" alt="gotta go fast!"/>
 </p>
 
 ## Architecture
 Most previous models that attempt to achieve self-driving consists of a deep convolutional neural network 
 (usually Inception or Resnet). The models take as input a single image.
  Would you be able to know what to do if I give you this image?
+ 
 <p align="center">
   <img src="github_images/choices.png" alt="Make a choice"/>
 </p>
@@ -34,7 +34,7 @@ about the motion of other cars, environment and himself.
 
 
 <p align="center">
-  <img src="github_images/choices.png" alt="Sequences 4 the win"/>
+  <img src="github_images/sequence.png" alt="Sequences 4 the win"/>
 </p>
 
 T.E.D.D. 1104 consists of a Deep Convolutional Neural Network (Resnet: K He et al. 2016) followed by 
@@ -44,7 +44,7 @@ for the entire sequence. Finally, a Feed-Forward Neural Network outputs the key 
 on the vector representation for the sequence.
 
 <p align="center">
-  <img src="github_images/choices.png" alt="The brain!"/>
+  <img src="github_images/network_architecture.png" alt="The brain!"/>
 </p>
 
 The model has been implemented using Pytorch: https://pytorch.org/
@@ -83,8 +83,11 @@ python generate_data.py --save_dir tedd1007\training_data
          as files named "training_dataX.npz" (numpy compressed array). Don't worry if you re-launch this script,
           the program will search for already existing dataset files in the directory and it won't overwrite them.
   * At any moment push Q + E to stop the program.
-          
-  ![alt text](github_images/example_config.png "Setup Example")
+  
+<p align="center">
+  <img src="github_images/example_config.png" alt="Setup Example"/>
+</p>
+  
 
 
 ### Train the model
@@ -99,7 +102,6 @@ python train.py --train_new
 --batch_size 10 
 --num_epochs 5 
 --fp16
-
 ```
 * How-to:
   Train a model using the default hyper parameters, to see a description of the network hyper parameters use 
@@ -109,6 +111,19 @@ python train.py --train_new
    (Note: model trained using FP16 cannot be run using FP32 and vice versa). The model is VERY memory demanding, as a
    reference I use a batch size of 10 for a RTX 2080 (8GB VRAM) for FP16 training. 
    
+ * If you want to continue training from a checkpoint use:
+   
+ ```
+python train.py ----continue_training
+--train_dir tedd1007\training_data\train 
+--dev_dir tedd1007\training_data\dev 
+--test_dir tedd1007\training_data\test 
+--output_dir tedd1007\models 
+--batch_size 10 
+--num_epochs 5 
+--checkpoint_path tedd1007\checkpoint\epoch1checkpoint.pt
+--fp16
+```
    
 ### Run the model
 * File: run_TEDD1104.py
@@ -116,7 +131,6 @@ python train.py --train_new
 * Usage example: 
 ```
 python run_TEDD1104.py --model_dir D:\GTAV-AI\models --show_current_control
-
 ```
 * How-to:
   * Set your game in windowed mode
@@ -128,7 +142,9 @@ python run_TEDD1104.py --model_dir D:\GTAV-AI\models --show_current_control
   * Push L to see the input images
   * Push and hold J to use to use manual control
           
-  ![alt text](github_images/example_config.png "Setup Example")
+<p align="center">
+  <img src="github_images/example_config.png" alt="Setup Example"/>
+</p>
   
   
 
@@ -136,10 +152,7 @@ python run_TEDD1104.py --model_dir D:\GTAV-AI\models --show_current_control
 ```
 - Iker García
   Personal Webpage: https://ikergarcia1996.github.io/Iker-Garcia-Ferrero/
-
 ```
 
 This repository is a greatly improved version of the model we published 2 years ago: https://github.com/ikergarcia1996/GTAV-Self-driving-car (by Eritz Yerga and Iker García)
   
-
-
