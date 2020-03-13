@@ -114,7 +114,7 @@ python train.py --train_new
  * If you want to continue training from a checkpoint use:
    
  ```
-python train.py ----continue_training
+python train.py --continue_training
 --train_dir tedd1007\training_data\train 
 --dev_dir tedd1007\training_data\dev 
 --test_dir tedd1007\training_data\test 
