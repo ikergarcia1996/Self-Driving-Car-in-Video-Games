@@ -38,7 +38,7 @@ about the motion of other cars, environment and himself.
 </p>
 
 T.E.D.D. 1104 consists of a Deep Convolutional Neural Network (Resnet: K He et al. 2016) followed by 
-a Recurrent Neural Network (LSTM). The CNN receives as input a sequence of 5 images and generated for each one a 
+a Recurrent Neural Network (LSTM). The CNN receives as input a sequence of 5 images and generates for each one a 
 vector representation. These representations are fed into the RNN that generates a unique vector representation 
 for the entire sequence. Finally, a Feed-Forward Neural Network outputs the key to press in the keyboard based 
 on the vector representation for the sequence.
