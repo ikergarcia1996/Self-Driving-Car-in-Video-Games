@@ -476,6 +476,7 @@ def save_checkpoint(
             )
 
     dict_hyperparams: dict = {
+        "sequence_size": model.sequence_size,
         "resnet": model.resnet,
         "pretrained_resnet": model.pretrained_resnet,
         "embedded_size": model.embedded_size,
@@ -536,7 +537,7 @@ def load_checkpoint(
     epoch = checkpoint["acc_dev"]
     amp_state = checkpoint["amp"]
     opt_level = checkpoint["opt_level"]
-    fp16 = checkpoint["fp16"]
+    fp16 = dict_hyperparams["fp16"]
 
     model: TEDD1104 = TEDD1104(
         resnet=dict_hyperparams["resnet"],
