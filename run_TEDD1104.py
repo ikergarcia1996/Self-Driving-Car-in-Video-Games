@@ -142,9 +142,10 @@ def run_TED1104(
             else:
                 show_what_ai_sees = True
 
+        time_it = time.time() - last_time
         print(
             f"Recording at {screen_recorder.fps} FPS\n"
-            f"Actions per second {1/(time.time()-last_time)}\n"
+            f"Actions per second {None if time_it==0 else 1/time_it}\n"
             f"Key predicted by nn: {key_press(model_prediction[0])}\n"
             f"Difference from img 1 to img 5 {None if not enable_evasion else score}\n"
             f"Push QE to exit\n"
@@ -168,9 +169,9 @@ if __name__ == "__main__":
     )
 
     parser.add_argument(
-        "--disable_enable_evasion",
-        action="store_false",
-        help="Disable automatic evasion maneuvers when the car gets stuck somewhere. Note: It adds computation time",
+        "--enable_evasion",
+        action="store_true",
+        help="Enable automatic evasion maneuvers when the car gets stuck somewhere. Note: It adds computation time",
     )
 
     parser.add_argument(
@@ -192,7 +193,7 @@ if __name__ == "__main__":
 
     run_TED1104(
         model_dir=args.model_dir,
-        enable_evasion=not args.disable_enable_evasion,
+        enable_evasion=args.enable_evasion,
         show_current_control=args.show_current_control,
         evasion_score=args.evasion_score,
     )
