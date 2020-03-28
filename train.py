@@ -30,6 +30,7 @@ def train(
     initial_epoch: int,
     num_epoch: int,
     max_acc: float,
+    hide_map_prob: float,
     fp16: bool = True,
     amp_opt_level=None,
     save_checkpoints: bool = True,
@@ -53,6 +54,7 @@ def train(
     - num_epochs: Number of epochs to do
     - max_acc: Accuracy in the development set (0 unless the model has been
       restored from checkpoint)
+    - hide_map_prob: Probability for removing the minimap (black square) from the image (0<=hide_map_prob<=1)
     - fp16: Use FP16 for training
     - amp_opt_level: If FP16 training Nvidia apex opt level
     - save_checkpoints: save a checkpoint each epoch (Each checkpoint will rewrite the previous one)
@@ -85,7 +87,10 @@ def train(
         for file_t in glob.glob(os.path.join(train_dir, "*.npz")):
             model.train()
             start_time: float = time.time()
-            X, y = load_file(path=file_t, fp=16 if fp16 else 32)
+
+            X, y = load_file(
+                path=file_t, fp=16 if fp16 else 32, hide_map_prob=hide_map_prob
+            )
             running_loss = 0.0
             num_batchs = 0
 
@@ -188,6 +193,7 @@ def train_new_model(
     dropout_cnn_out: float = 0.1,
     dropout_lstm: float = 0.1,
     dropout_lstm_out: float = 0.1,
+    hide_map_prob: float = 0.0,
     fp16=True,
     apex_opt_level="O2",
     save_checkpoints=True,
@@ -218,6 +224,7 @@ def train_new_model(
     - dropout_cnn_out: dropout probability for the cnn features (output layer)
     - dropout_lstm: dropout probability for the LSTM
     - dropout_lstm_out: dropout probability for the LSTM features (output layer)
+    - hide_map_prob: Probability for removing the minimap (black square) from the image (0<=hide_map_prob<=1)
     - fp16: Use FP16 for training
     - amp_opt_level: If FP16 training Nvidia apex opt level
     - save_checkpoints: save a checkpoint each epoch (Each checkpoint will rewrite the previous one)
@@ -281,6 +288,7 @@ def train_new_model(
         initial_epoch=0,
         num_epoch=num_epoch,
         max_acc=0.0,
+        hide_map_prob=hide_map_prob,
         fp16=fp16,
         amp_opt_level=apex_opt_level if fp16 else None,
         save_checkpoints=save_checkpoints,
@@ -292,12 +300,13 @@ def train_new_model(
 
 def continue_training(
     checkpoint_path: str,
-    train_dir="Data\\GTAV-AI\\data-v2\\train\\",
-    dev_dir="Data\\GTAV-AI\\data-v2\\dev\\",
-    test_dir="Data\\GTAV-AI\\data-v2\\test\\",
-    output_dir="Data\\models\\",
-    batch_size=10,
-    num_epoch=20,
+    train_dir: str = "Data\\GTAV-AI\\data-v2\\train\\",
+    dev_dir: str = "Data\\GTAV-AI\\data-v2\\dev\\",
+    test_dir: str = "Data\\GTAV-AI\\data-v2\\test\\",
+    output_dir: str = "Data\\models\\",
+    batch_size: int = 10,
+    num_epoch: int = 20,
+    hide_map_prob: float = 0.0,
     save_checkpoints=True,
     save_best=True,
 ):
@@ -317,6 +326,7 @@ def continue_training(
     - batch_size: Batch size (Around 10 for 8GB GPU)
     - num_epochs: Number of epochs to do
     - optimizer_name: Name of the optimizer to use [SGD, Adam]
+    - hide_map_prob: Probability for removing the minimap (black square) from the image (0<=hide_map_prob<=1)
     - save_checkpoints: save a checkpoint each epoch (Each checkpoint will rewrite the previous one)
     - save_best: save the model that achieves the higher accuracy in the development set
 
@@ -341,6 +351,7 @@ def continue_training(
         initial_epoch=epoch,
         num_epoch=num_epoch,
         max_acc=acc_dev,
+        hide_map_prob=hide_map_prob,
         fp16=fp16,
         amp_opt_level=opt_level if fp16 else None,
         save_checkpoints=save_checkpoints,
@@ -401,6 +412,13 @@ if __name__ == "__main__":
 
     parser.add_argument(
         "--num_epochs", type=int, required=True, help="Number of epochs to perform",
+    )
+
+    parser.add_argument(
+        "--hide_map_prob",
+        type=float,
+        default=0.0,
+        help="Probability for removing the minimap (black square) from the image (0<=hide_map_prob<=1)",
     )
 
     parser.add_argument(
@@ -538,6 +556,7 @@ if __name__ == "__main__":
             output_dir=args.output_dir,
             batch_size=args.batch_size,
             num_epoch=args.num_epochs,
+            hide_map_prob=args.hide_map_prob,
             optimizer_name=args.optimizer_name,
             resnet=args.resnet,
             pretrained_resnet=args.do_not_load_pretrained_resnet,
@@ -565,6 +584,7 @@ if __name__ == "__main__":
             test_dir=args.test_dir,
             output_dir=args.output_dir,
             batch_size=args.batch_size,
+            hide_map_prob=args.hide_map_prob,
             save_checkpoints=args.not_save_checkpoints,
             save_best=args.not_save_best,
         )
