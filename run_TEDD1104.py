@@ -183,7 +183,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--evasion_score",
         type=float,
-        default=1000,
+        default=200,
         help="Mean squared error value between images to activate the evasion maneuvers",
     )
 
