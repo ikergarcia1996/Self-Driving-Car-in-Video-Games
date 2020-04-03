@@ -1,5 +1,3 @@
-import os
-
 from torch.nn import CrossEntropyLoss
 from utils import *
 from model import TEDD1104, save_model, load_checkpoint, save_checkpoint
