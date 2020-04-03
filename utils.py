@@ -233,7 +233,7 @@ def load_file(
 
 def load_dataset(path: str, fp: int = 16) -> (np.ndarray, np.ndarray):
     """
-    Load dataset from directory: Load, reshape and preprocess data for all the files in a directory
+    Load dataset from directory: Load, reshape and preprocess data for all the files in a directory.
     Input:
      - path: Path of the directory
      - fp: floating-point precision: Available values: 16, 32, 64

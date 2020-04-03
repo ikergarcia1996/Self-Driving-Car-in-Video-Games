@@ -3,7 +3,6 @@ import numpy as np
 import time
 import cv2
 from keyboard.getkeys import key_check
-from utils import keys_to_output
 import threading
 
 global fps
@@ -13,6 +12,28 @@ global back_buffer
 global num
 global seq
 global key_out
+
+
+def keys_to_output(keys: np.ndarray) -> np.ndarray:
+    """
+    Convert keys to a ...multi-hot... array
+    Input:
+     - np.ndarray of strings ["A","W"]
+    Ouput:
+     - multi-hot array of integers (0,1) representing which keys are pressed (1). Array: [A,D,W,S]
+    """
+    output = np.asarray([0, 0, 0, 0])
+
+    if "A" in keys:
+        output[0] = 1
+    if "D" in keys:
+        output[1] = 1
+    if "W" in keys:
+        output[2] = 1
+    if "S" in keys:
+        output[3] = 1
+
+    return output
 
 
 def screen_record():
@@ -94,7 +115,7 @@ def image_sequencer_thread(stop_event: threading.Event) -> None:
 
 def initialize_global_variables() -> None:
     """
-    Initialize the global variables
+    Initialize global variables
     Input:
     Output:
     """
