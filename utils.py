@@ -266,28 +266,6 @@ def printTrace(message: str) -> None:
     print("<" + str(datetime.datetime.now()) + ">  " + str(message))
 
 
-def keys_to_output(keys: np.ndarray) -> np.ndarray:
-    """
-    Convert keys to a ...multi-hot... array
-    Input:
-     - np.ndarray of strings ["A","W"]
-    Ouput:
-     - multi-hot array of integers (0,1) representing which keys are pressed (1). Array: [A,D,W,S]
-    """
-    output = np.asarray([0, 0, 0, 0])
-
-    if "A" in keys:
-        output[0] = 1
-    if "D" in keys:
-        output[1] = 1
-    if "W" in keys:
-        output[2] = 1
-    if "S" in keys:
-        output[3] = 1
-
-    return output
-
-
 def mse_numpy(image1: np.ndarray, image2: np.ndarray) -> np.float:
     """
     Mean squared error between two numpy ndarrays
