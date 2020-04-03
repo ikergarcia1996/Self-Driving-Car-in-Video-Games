@@ -5,8 +5,72 @@ import numpy as np
 import argparse
 import threading
 import screen.record_screen as screen_recorder
-from utils import counter_keys, save_data, get_last_file_num
 from keyboard.getkeys import key_check
+
+
+def save_data(dir_path: str, data: np.ndarray, number: int):
+    """
+    Save a numpy ndarray to a directory and delete it from RAM
+    Input:
+     - dir_path path of the directory where the files are going to be stored
+     - data umpy ndarray
+     - number integer used to name the file
+    Ouput:
+
+    """
+    file_name = os.path.join(dir_path, f"training_data{number}.npz")
+    np.savez_compressed(file_name, data)
+    del data
+
+
+def get_last_file_num(dir_path: str) -> int:
+    """
+    Given a directory with files in the format training_data[number].npz return the higher number
+    Input:
+     - dir_path path of the directory where the files are stored
+    Ouput:
+     - int max number in the directory. -1 if no file exits
+     """
+
+    files = [
+        int(f.split(".")[0][13:])
+        for f in os.listdir(dir_path)
+        if os.path.isfile(os.path.join(dir_path, f)) and f.startswith("training_data")
+    ]
+
+    return -1 if len(files) == 0 else max(files)
+
+
+def counter_keys(key: np.ndarray) -> int:
+    """
+    Multi-hot vector to one hot vector (represented as an integer)
+    Input:
+     - key numpy array of integers (1,0) of size 4
+    Ouput:
+    - One hot vector encoding represented as an index (int). If the vector does not represent any valid key
+    input the returned value will be -1
+
+    """
+    if np.array_equal(key, [0, 0, 0, 0]):
+        return 0
+    elif np.array_equal(key, [1, 0, 0, 0]):
+        return 1
+    elif np.array_equal(key, [0, 1, 0, 0]):
+        return 2
+    elif np.array_equal(key, [0, 0, 1, 0]):
+        return 3
+    elif np.array_equal(key, [0, 0, 0, 1]):
+        return 4
+    elif np.array_equal(key, [1, 0, 1, 0]):
+        return 5
+    elif np.array_equal(key, [1, 0, 0, 1]):
+        return 6
+    elif np.array_equal(key, [0, 1, 1, 0]):
+        return 7
+    elif np.array_equal(key, [0, 1, 0, 1]):
+        return 8
+    else:
+        return -1
 
 
 def generate_dataset(
