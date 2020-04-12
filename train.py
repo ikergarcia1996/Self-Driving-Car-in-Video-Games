@@ -33,6 +33,7 @@ def train(
     fp16: bool = True,
     amp_opt_level=None,
     save_checkpoints: bool = True,
+    save_every: int = 100,
     save_best: bool = True,
 ):
 
@@ -83,11 +84,13 @@ def train(
 
     printTrace("Training...")
     for epoch in range(num_epoch):
+        iteration_no = 0
         num_used_files: int = 0
         files: List[str] = glob.glob(os.path.join(train_dir, "*.npz"))
         random.shuffle(files)
         # Get files in batches, all files will be loaded and data will be shuffled
         for files in batch(files, num_load_files_training):
+            iteration_no += 1
             num_used_files += num_load_files_training
             model.train()
             start_time: float = time.time()
@@ -146,7 +149,7 @@ def train(
             )
 
             printTrace(
-                f"EPOCH: {initial_epoch+epoch}. "
+                f"EPOCH: {initial_epoch+epoch}. Iteration {iteration_no}"
                 f"{num_used_files} of {len(files)} files. "
                 f"Training time: {time.time() - start_time} secs"
             )
@@ -166,18 +169,18 @@ def train(
                     amp_opt_level=amp_opt_level,
                 )
 
-        if save_checkpoints:
-            printTrace("Saving checkpoint...")
-            save_checkpoint(
-                path=os.path.join(output_dir, "checkpoint.pt"),
-                model=model,
-                optimizer_name=optimizer_name,
-                optimizer=optimizer,
-                acc_dev=acc_dev,
-                epoch=initial_epoch + epoch,
-                fp16=fp16,
-                opt_level=amp_opt_level,
-            )
+            if save_checkpoints and iteration_no % save_every == 0:
+                printTrace("Saving checkpoint...")
+                save_checkpoint(
+                    path=os.path.join(output_dir, "checkpoint.pt"),
+                    model=model,
+                    optimizer_name=optimizer_name,
+                    optimizer=optimizer,
+                    acc_dev=acc_dev,
+                    epoch=initial_epoch + epoch,
+                    fp16=fp16,
+                    opt_level=amp_opt_level,
+                )
 
     return max_acc
 
@@ -207,6 +210,7 @@ def train_new_model(
     fp16=True,
     apex_opt_level="O2",
     save_checkpoints=True,
+    save_every: int = 100,
     save_best=True,
 ):
 
@@ -303,6 +307,7 @@ def train_new_model(
         fp16=fp16,
         amp_opt_level=apex_opt_level if fp16 else None,
         save_checkpoints=save_checkpoints,
+        save_every=save_every,
         save_best=save_best,
     )
 
@@ -320,6 +325,7 @@ def continue_training(
     hide_map_prob: float = 0.0,
     num_load_files_training: int = 5,
     save_checkpoints=True,
+    save_every: int = 100,
     save_best=True,
 ):
 
@@ -368,6 +374,7 @@ def continue_training(
         fp16=fp16,
         amp_opt_level=opt_level if fp16 else None,
         save_checkpoints=save_checkpoints,
+        save_every=save_every,
         save_best=save_best,
     )
 
@@ -446,6 +453,13 @@ if __name__ == "__main__":
         "--not_save_checkpoints",
         action="store_false",
         help="Do NOT save a checkpoint each epoch (Each checkpoint will rewrite the previous one)",
+    )
+
+    parser.add_argument(
+        "--save_every",
+        type=int,
+        default=100,
+        help="Save the model every --save_every iterations (1 iteration = --num_load_files_training files used) ",
     )
 
     parser.add_argument(
@@ -595,6 +609,7 @@ if __name__ == "__main__":
             fp16=args.fp16,
             apex_opt_level=args.amp_opt_level,
             save_checkpoints=args.not_save_checkpoints,
+            save_every=args.save_every,
             save_best=args.not_save_best,
         )
 
@@ -609,5 +624,6 @@ if __name__ == "__main__":
             hide_map_prob=args.hide_map_prob,
             num_load_files_training=args.num_load_files_training,
             save_checkpoints=args.not_save_checkpoints,
+            save_every=args.save_every,
             save_best=args.not_save_best,
         )
