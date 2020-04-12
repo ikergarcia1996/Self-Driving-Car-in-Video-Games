@@ -332,7 +332,7 @@ def load_and_shuffle_datasets(
     data_array: np.ndarray = np.array([])
 
     for file_no, file in enumerate(paths):
-        print(f"Loading file {file_no+1} of {len(paths)}...")
+        # print(f"Loading file {file_no+1} of {len(paths)}...")
         try:
             data: np.ndarray = np.load(file, allow_pickle=True)["arr_0"]
         except (IOError, ValueError) as err:
