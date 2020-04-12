@@ -1,6 +1,7 @@
 import numpy as np
 import logging
-from typing import Iterable, Sized
+from typing import Iterable, Sized, List, Set
+
 from model import TEDD1104
 import glob
 import datetime
@@ -20,6 +21,43 @@ except ModuleNotFoundError:
         "Installing copy is highly recommended (x10 speedup): "
         "https://docs-cupy.chainer.org/en/latest/install.html?highlight=cuda90#install-cupy"
     )
+
+
+def check_valid_y(data: np.ndarray) -> bool:
+    """
+    Check if any key has been pressed in the datased. Some files may not have any key recorded due to windows
+    permission errors on some computers, people not using WASD or other problems, we want to discard these files.
+    Input:
+     - data: ndarray [num_examples x 6]
+    Output:
+    - Bool: True if the file is valid, False is there no key recorded
+    """
+    seen_keys: Set[int] = set()
+    for i in range(0, data.shape[0]):
+        if np.array_equal(data[i][5], [0, 0, 0, 0]):
+            seen_keys.add(0)
+        elif np.array_equal(data[i][5], [1, 0, 0, 0]):
+            seen_keys.add(1)
+        elif np.array_equal(data[i][5], [0, 1, 0, 0]):
+            seen_keys.add(2)
+        elif np.array_equal(data[i][5], [0, 0, 1, 0]):
+            seen_keys.add(3)
+        elif np.array_equal(data[i][5], [0, 0, 0, 1]):
+            seen_keys.add(4)
+        elif np.array_equal(data[i][5], [1, 0, 1, 0]):
+            seen_keys.add(5)
+        elif np.array_equal(data[i][5], [1, 0, 0, 1]):
+            seen_keys.add(6)
+        elif np.array_equal(data[i][5], [0, 1, 1, 0]):
+            seen_keys.add(7)
+        elif np.array_equal(data[i][5], [0, 1, 0, 1]):
+            seen_keys.add(8)
+
+        if len(seen_keys) >= 3:
+            return True
+
+    else:
+        return False
 
 
 def reshape_y(data: np.ndarray) -> np.ndarray:
@@ -72,8 +110,7 @@ def reshape_x_numpy(
     for i in range(0, len(data)):
         for j in range(0, 5):
             img = np.array(data[i][j], dtype=dtype)
-
-            if random.random() <= hide_map_prob:
+            if random.random() <= hide_map_prob:  # Put a black square over the minimap
                 img[215:, :80] = np.zeros((55, 80, 3), dtype=dtype)
 
             reshaped[i * 5 + j] = np.rollaxis((img / dtype(255.0)) - mean / std, 2, 0)
@@ -94,13 +131,14 @@ def reshape_x_cupy(
     - ndarray [num_examples * 5, num_channels, H, W]
 
     """
+
     mean = cp.array([0.485, 0.456, 0.406], dtype=dtype)
     std = cp.array([0.229, 0.224, 0.225], dtype=dtype)
     reshaped = np.zeros((len(data) * 5, 3, 270, 480), dtype=dtype)
     for i in range(0, len(data)):
         for j in range(0, 5):
             img = cp.array(data[i][j], dtype=dtype)
-            if random.random() <= hide_map_prob:
+            if random.random() <= hide_map_prob:  # Put a black square over the minimap
                 img[215:, :80] = cp.zeros((55, 80, 3), dtype=dtype)
 
             reshaped[i * 5 + j] = cp.asnumpy(
@@ -225,10 +263,25 @@ def load_file(
     - X: input examples [num_examples, 5, 3, H, W]
     - y: golds for the input examples [num_examples]
     """
-    data = np.load(path, allow_pickle=True)["arr_0"]
-    X = reshape_x(data, fp, hide_map_prob)
-    y = reshape_y(data)
-    return X, y
+    try:
+        data = np.load(path, allow_pickle=True)["arr_0"]
+    except (IOError, ValueError) as err:
+        logging.warning(f"[{err}] Error in file: {path}, ignoring the file.")
+        return np.array([]), np.array([])
+    except:
+        logging.warning(
+            f"[Unknown exception, probably corrupted file] Error in file: {path}, ignoring the file."
+        )
+        return np.array([]), np.array([])
+
+    if check_valid_y(data):
+        X = reshape_x(data, fp, hide_map_prob)
+        y = reshape_y(data)
+        return X, y
+
+    else:
+        logging.warning(f"Invalid file, no keys recorded: {path}, ignoring the file.")
+        return np.array([]), np.array([])
 
 
 def load_dataset(path: str, fp: int = 16) -> (np.ndarray, np.ndarray):
@@ -244,14 +297,73 @@ def load_dataset(path: str, fp: int = 16) -> (np.ndarray, np.ndarray):
     X: np.ndarray = np.array([])
     y: np.ndarray = np.array([])
 
-    for file in glob.glob(os.path.join(path, "*.npz")):
+    files = glob.glob(os.path.join(path, "*.npz"))
+    for file_n, file in enumerate(files):
+        print(f"Loading file {file_n+1} of {len(files)}...")
         X_batch, y_batch = load_file(file, fp)
-        if len(X) == 0:
-            X = X_batch
-            y = y_batch
+        if len(X_batch) > 0 and len(y_batch) > 0:
+            if len(X) == 0:
+                X = X_batch
+                y = y_batch
+            else:
+                X = np.concatenate((X, X_batch), axis=0)
+                y = np.concatenate((y, y_batch), axis=0)
+
+    if len(X) == 0 or len(y) == 0:
+        # Since this function is used for loading the dev and test set, we want to stop the execution if we don't
+        # have a valid test of dev set.
+        raise ValueError(f"Empty dataset, all files invalid. Path: {path}")
+
+    return X, y
+
+
+def load_and_shuffle_datasets(
+    paths: List[str], hide_map_prob: float, fp: int = 16
+) -> (np.ndarray, np.ndarray):
+    """
+    Load multiple dataset files and shuffle the data, useful for training
+    Input:
+     - paths: List of paths to dataset files
+     - fp: floating-point precision: Available values: 16, 32, 64
+    Output:
+    - X: input examples [num_examples_per_file * num_files, 5, 3, H, W]
+    - y: golds for the input examples [num_examples_per_file * num_files]
+    """
+    data_array: np.ndarray = np.array([])
+
+    for file_no, file in enumerate(paths):
+        print(f"Loading file {file_no+1} of {len(paths)}...")
+        try:
+            data: np.ndarray = np.load(file, allow_pickle=True)["arr_0"]
+        except (IOError, ValueError) as err:
+            logging.warning(f"[{err}] Error in file: {file}, ignoring the file.")
+            continue
+        except:
+            logging.warning(
+                f"[Unknown exception, probably corrupted file] Error in file: {file}, ignoring the file."
+            )
+            continue
+
+        if check_valid_y(data):
+            if len(data_array) == 0:
+                data_array = data
+            else:
+                data_array = np.concatenate((data_array, data), axis=0)
         else:
-            X = np.concatenate((X, X_batch), axis=0)
-            y = np.concatenate((y, y_batch), axis=0)
+            logging.warning(
+                f"Invalid file, no keys recorded: {file}, ignoring the file."
+            )
+
+    if len(data_array) > 0:
+        np.random.shuffle(data_array)
+    else:
+        # Since this function is used for training, we want to continue training with the next files,
+        # so we return two empty arrays
+        logging.warning(f"Empty dataset, all files invalid. Path: {paths}")
+        return np.array([]), np.array([])
+
+    X: np.ndarray = reshape_x(data_array, fp, hide_map_prob)
+    y: np.ndarray = reshape_y(data_array)
 
     return X, y
 

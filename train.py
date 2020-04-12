@@ -29,6 +29,7 @@ def train(
     num_epoch: int,
     max_acc: float,
     hide_map_prob: float,
+    num_load_files_training: int,
     fp16: bool = True,
     amp_opt_level=None,
     save_checkpoints: bool = True,
@@ -71,9 +72,10 @@ def train(
             )
 
     criterion: CrossEntropyLoss = torch.nn.CrossEntropyLoss()
+    print("Loading dev set")
     X_dev, y_dev = load_dataset(dev_dir, fp=16 if fp16 else 31)
     X_dev = torch.from_numpy(X_dev)
-
+    print("Loading test set")
     X_test, y_test = load_dataset(test_dir, fp=16 if fp16 else 21)
     X_test = torch.from_numpy(X_test)
 
@@ -81,13 +83,17 @@ def train(
 
     printTrace("Training...")
     for epoch in range(num_epoch):
-
-        for file_t in glob.glob(os.path.join(train_dir, "*.npz")):
+        num_used_files: int = 0
+        files: List[str] = glob.glob(os.path.join(train_dir, "*.npz"))
+        random.shuffle(files)
+        # Get files in batches, all files will be loaded and data will be shuffled
+        for files in batch(files, num_load_files_training):
+            num_used_files += num_load_files_training
             model.train()
             start_time: float = time.time()
 
-            X, y = load_file(
-                path=file_t, fp=16 if fp16 else 32, hide_map_prob=hide_map_prob
+            X, y = load_and_shuffle_datasets(
+                paths=files, fp=16 if fp16 else 32, hide_map_prob=hide_map_prob
             )
             running_loss = 0.0
             num_batchs = 0
@@ -116,13 +122,16 @@ def train(
                 num_batchs += 1
 
             # Print Statistics
-            acc_train = evaluate(
-                model=model,
-                X=torch.from_numpy(X),
-                golds=y,
-                device=device,
-                batch_size=batch_size,
-            )
+            if len(X) > 0 and len(y) > 0:
+                acc_train = evaluate(
+                    model=model,
+                    X=torch.from_numpy(X),
+                    golds=y,
+                    device=device,
+                    batch_size=batch_size,
+                )
+            else:
+                acc_train = -1.0
 
             acc_dev = evaluate(
                 model=model, X=X_dev, golds=y_dev, device=device, batch_size=batch_size,
@@ -137,11 +146,13 @@ def train(
             )
 
             printTrace(
-                f"EPOCH: {initial_epoch+epoch}. Current File {file_t}. Training time: {time.time() - start_time} secs"
+                f"EPOCH: {initial_epoch+epoch}. "
+                f"{num_used_files} of {len(files)} files. "
+                f"Training time: {time.time() - start_time} secs"
             )
 
             printTrace(
-                f"Loss: {running_loss / num_batchs}. Acc training set: {acc_train}. "
+                f"Loss: {-1 if num_batchs == 0 else running_loss / num_batchs}. Acc training set: {acc_train}. "
                 f"Acc dev set: {acc_dev}. Acc test set: {acc_test}"
             )
 
@@ -192,6 +203,7 @@ def train_new_model(
     dropout_lstm: float = 0.1,
     dropout_lstm_out: float = 0.1,
     hide_map_prob: float = 0.0,
+    num_load_files_training: int = 5,
     fp16=True,
     apex_opt_level="O2",
     save_checkpoints=True,
@@ -287,6 +299,7 @@ def train_new_model(
         num_epoch=num_epoch,
         max_acc=0.0,
         hide_map_prob=hide_map_prob,
+        num_load_files_training=num_load_files_training,
         fp16=fp16,
         amp_opt_level=apex_opt_level if fp16 else None,
         save_checkpoints=save_checkpoints,
@@ -305,6 +318,7 @@ def continue_training(
     batch_size: int = 10,
     num_epoch: int = 20,
     hide_map_prob: float = 0.0,
+    num_load_files_training: int = 5,
     save_checkpoints=True,
     save_best=True,
 ):
@@ -350,6 +364,7 @@ def continue_training(
         num_epoch=num_epoch,
         max_acc=acc_dev,
         hide_map_prob=hide_map_prob,
+        num_load_files_training=num_load_files_training,
         fp16=fp16,
         amp_opt_level=opt_level if fp16 else None,
         save_checkpoints=save_checkpoints,
@@ -417,6 +432,14 @@ if __name__ == "__main__":
         type=float,
         default=0.0,
         help="Probability for removing the minimap (black square) from the image (0<=hide_map_prob<=1)",
+    )
+
+    parser.add_argument(
+        "--num_load_files_training",
+        type=int,
+        default=5,
+        help="Number of dataset files to load each iteration for training. Files will be merged and shuffled. Loading"
+        "more may be helpful for training, but it will use more RAM",
     )
 
     parser.add_argument(
@@ -555,6 +578,7 @@ if __name__ == "__main__":
             batch_size=args.batch_size,
             num_epoch=args.num_epochs,
             hide_map_prob=args.hide_map_prob,
+            num_load_files_training=args.num_load_files_training,
             optimizer_name=args.optimizer_name,
             resnet=args.resnet,
             pretrained_resnet=args.do_not_load_pretrained_resnet,
@@ -583,6 +607,7 @@ if __name__ == "__main__":
             output_dir=args.output_dir,
             batch_size=args.batch_size,
             hide_map_prob=args.hide_map_prob,
+            num_load_files_training=args.num_load_files_training,
             save_checkpoints=args.not_save_checkpoints,
             save_best=args.not_save_best,
         )
