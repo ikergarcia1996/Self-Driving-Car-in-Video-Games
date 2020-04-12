@@ -445,10 +445,10 @@ def save_checkpoint(
     model: TEDD1104,
     optimizer_name: str,
     optimizer: torch.optim,
-    acc_dev,
-    epoch,
-    fp16,
-    opt_level=None,
+    acc_dev: float,
+    epoch: int,
+    fp16: bool,
+    opt_level: str = None,
 ) -> None:
 
     """
