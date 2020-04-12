@@ -81,7 +81,7 @@ def train(
     X_test = torch.from_numpy(X_test)
 
     acc_dev: float = 0.0
-
+    total_training_exampels: int = 0
     printTrace("Training...")
     for epoch in range(num_epoch):
         iteration_no = 0
@@ -89,15 +89,16 @@ def train(
         files: List[str] = glob.glob(os.path.join(train_dir, "*.npz"))
         random.shuffle(files)
         # Get files in batches, all files will be loaded and data will be shuffled
-        for files in batch(files, num_load_files_training):
+        for paths in batch(files, num_load_files_training):
             iteration_no += 1
             num_used_files += num_load_files_training
             model.train()
             start_time: float = time.time()
 
             X, y = load_and_shuffle_datasets(
-                paths=files, fp=16 if fp16 else 32, hide_map_prob=hide_map_prob
+                paths=paths, fp=16 if fp16 else 32, hide_map_prob=hide_map_prob
             )
+            total_training_exampels += len(y)
             running_loss = 0.0
             num_batchs = 0
 
@@ -149,9 +150,10 @@ def train(
             )
 
             printTrace(
-                f"EPOCH: {initial_epoch+epoch}. Iteration {iteration_no}"
+                f"EPOCH: {initial_epoch+epoch}. Iteration {iteration_no}. "
                 f"{num_used_files} of {len(files)} files. "
-                f"Training time: {time.time() - start_time} secs"
+                f"Total examples used for training {total_training_exampels}. "
+                f"Iteration time: {time.time() - start_time} secs"
             )
 
             printTrace(
