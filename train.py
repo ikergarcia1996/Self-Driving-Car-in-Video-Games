@@ -74,10 +74,10 @@ def train(
 
     criterion: CrossEntropyLoss = torch.nn.CrossEntropyLoss()
     print("Loading dev set")
-    X_dev, y_dev = load_dataset(dev_dir, fp=16 if fp16 else 31)
+    X_dev, y_dev = load_dataset(dev_dir, fp=16 if fp16 else 32)
     X_dev = torch.from_numpy(X_dev)
     print("Loading test set")
-    X_test, y_test = load_dataset(test_dir, fp=16 if fp16 else 21)
+    X_test, y_test = load_dataset(test_dir, fp=16 if fp16 else 32)
     X_test = torch.from_numpy(X_test)
 
     acc_dev: float = 0.0
