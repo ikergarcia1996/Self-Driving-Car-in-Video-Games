@@ -100,7 +100,8 @@ def reshape_x_numpy(
     Input:
      - data: ndarray [num_examples x 6]
      -dtype: numpy dtype for the output array
-     -hide_map_prob: Probability for removing the minimap (black square) from the image (0<=hide_map_prob<=1)
+     -hide_map_prob: Probability for removing the minimap (black square)
+      from the sequence of images (0<=hide_map_prob<=1)
     Output:
     - ndarray [num_examples * 5, num_channels, H, W]
     """
@@ -108,9 +109,10 @@ def reshape_x_numpy(
     std = np.array([0.229, 0.224, 0.225], dtype)
     reshaped = np.zeros((len(data) * 5, 3, 270, 480), dtype=dtype)
     for i in range(0, len(data)):
+        black_minimap: bool = (random.random() <= hide_map_prob)
         for j in range(0, 5):
             img = np.array(data[i][j], dtype=dtype)
-            if random.random() <= hide_map_prob:  # Put a black square over the minimap
+            if black_minimap:  # Put a black square over the minimap
                 img[215:, :80] = np.zeros((55, 80, 3), dtype=dtype)
 
             reshaped[i * 5 + j] = np.rollaxis((img / dtype(255.0)) - mean / std, 2, 0)
@@ -126,7 +128,8 @@ def reshape_x_cupy(
     Input:
      - data: ndarray [num_examples x 6]
      -dtype: numpy dtype for the output array
-     -hide_map_prob: Probability for removing the minimap (black square) from the image (0<=hide_map_prob<=1)
+     -hide_map_prob: Probability for removing the minimap (black square)
+      from the sequence of images (0<=hide_map_prob<=1)
     Output:
     - ndarray [num_examples * 5, num_channels, H, W]
 
@@ -136,9 +139,10 @@ def reshape_x_cupy(
     std = cp.array([0.229, 0.224, 0.225], dtype=dtype)
     reshaped = np.zeros((len(data) * 5, 3, 270, 480), dtype=dtype)
     for i in range(0, len(data)):
+        black_minimap: bool = (random.random() <= hide_map_prob)
         for j in range(0, 5):
             img = cp.array(data[i][j], dtype=dtype)
-            if random.random() <= hide_map_prob:  # Put a black square over the minimap
+            if black_minimap:  # Put a black square over the minimap
                 img[215:, :80] = cp.zeros((55, 80, 3), dtype=dtype)
 
             reshaped[i * 5 + j] = cp.asnumpy(
