@@ -10,10 +10,12 @@ is used to train the model.
 
 While we focus on self-driving cars and the video game Grand Theft Auto V this model can be adapted to play any existing
 video game. 
+    <table>
     <tr>
     <td> <img src="github_images/demo.gif" alt="gotta go fast!"/> </td>
     <td> <img src="github_images/demo2.gif" alt="gotta go fast2!"/> </td>
     </tr>
+    </table>
 
 ## Architecture
 Most previous models that attempt to achieve self-driving in video games consists of a deep convolutional neural network 
