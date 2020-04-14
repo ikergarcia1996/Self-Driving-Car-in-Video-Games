@@ -389,7 +389,7 @@ def save_model(model: TEDD1104, save_dir: str, fp16, amp_opt_level: str = None) 
     torch.save(obj=model_weights, f=os.path.join(save_dir, "model.bin"))
 
 
-def load_model(save_dir: str, decive: torch.device) -> (TEDD1104, int):
+def load_model(save_dir: str, device: torch.device, fp16: bool) -> TEDD1104:
     """
     Load a model from directory. The directory should contain a json with the model hyperparameters and a bin file
     with the model weights.
@@ -419,17 +419,17 @@ def load_model(save_dir: str, decive: torch.device) -> (TEDD1104, int):
         dropout_cnn_out=dict_hyperparams["dropout_cnn_out"],
         dropout_lstm=dict_hyperparams["dropout_lstm"],
         dropout_lstm_out=dict_hyperparams["dropout_lstm_out"],
-    ).to(device=decive)
+    ).to(device=device)
 
     model_weights = torch.load(f=os.path.join(save_dir, "model.bin"))
 
-    if dict_hyperparams["fp16"]:
+    if fp16:
         try:
             from apex import amp
         except ImportError:
             raise ImportError(
-                "The model you are trying to load uses FP16 training."
-                "Please install apex from https://www.github.com/nvidia/apex"
+                "You used the fp16 training flag but you don't seem have Nvidia Apex installed. "
+                "For using FP16, please install apex from https://www.github.com/nvidia/apex"
             )
 
         model = amp.initialize(model, opt_level=dict_hyperparams["amp_opt_level"])
@@ -437,7 +437,7 @@ def load_model(save_dir: str, decive: torch.device) -> (TEDD1104, int):
 
     model.load_state_dict(model_weights["model"])
 
-    return model, dict_hyperparams["fp16"]
+    return model
 
 
 def save_checkpoint(
@@ -570,7 +570,7 @@ def load_checkpoint(
         except ImportError:
             raise ImportError(
                 "The model you are trying to load uses FP16 training."
-                "Please install apex from https://www.github.com/nvidia/apex"
+                "Please install Nvidia Apex from https://www.github.com/nvidia/apex"
             )
 
         model, optimizer = amp.initialize(model, optimizer, opt_level=opt_level)
