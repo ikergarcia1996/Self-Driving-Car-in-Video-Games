@@ -17,6 +17,10 @@ video game.
     </tr>
     </table>
 
+## News
+**NEW 15/04/2020** First pretrained model available!!, [click here to download it](https://github.com/ikergarcia1996/Self-Driving-Car-in-Video-Games/releases/tag/0.1). For instructions on how to run the AI see [Run the Model Section](#RunModel)  
+**NEW 7/04/2020** Let's generate a huge training dataset together!! [Click here so see how to collaborate in the project (Spanish)](https://youtu.be/utQoMGLbCFc)
+
 ## Architecture
 Most previous models that attempt to achieve self-driving in video games consists of a deep convolutional neural network 
 (usually Inception or Resnet). The models take as input a single image.
@@ -70,7 +74,7 @@ json
 win32api (PythonWin) - Should be installed by default in newest Python versions (Python 3.7 reccomended)
 ```
 
-### Generate dataset
+###<a name="GenerateDataset"></a> Run the model Generate dataset
 * File: generate_data.py
 * Usage example: 
 ```
@@ -92,7 +96,7 @@ python generate_data.py --save_dir tedd1007\training_data
   
 
 
-### Train the model
+###<a name="TrainModel"></a> Train the model
 * File: train.py
 * Usage example: 
 ```
@@ -109,11 +113,12 @@ python train.py --train_new
   Train a model using the default hyper parameters, to see a description of the network hyper parameters use 
   "python train.py -h" or check the "train.py" and "model.py" files. train, dev and test directories should contain
    as many files named "training_dataX.npz" as you want. The FP16 flag allows you to use Mixed Precision Training if
-   you have a modern Nvidia GPU  with Tensor cores, it uses the Nvidia Apex library: https://github.com/NVIDIA/apex 
-   (Note: model trained using FP16 cannot be run using FP32 and vice versa). The model is VERY memory demanding, as a
-   reference I use a batch size of 10 for a RTX 2080 (8GB VRAM) for FP16 training. 
+   you have a modern Nvidia GPU  with Tensor cores, it uses the Nvidia Apex library: https://github.com/NVIDIA/apex. 
+   The model is VERY memory demanding, as a
+   reference I use a batch size of 15 for a RTX 2080 (8GB VRAM) for FP16 training using the default parameters. 
    
- * If you want to continue training from a checkpoint use:
+ * If you want to continue training from a checkpoint use (Note: The checkpoint will automatically use the same 
+ floating point precision (FP16 or FP32) used for training when it was created):
    
  ```
 python train.py --continue_training
@@ -124,15 +129,14 @@ python train.py --continue_training
 --batch_size 10 
 --num_epochs 5 
 --checkpoint_path tedd1007\checkpoint\epoch1checkpoint.pt
---fp16
 ```
    
-### Run the model
+###<a name="RunModel"></a> Run the model
 * File: run_TEDD1104.py
 * Pretrained-Models: Coming soon!!!
 * Usage example: 
 ```
-python run_TEDD1104.py --model_dir D:\GTAV-AI\models --show_current_control
+python run_TEDD1104.py --model_dir D:\GTAV-AI\models --show_current_control --fp16
 ```
 * How-to:
   * Set your game in windowed mode
