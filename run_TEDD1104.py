@@ -22,7 +22,11 @@ else:
 
 
 def run_TED1104(
-    model_dir, enable_evasion, show_current_control, evasion_score=1000
+    model_dir,
+    fp16: bool,
+    enable_evasion: bool,
+    show_current_control: bool,
+    evasion_score=1000,
 ) -> None:
     """
     Generate dataset exampled from a human playing a videogame
@@ -51,7 +55,7 @@ def run_TED1104(
     show_what_ai_sees: bool = False
     fp16: bool
     model: TEDD1104
-    model, fp16 = load_model(model_dir, device)
+    model = load_model(save_dir=model_dir, device=device, fp16=fp16)
     model.eval()
     stop_recording: threading.Event = threading.Event()
 
@@ -169,6 +173,14 @@ if __name__ == "__main__":
     )
 
     parser.add_argument(
+        "--fp16",
+        action="store_true",
+        help="Use FP16 floating point precision: "
+        "Requires Nvidia Apex: https://www.github.com/nvidia/apex "
+        "and a modern Nvidia GPU FP16 capable (Volta, Turing and future architectures).",
+    )
+
+    parser.add_argument(
         "--enable_evasion",
         action="store_true",
         help="Enable automatic evasion maneuvers when the car gets stuck somewhere. Note: It adds computation time",
@@ -193,6 +205,7 @@ if __name__ == "__main__":
 
     run_TED1104(
         model_dir=args.model_dir,
+        fp16=args.fp16,
         enable_evasion=args.enable_evasion,
         show_current_control=args.show_current_control,
         evasion_score=args.evasion_score,
