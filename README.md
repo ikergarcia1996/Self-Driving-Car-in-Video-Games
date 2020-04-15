@@ -140,8 +140,8 @@ python train.py --continue_training
 ```
 python run_TEDD1104.py --model_dir D:\GTAV-AI\models --show_current_control --fp16
 ```
-Use the FP16 flag if you have a Nvidia GPU with tensor cores (RTX 2000, RTX Titan, Titan V...) 
-so model will use half the Vram and you will get a nice speed up (~x2 speed up). 
+Use the FP16 flag if you have an Nvidia GPU with tensor cores (RTX 2000, RTX Titan, Titan V...) 
+for a nice speed up (~x2 speed up) and half the VRAM usage. 
 Requires the Nvidia Apex library: https://github.com/NVIDIA/apex
 
 * How-to:
