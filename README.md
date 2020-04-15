@@ -18,7 +18,7 @@ video game.
     </table>
 
 ## News
-**NEW 15/04/2020** First pretrained model available!!, [click here to download it](https://github.com/ikergarcia1996/Self-Driving-Car-in-Video-Games/releases/tag/0.1). For instructions on how to run the AI see [Run the Model Section](#run-the-model)  
+**NEW 15/04/2020** First pretrained model available!!, [click here to download it](https://github.com/ikergarcia1996/Self-Driving-Car-in-Video-Games/releases/tag/0.1). For instructions on how to run the AI see the [Run the Model](#run-the-model) Section
 **NEW 7/04/2020** Let's generate a huge training dataset together!! [Click here so see how to collaborate in the project (Spanish)](https://youtu.be/utQoMGLbCFc)
 
 ## Architecture
@@ -113,9 +113,11 @@ python train.py --train_new
   Train a model using the default hyper parameters, to see a description of the network hyper parameters use 
   "python train.py -h" or check the "train.py" and "model.py" files. train, dev and test directories should contain
    as many files named "training_dataX.npz" as you want. The FP16 flag allows you to use Mixed Precision Training if
-   you have a modern Nvidia GPU  with Tensor cores, it uses the Nvidia Apex library: https://github.com/NVIDIA/apex. 
+   you have a modern Nvidia GPU with Tensor cores (RTX 2000, RTX Titan, Titan V, Tesla V100...), 
+   it uses the Nvidia Apex library: https://github.com/NVIDIA/apex.
    The model is VERY memory demanding, as a
-   reference I use a batch size of 15 for a RTX 2080 (8GB VRAM) for FP16 training using the default parameters. 
+   reference I use a batch size of 15 for a RTX 2080 (8GB VRAM) for FP16 training (half the Vram usage than FP32 training) 
+   using the default parameters. 
    
  * If you want to continue training from a checkpoint use (Note: The checkpoint will automatically use the same 
  floating point precision (FP16 or FP32) used for training when it was created):
@@ -138,6 +140,10 @@ python train.py --continue_training
 ```
 python run_TEDD1104.py --model_dir D:\GTAV-AI\models --show_current_control --fp16
 ```
+Use the FP16 flag if you have a Nvidia GPU with tensor cores (RTX 2000, RTX Titan, Titan V...) 
+so model will use half the Vram and you will get a nice speed up (~x2 speed up). 
+Requires the Nvidia Apex library: https://github.com/NVIDIA/apex
+
 * How-to:
   * Set your game in windowed mode
   * Set your game to 1600x900 resolution
@@ -151,7 +157,8 @@ python run_TEDD1104.py --model_dir D:\GTAV-AI\models --show_current_control --fp
 <p align="center">
   <img src="github_images/example_config.png" alt="Setup Example"/>
 </p>
-  
+
+
   
 
 # Authors:
