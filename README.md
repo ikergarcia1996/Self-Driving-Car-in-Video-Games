@@ -18,7 +18,7 @@ video game.
     </table>
 
 ## News
-**NEW 15/04/2020** First pretrained model available!!, [click here to download it](https://github.com/ikergarcia1996/Self-Driving-Car-in-Video-Games/releases/tag/0.1). For instructions on how to run the AI see [Run the Model Section](#RunModel)  
+**NEW 15/04/2020** First pretrained model available!!, [click here to download it](https://github.com/ikergarcia1996/Self-Driving-Car-in-Video-Games/releases/tag/0.1). For instructions on how to run the AI see [Run the Model Section](#run-the-model)  
 **NEW 7/04/2020** Let's generate a huge training dataset together!! [Click here so see how to collaborate in the project (Spanish)](https://youtu.be/utQoMGLbCFc)
 
 ## Architecture
@@ -74,7 +74,7 @@ json
 win32api (PythonWin) - Should be installed by default in newest Python versions (Python 3.7 reccomended)
 ```
 
-### <a name="GenerateDataset"></a>  Run the model Generate dataset 
+### Run the model Generate dataset 
 * File: generate_data.py
 * Usage example: 
 ```
@@ -96,7 +96,7 @@ python generate_data.py --save_dir tedd1007\training_data
   
 
 
-### <a name="TrainModel"></a> Train the model 
+### Train the model 
 * File: train.py
 * Usage example: 
 ```
@@ -131,7 +131,7 @@ python train.py --continue_training
 --checkpoint_path tedd1007\checkpoint\epoch1checkpoint.pt
 ```
    
-### <a name="RunModel"></a> Run the model
+### Run the model
 * File: run_TEDD1104.py
 * Pretrained-Models: [See the releases sections](https://github.com/ikergarcia1996/Self-Driving-Car-in-Video-Games/releases/)
 * Usage example: 
