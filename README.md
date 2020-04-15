@@ -74,7 +74,7 @@ json
 win32api (PythonWin) - Should be installed by default in newest Python versions (Python 3.7 reccomended)
 ```
 
-###<a name="GenerateDataset"></a> Run the model Generate dataset
+### <a name="GenerateDataset"></a>  Run the model Generate dataset 
 * File: generate_data.py
 * Usage example: 
 ```
@@ -96,7 +96,7 @@ python generate_data.py --save_dir tedd1007\training_data
   
 
 
-###<a name="TrainModel"></a> Train the model
+### <a name="TrainModel"></a> Train the model 
 * File: train.py
 * Usage example: 
 ```
@@ -131,9 +131,9 @@ python train.py --continue_training
 --checkpoint_path tedd1007\checkpoint\epoch1checkpoint.pt
 ```
    
-###<a name="RunModel"></a> Run the model
+### <a name="RunModel"></a> Run the model
 * File: run_TEDD1104.py
-* Pretrained-Models: Coming soon!!!
+* Pretrained-Models: [See the releases sections](https://github.com/ikergarcia1996/Self-Driving-Car-in-Video-Games/releases/)
 * Usage example: 
 ```
 python run_TEDD1104.py --model_dir D:\GTAV-AI\models --show_current_control --fp16
