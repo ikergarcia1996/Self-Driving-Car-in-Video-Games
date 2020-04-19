@@ -124,7 +124,7 @@ def train(
                 optimizer.step()
                 running_loss += loss.item()
                 num_batchs += 1
-
+            start_time_eval: float = time.time()
             # Print Statistics
             if len(X) > 0 and len(y) > 0:
                 acc_train = evaluate(
@@ -153,7 +153,7 @@ def train(
                 f"EPOCH: {initial_epoch+epoch}. Iteration {iteration_no}. "
                 f"{num_used_files} of {len(files)} files. "
                 f"Total examples used for training {total_training_exampels}. "
-                f"Iteration time: {time.time() - start_time} secs"
+                f"Iteration time: {time.time() - start_time} secs. Eval time: {time.time() - start_time_eval} secs."
             )
 
             printTrace(
