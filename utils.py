@@ -359,6 +359,7 @@ def load_and_shuffle_datasets(
             )
 
     if len(data_array) > 0:
+        np.random.seed(None)
         np.random.shuffle(data_array)
     else:
         # Since this function is used for training, we want to continue training with the next files,

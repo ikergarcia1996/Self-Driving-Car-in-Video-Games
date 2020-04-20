@@ -6,6 +6,7 @@ import torch.optim as optim
 from typing import List
 import time
 import argparse
+import random
 
 if torch.cuda.is_available():
     device: torch.device = torch.device("cuda:0")
@@ -87,6 +88,7 @@ def train(
         iteration_no = 0
         num_used_files: int = 0
         files: List[str] = glob.glob(os.path.join(train_dir, "*.npz"))
+        random.seed()
         random.shuffle(files)
         # Get files in batches, all files will be loaded and data will be shuffled
         for paths in batch(files, num_load_files_training):
