@@ -209,6 +209,7 @@ def train_new_model(
     batch_size=10,
     num_epoch=20,
     optimizer_name="SGD",
+    learning_rate:float = 0.01,
     resnet: int = 18,
     pretrained_resnet: bool = True,
     sequence_size: int = 5,
@@ -282,9 +283,9 @@ def train_new_model(
     ).to(device)
 
     if optimizer_name == "SGD":
-        optimizer = optim.SGD(model.parameters(), lr=0.01, momentum=0.9)
+        optimizer = optim.SGD(model.parameters(), lr=learning_rate, momentum=0.9)
     elif optimizer_name == "Adam":
-        optimizer = optim.Adam(model.parameters(), lr=0.001)
+        optimizer = optim.Adam(model.parameters(), lr=learning_rate)
     else:
         raise ValueError(
             f"Optimizer {optimizer_name} not implemented. Available optimizers: SGD, Adam"
@@ -520,6 +521,13 @@ if __name__ == "__main__":
     )
 
     parser.add_argument(
+        "--learning_rate",
+        type=float,
+        default=0.01,
+        help="[new_model] Optimizer learning rate",
+    )
+
+    parser.add_argument(
         "--resnet",
         type=int,
         default=18,
@@ -621,6 +629,7 @@ if __name__ == "__main__":
             hide_map_prob=args.hide_map_prob,
             num_load_files_training=args.num_load_files_training,
             optimizer_name=args.optimizer_name,
+            learning_rate=args.learning_rate,
             resnet=args.resnet,
             pretrained_resnet=args.do_not_load_pretrained_resnet,
             sequence_size=args.sequence_size,
