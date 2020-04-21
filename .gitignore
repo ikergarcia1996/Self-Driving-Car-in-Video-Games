@@ -4,3 +4,5 @@
 .vs/
 
 __pycache__/
+
+debug/

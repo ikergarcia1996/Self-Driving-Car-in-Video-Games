@@ -34,7 +34,8 @@ def train(
     fp16: bool = True,
     amp_opt_level=None,
     save_checkpoints: bool = True,
-    save_every: int = 100,
+    eval_every: int = 5,
+    save_every: int = 20,
     save_best: bool = True,
 ):
 
@@ -81,11 +82,10 @@ def train(
     X_test, y_test = load_dataset(test_dir, fp=16 if fp16 else 32)
     X_test = torch.from_numpy(X_test)
 
-    acc_dev: float = 0.0
     total_training_exampels: int = 0
     printTrace("Training...")
     for epoch in range(num_epoch):
-        iteration_no = 0
+        iteration_no: int = 0
         num_used_files: int = 0
         files: List[str] = glob.glob(os.path.join(train_dir, "*.npz"))
         random.seed()
@@ -101,8 +101,9 @@ def train(
                 paths=paths, fp=16 if fp16 else 32, hide_map_prob=hide_map_prob
             )
             total_training_exampels += len(y)
-            running_loss = 0.0
-            num_batchs = 0
+            running_loss: float = 0.0
+            num_batchs: int = 0
+            acc_dev: float = 0.0
 
             for X_bacth, y_batch in nn_batchs(X, y, batch_size):
                 X_bacth, y_batch = (
@@ -126,52 +127,63 @@ def train(
                 optimizer.step()
                 running_loss += loss.item()
                 num_batchs += 1
-            start_time_eval: float = time.time()
+
             # Print Statistics
-            if len(X) > 0 and len(y) > 0:
-                acc_train = evaluate(
-                    model=model,
-                    X=torch.from_numpy(X),
-                    golds=y,
-                    device=device,
-                    batch_size=batch_size,
-                )
-            else:
-                acc_train = -1.0
-
-            acc_dev = evaluate(
-                model=model, X=X_dev, golds=y_dev, device=device, batch_size=batch_size,
-            )
-
-            acc_test = evaluate(
-                model=model,
-                X=X_test,
-                golds=y_test,
-                device=device,
-                batch_size=batch_size,
-            )
-
             printTrace(
                 f"EPOCH: {initial_epoch+epoch}. Iteration {iteration_no}. "
                 f"{num_used_files} of {len(files)} files. "
                 f"Total examples used for training {total_training_exampels}. "
-                f"Iteration time: {time.time() - start_time} secs. Eval time: {time.time() - start_time_eval} secs."
+                f"Iteration time: {round(time.time() - start_time,2)} secs."
             )
 
-            printTrace(
-                f"Loss: {-1 if num_batchs == 0 else running_loss / num_batchs}. Acc training set: {acc_train}. "
-                f"Acc dev set: {acc_dev}. Acc test set: {acc_test}"
-            )
+            if iteration_no % eval_every == 0:
+                start_time_eval: float = time.time()
+                if len(X) > 0 and len(y) > 0:
+                    acc_train: float = evaluate(
+                        model=model,
+                        X=torch.from_numpy(X),
+                        golds=y,
+                        device=device,
+                        batch_size=batch_size,
+                    )
+                else:
+                    acc_train = -1.0
 
-            if acc_dev > max_acc and save_best:
-                max_acc = acc_dev
-                printTrace(f"New max acc in dev set {max_acc}. Saving model...")
-                save_model(
+                acc_dev: float = evaluate(
                     model=model,
-                    save_dir=output_dir,
-                    fp16=fp16,
-                    amp_opt_level=amp_opt_level,
+                    X=X_dev,
+                    golds=y_dev,
+                    device=device,
+                    batch_size=batch_size,
                 )
+
+                acc_test: float = evaluate(
+                    model=model,
+                    X=X_test,
+                    golds=y_test,
+                    device=device,
+                    batch_size=batch_size,
+                )
+
+                printTrace(
+                    f"Loss: {-1 if num_batchs == 0 else running_loss / num_batchs}. "
+                    f"Acc training set: {round(acc_train,2)}. "
+                    f"Acc dev set: {round(acc_dev,2)}. "
+                    f"Acc test set: {round(acc_test,2)}.  "
+                    f"Eval time: {round(time.time() - start_time_eval,2)} secs."
+                )
+
+                if 0.0 < acc_dev > max_acc and save_best:
+                    max_acc = acc_dev
+                    printTrace(
+                        f"New max acc in dev set {round(max_acc,2)}. Saving model..."
+                    )
+                    save_model(
+                        model=model,
+                        save_dir=output_dir,
+                        fp16=fp16,
+                        amp_opt_level=amp_opt_level,
+                    )
 
             if save_checkpoints and iteration_no % save_every == 0:
                 printTrace("Saving checkpoint...")
@@ -214,7 +226,8 @@ def train_new_model(
     fp16=True,
     apex_opt_level="O2",
     save_checkpoints=True,
-    save_every: int = 100,
+    eval_every: int = 5,
+    save_every: int = 20,
     save_best=True,
 ):
 
@@ -252,14 +265,6 @@ def train_new_model(
 
     """
 
-    if fp16:
-        try:
-            from apex import amp
-        except ImportError:
-            raise ImportError(
-                "Please install apex from https://www.github.com/nvidia/apex to use fp16 training."
-            )
-
     print("Loading new model")
     model: TEDD1104 = TEDD1104(
         resnet=resnet,
@@ -286,6 +291,14 @@ def train_new_model(
         )
 
     if fp16:
+
+        try:
+            from apex import amp
+        except ImportError:
+            raise ImportError(
+                "Please install apex from https://www.github.com/nvidia/apex to use fp16 training."
+            )
+
         model, optimizer = amp.initialize(
             model,
             optimizer,
@@ -311,6 +324,7 @@ def train_new_model(
         fp16=fp16,
         amp_opt_level=apex_opt_level if fp16 else None,
         save_checkpoints=save_checkpoints,
+        eval_every=eval_every,
         save_every=save_every,
         save_best=save_best,
     )
@@ -329,6 +343,7 @@ def continue_training(
     hide_map_prob: float = 0.0,
     num_load_files_training: int = 5,
     save_checkpoints=True,
+    eval_every: int = 5,
     save_every: int = 100,
     save_best=True,
 ):
@@ -378,6 +393,7 @@ def continue_training(
         fp16=fp16,
         amp_opt_level=opt_level if fp16 else None,
         save_checkpoints=save_checkpoints,
+        eval_every=eval_every,
         save_every=save_every,
         save_best=save_best,
     )
@@ -457,6 +473,13 @@ if __name__ == "__main__":
         "--not_save_checkpoints",
         action="store_false",
         help="Do NOT save a checkpoint each epoch (Each checkpoint will rewrite the previous one)",
+    )
+
+    parser.add_argument(
+        "--eval_every",
+        type=int,
+        default=5,
+        help="Evaluate the model every --eval_every iterations (1 iteration = --num_load_files_training files used) ",
     )
 
     parser.add_argument(
@@ -613,6 +636,7 @@ if __name__ == "__main__":
             fp16=args.fp16,
             apex_opt_level=args.amp_opt_level,
             save_checkpoints=args.not_save_checkpoints,
+            eval_every=args.eval_every,
             save_every=args.save_every,
             save_best=args.not_save_best,
         )
@@ -628,6 +652,7 @@ if __name__ == "__main__":
             hide_map_prob=args.hide_map_prob,
             num_load_files_training=args.num_load_files_training,
             save_checkpoints=args.not_save_checkpoints,
+            eval_every=args.eval_every,
             save_every=args.save_every,
             save_best=args.not_save_best,
         )
