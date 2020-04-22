@@ -27,6 +27,7 @@ def train(
     test_dir: str,
     output_dir: str,
     batch_size: int,
+    accumulation_steps: int,
     initial_epoch: int,
     num_epoch: int,
     max_acc: float,
@@ -116,6 +117,9 @@ def train(
 
                 outputs = model.forward(X_bacth)
                 loss = criterion(outputs, y_batch)
+                loss = loss / accumulation_steps
+                running_loss += loss.item()
+
                 if fp16:
                     with amp.scale_loss(loss, optimizer) as scaled_loss:
                         scaled_loss.backward()
@@ -127,9 +131,10 @@ def train(
                 else:
                     torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
 
-                optimizer.step()
-                model.zero_grad()
-                running_loss += loss.item()
+                if (num_batchs + 1) % accumulation_steps:
+                    optimizer.step()
+                    model.zero_grad()
+
                 num_batchs += 1
 
             # Print Statistics
@@ -140,7 +145,7 @@ def train(
                 f"Iteration time: {round(time.time() - start_time,2)} secs."
             )
 
-            scheduler.step(running_loss)
+            scheduler.step(running_loss / num_batchs)
 
             if iteration_no % eval_every == 0:
                 start_time_eval: float = time.time()
@@ -214,6 +219,7 @@ def train_new_model(
     test_dir="Data\\GTAV-AI\\data-v2\\test\\",
     output_dir="Data\\models\\",
     batch_size=10,
+    accumulation_steps: int = 1,
     num_epoch=20,
     optimizer_name="SGD",
     learning_rate: float = 0.01,
@@ -328,6 +334,7 @@ def train_new_model(
         test_dir=test_dir,
         output_dir=output_dir,
         batch_size=batch_size,
+        accumulation_steps=accumulation_steps,
         initial_epoch=0,
         num_epoch=num_epoch,
         max_acc=0.0,
@@ -351,6 +358,7 @@ def continue_training(
     test_dir: str = "Data\\GTAV-AI\\data-v2\\test\\",
     output_dir: str = "Data\\models\\",
     batch_size: int = 10,
+    accumulation_steps: int = 1,
     num_epoch: int = 20,
     hide_map_prob: float = 0.0,
     num_load_files_training: int = 5,
@@ -405,6 +413,7 @@ def continue_training(
         test_dir=test_dir,
         output_dir=output_dir,
         batch_size=batch_size,
+        accumulation_steps=accumulation_steps,
         initial_epoch=epoch,
         num_epoch=num_epoch,
         max_acc=acc_dev,
@@ -468,6 +477,13 @@ if __name__ == "__main__":
         type=int,
         required=True,
         help="batch size for training (10 for a 8GB GPU seems fine)",
+    )
+
+    parser.add_argument(
+        "--gradient_accumulation_steps",
+        type=int,
+        default=1,
+        help="Number of gradient steps to accumulate. True batch size =  --batch_size * --accumulation_steps",
     )
 
     parser.add_argument(
@@ -644,6 +660,7 @@ if __name__ == "__main__":
             test_dir=args.test_dir,
             output_dir=args.output_dir,
             batch_size=args.batch_size,
+            accumulation_steps=args.gradient_accumulation_steps,
             num_epoch=args.num_epochs,
             hide_map_prob=args.hide_map_prob,
             num_load_files_training=args.num_load_files_training,
@@ -677,6 +694,7 @@ if __name__ == "__main__":
             test_dir=args.test_dir,
             output_dir=args.output_dir,
             batch_size=args.batch_size,
+            accumulation_steps=args.gradient_accumulation_steps,
             hide_map_prob=args.hide_map_prob,
             num_load_files_training=args.num_load_files_training,
             save_checkpoints=args.not_save_checkpoints,
