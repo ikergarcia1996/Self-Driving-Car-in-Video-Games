@@ -445,6 +445,7 @@ def save_checkpoint(
     model: TEDD1104,
     optimizer_name: str,
     optimizer: torch.optim,
+    scheduler: torch.optim.lr_scheduler,
     acc_dev: float,
     epoch: int,
     fp16: bool,
@@ -497,6 +498,7 @@ def save_checkpoint(
         "model": model.state_dict(),
         "optimizer_name": optimizer_name,
         "optimizer": optimizer.state_dict(),
+        "scheduler": scheduler.state_dict(),
         "acc_dev": acc_dev,
         "epoch": epoch,
         "amp": None if not fp16 else amp.state_dict(),
@@ -508,7 +510,7 @@ def save_checkpoint(
 
 def load_checkpoint(
     path: str, device: torch.device
-) -> (TEDD1104, str, torch.optim, float, int, bool, str):
+) -> (TEDD1104, str, torch.optim, torch.optim.lr_scheduler, float, int, bool, str):
 
     """
     Restore checkpoint
@@ -564,6 +566,16 @@ def load_checkpoint(
             f"Optimizer name {optimizer_name}. Available optimizers: SGD, Adam"
         )
 
+    scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, verbose=True)
+
+    model.load_state_dict(model_weights)
+    optimizer.load_state_dict(optimizer_state)
+    try:
+        scheduler_state = checkpoint["scheduler"]
+        scheduler.load_state_dict(scheduler_state)
+    except KeyError:
+        print(f"Legacy checkpoint, a new scheduler will be created")
+
     if fp16:
         try:
             from apex import amp
@@ -576,13 +588,13 @@ def load_checkpoint(
         model, optimizer = amp.initialize(model, optimizer, opt_level=opt_level)
         amp.load_state_dict(amp_state)
 
-    model.load_state_dict(model_weights)
-    optimizer.load_state_dict(optimizer_state)
+
 
     return (
         model,
         optimizer_name,
         optimizer,
+        scheduler,
         acc_dev,
         epoch,
         fp16,

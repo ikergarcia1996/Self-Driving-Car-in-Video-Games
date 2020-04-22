@@ -21,6 +21,7 @@ def train(
     model: TEDD1104,
     optimizer_name: str,
     optimizer: torch.optim,
+    scheduler: torch.optim.lr_scheduler,
     train_dir: str,
     dev_dir: str,
     test_dir: str,
@@ -83,6 +84,8 @@ def train(
     X_test = torch.from_numpy(X_test)
 
     total_training_exampels: int = 0
+    model.zero_grad()
+
     printTrace("Training...")
     for epoch in range(num_epoch):
         iteration_no: int = 0
@@ -110,7 +113,7 @@ def train(
                     torch.from_numpy(X_bacth).to(device),
                     torch.from_numpy(y_batch).long().to(device),
                 )
-                optimizer.zero_grad()
+
                 outputs = model.forward(X_bacth)
                 loss = criterion(outputs, y_batch)
                 if fp16:
@@ -125,6 +128,7 @@ def train(
                     torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
 
                 optimizer.step()
+                model.zero_grad()
                 running_loss += loss.item()
                 num_batchs += 1
 
@@ -135,6 +139,8 @@ def train(
                 f"Total examples used for training {total_training_exampels}. "
                 f"Iteration time: {round(time.time() - start_time,2)} secs."
             )
+
+            scheduler.step(running_loss)
 
             if iteration_no % eval_every == 0:
                 start_time_eval: float = time.time()
@@ -192,6 +198,7 @@ def train(
                     model=model,
                     optimizer_name=optimizer_name,
                     optimizer=optimizer,
+                    scheduler=scheduler,
                     acc_dev=acc_dev,
                     epoch=initial_epoch + epoch,
                     fp16=fp16,
@@ -209,7 +216,7 @@ def train_new_model(
     batch_size=10,
     num_epoch=20,
     optimizer_name="SGD",
-    learning_rate:float = 0.01,
+    learning_rate: float = 0.01,
     resnet: int = 18,
     pretrained_resnet: bool = True,
     sequence_size: int = 5,
@@ -283,7 +290,9 @@ def train_new_model(
     ).to(device)
 
     if optimizer_name == "SGD":
-        optimizer = optim.SGD(model.parameters(), lr=learning_rate, momentum=0.9)
+        optimizer = optim.SGD(
+            model.parameters(), lr=learning_rate, momentum=0.9, nesterov=True
+        )
     elif optimizer_name == "Adam":
         optimizer = optim.Adam(model.parameters(), lr=learning_rate)
     else:
@@ -291,8 +300,9 @@ def train_new_model(
             f"Optimizer {optimizer_name} not implemented. Available optimizers: SGD, Adam"
         )
 
-    if fp16:
+    scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, verbose=True)
 
+    if fp16:
         try:
             from apex import amp
         except ImportError:
@@ -312,6 +322,7 @@ def train_new_model(
         model=model,
         optimizer_name=optimizer_name,
         optimizer=optimizer,
+        scheduler=scheduler,
         train_dir=train_dir,
         dev_dir=dev_dir,
         test_dir=test_dir,
@@ -372,15 +383,23 @@ def continue_training(
 
     """
 
-    model, optimizer_name, optimizer, acc_dev, epoch, fp16, opt_level = load_checkpoint(
-        checkpoint_path, device
-    )
+    (
+        model,
+        optimizer_name,
+        optimizer,
+        scheduler,
+        acc_dev,
+        epoch,
+        fp16,
+        opt_level,
+    ) = load_checkpoint(checkpoint_path, device)
     model = model.to(device)
 
     max_acc = train(
         model=model,
         optimizer_name=optimizer_name,
         optimizer=optimizer,
+        scheduler=scheduler,
         train_dir=train_dir,
         dev_dir=dev_dir,
         test_dir=test_dir,
