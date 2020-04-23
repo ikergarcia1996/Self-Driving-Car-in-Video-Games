@@ -155,7 +155,7 @@ def train(
 
             scheduler.step(running_loss / num_batchs)
 
-            if iteration_no + 1 % eval_every == 0:
+            if (iteration_no + 1) % eval_every == 0:
                 start_time_eval: float = time.time()
                 if len(X) > 0 and len(y) > 0:
                     acc_train: float = evaluate(
@@ -207,7 +207,7 @@ def train(
                 writer.add_scalar("Accuracy/dev", acc_dev / num_batchs, iteration_no)
                 writer.add_scalar("Accuracy/test", acc_test / num_batchs, iteration_no)
 
-            if save_checkpoints and iteration_no % save_every == 0:
+            if save_checkpoints and (iteration_no + 1) % save_every == 0:
                 printTrace("Saving checkpoint...")
                 save_checkpoint(
                     path=os.path.join(output_dir, "checkpoint.pt"),
@@ -534,7 +534,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--save_every",
         type=int,
-        default=100,
+        default=20,
         help="Save the model every --save_every iterations (1 iteration = --num_load_files_training files used) ",
     )
 
