@@ -204,8 +204,8 @@ def train(
                     )
                 if acc_train > -1:
                     writer.add_scalar("Accuracy/train", acc_train, iteration_no)
-                writer.add_scalar("Accuracy/dev", acc_dev / num_batchs, iteration_no)
-                writer.add_scalar("Accuracy/test", acc_test / num_batchs, iteration_no)
+                writer.add_scalar("Accuracy/dev", acc_dev, iteration_no)
+                writer.add_scalar("Accuracy/test", acc_test, iteration_no)
 
             if save_checkpoints and (iteration_no + 1) % save_every == 0:
                 printTrace("Saving checkpoint...")
