@@ -7,6 +7,7 @@ from typing import List
 import time
 import argparse
 import random
+from torch.utils.tensorboard import SummaryWriter
 
 if torch.cuda.is_available():
     device: torch.device = torch.device("cuda:0")
@@ -67,6 +68,7 @@ def train(
     Output:
      - float: Accuracy in the development test of the best model
     """
+    writer: SummaryWriter = SummaryWriter()
 
     if fp16:
         try:
@@ -141,9 +143,11 @@ def train(
             printTrace(
                 f"EPOCH: {initial_epoch+epoch}. Iteration {iteration_no}. "
                 f"{num_used_files} of {len(files)} files. "
+                f"Loss: {-1 if num_batchs == 0 else running_loss / num_batchs}. "
                 f"Total examples used for training {total_training_exampels}. "
                 f"Iteration time: {round(time.time() - start_time,2)} secs."
             )
+            writer.add_scalar("Loss/train", running_loss / num_batchs, iteration_no)
 
             scheduler.step(running_loss / num_batchs)
 
@@ -177,7 +181,6 @@ def train(
                 )
 
                 printTrace(
-                    f"Loss: {-1 if num_batchs == 0 else running_loss / num_batchs}. "
                     f"Acc training set: {round(acc_train,2)}. "
                     f"Acc dev set: {round(acc_dev,2)}. "
                     f"Acc test set: {round(acc_test,2)}.  "
@@ -195,6 +198,10 @@ def train(
                         fp16=fp16,
                         amp_opt_level=amp_opt_level,
                     )
+                if acc_train > -1:
+                    writer.add_scalar("Accuracy/train", acc_train, iteration_no)
+                writer.add_scalar("Accuracy/dev", acc_dev / num_batchs, iteration_no)
+                writer.add_scalar("Accuracy/test", acc_test / num_batchs, iteration_no)
 
             if save_checkpoints and iteration_no % save_every == 0:
                 printTrace("Saving checkpoint...")
