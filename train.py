@@ -7,6 +7,7 @@ from typing import List
 import time
 import argparse
 import random
+import math
 from torch.utils.tensorboard import SummaryWriter
 
 if torch.cuda.is_available():
@@ -85,12 +86,12 @@ def train(
     print("Loading test set")
     X_test, y_test = load_dataset(test_dir, fp=16 if fp16 else 32)
     X_test = torch.from_numpy(X_test)
-
     total_training_exampels: int = 0
     model.zero_grad()
 
     printTrace("Training...")
     for epoch in range(num_epoch):
+        step_no: int = 0
         iteration_no: int = 0
         num_used_files: int = 0
         files: List[str] = glob.glob(os.path.join(train_dir, "*.npz"))
@@ -98,8 +99,7 @@ def train(
         random.shuffle(files)
         # Get files in batches, all files will be loaded and data will be shuffled
         for paths in batch(files, num_load_files_training):
-            iteration_no += 1
-            num_used_files += num_load_files_training
+
             model.train()
             start_time: float = time.time()
 
@@ -118,8 +118,7 @@ def train(
                 )
 
                 outputs = model.forward(X_bacth)
-                loss = criterion(outputs, y_batch)
-                loss = loss / accumulation_steps
+                loss = criterion(outputs, y_batch) / accumulation_steps
                 running_loss += loss.item()
 
                 if fp16:
@@ -133,11 +132,16 @@ def train(
                 else:
                     torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
 
-                if (num_batchs + 1) % accumulation_steps:
+                if (step_no + 1) % accumulation_steps or (
+                    num_used_files + 1 > len(files) - num_load_files_training
+                    and num_batchs == math.ceil(len(y) / batch_size) - 1
+                ):  # If we are in the last bach of the epoch we also want to perform gradient descent
                     optimizer.step()
                     model.zero_grad()
 
                 num_batchs += 1
+                step_no += 1
+                num_used_files += num_load_files_training
 
             # Print Statistics
             printTrace(
@@ -151,7 +155,7 @@ def train(
 
             scheduler.step(running_loss / num_batchs)
 
-            if iteration_no % eval_every == 0:
+            if iteration_no + 1 % eval_every == 0:
                 start_time_eval: float = time.time()
                 if len(X) > 0 and len(y) > 0:
                     acc_train: float = evaluate(
@@ -216,6 +220,8 @@ def train(
                     fp16=fp16,
                     opt_level=amp_opt_level,
                 )
+
+            iteration_no += 1
 
     return max_acc
 
