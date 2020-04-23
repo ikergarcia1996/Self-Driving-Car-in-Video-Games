@@ -18,8 +18,8 @@ video game.
     </table>
 
 ## News
-**NEW 15/04/2020** First pretrained model available!!, [click here to download it](https://github.com/ikergarcia1996/Self-Driving-Car-in-Video-Games/releases/tag/0.1). For instructions on how to run the AI see the [Run the Model](#run-the-model) Section
-**NEW 7/04/2020** Let's generate a huge training dataset together!! [Click here so see how to collaborate in the project (Spanish)](https://youtu.be/utQoMGLbCFc)
+**NEW 15/04/2020** First pretrained model released!!, [click here to download it](https://github.com/ikergarcia1996/Self-Driving-Car-in-Video-Games/releases/tag/0.2). For instructions on how to run the AI see the [Run the Model](#run-the-model) Section  
+**NEW 7/04/2020** Let's generate a huge training dataset together!! [Click here so see how to collaborate in the project (Spanish)](https://youtu.be/utQoMGLbCFc)  
 
 ## Architecture
 Most previous models that attempt to achieve self-driving in video games consists of a deep convolutional neural network 
