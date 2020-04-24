@@ -103,9 +103,12 @@ def generate_dataset(
     th_img: threading.Thread = threading.Thread(
         target=screen_recorder.img_thread, args=[stop_recording]
     )
+
     th_seq: threading.Thread = threading.Thread(
         target=screen_recorder.image_sequencer_thread, args=[stop_recording]
     )
+    th_img.setDaemon(True)
+    th_seq.setDaemon(True)
     th_img.start()
     # Wait to launch the image_sequencer_thread, it needs the img_thread to be running
     time.sleep(1)
