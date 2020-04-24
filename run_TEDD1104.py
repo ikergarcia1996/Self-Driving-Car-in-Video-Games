@@ -82,9 +82,14 @@ def run_TED1104(
     last_time: float = time.time()
     model_prediction: np.ndarray = np.asarray([0])
     score: np.float = np.float(0)
-
+    last_num: int = 0
     while True:
-        img_seq: np.ndarray = screen_recorder.seq.copy()
+        while (
+            last_num == screen_recorder.num
+        ):  # Don't run the same sequency again, the resulted key will be the same
+            time.sleep(0.0001)
+        last_num += 1
+        img_seq: np.ndarray = screen_recorder.seq
         keys = key_check()
         if not "J" in keys:
             X: torch.Tensor = torch.from_numpy(
