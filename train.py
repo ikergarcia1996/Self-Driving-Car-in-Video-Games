@@ -9,6 +9,7 @@ import argparse
 import random
 import math
 from torch.utils.tensorboard import SummaryWriter
+from DataLoader import DataLoaderTEDD
 
 if torch.cuda.is_available():
     device: torch.device = torch.device("cuda:0")
@@ -94,18 +95,19 @@ def train(
         step_no: int = 0
         iteration_no: int = 0
         num_used_files: int = 0
-        files: List[str] = glob.glob(os.path.join(train_dir, "*.npz"))
-        random.seed()
-        random.shuffle(files)
-        # Get files in batches, all files will be loaded and data will be shuffled
-        for paths in batch(files, num_load_files_training):
+        data_loader = DataLoaderTEDD(
+            dataset_dir=train_dir,
+            nfiles2load=num_load_files_training,
+            hide_map_prob=hide_map_prob,
+            fp=16 if fp16 else 32,
+        )
 
+        data = data_loader.get_next()
+        # Get files in batches, all files will be loaded and data will be shuffled
+        while data:
+            X, y = data
             model.train()
             start_time: float = time.time()
-
-            X, y = load_and_shuffle_datasets(
-                paths=paths, fp=16 if fp16 else 32, hide_map_prob=hide_map_prob
-            )
             total_training_exampels += len(y)
             running_loss: float = 0.0
             num_batchs: int = 0
@@ -133,7 +135,7 @@ def train(
                     torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
 
                 if (step_no + 1) % accumulation_steps or (
-                    num_used_files + 1 > len(files) - num_load_files_training
+                    num_used_files + 1 > len(data_loader) - num_load_files_training
                     and num_batchs == math.ceil(len(y) / batch_size) - 1
                 ):  # If we are in the last bach of the epoch we also want to perform gradient descent
                     optimizer.step()
@@ -141,15 +143,19 @@ def train(
 
                 num_batchs += 1
                 step_no += 1
-                num_used_files += num_load_files_training
+
+            num_used_files += num_load_files_training
 
             # Print Statistics
             printTrace(
                 f"EPOCH: {initial_epoch+epoch}. Iteration {iteration_no}. "
-                f"{num_used_files} of {len(files)} files. "
-                f"Loss: {-1 if num_batchs == 0 else running_loss / num_batchs}. "
+                f"{num_used_files} of {len(data_loader)} files. "
                 f"Total examples used for training {total_training_exampels}. "
                 f"Iteration time: {round(time.time() - start_time,2)} secs."
+            )
+            printTrace(
+                f"Loss: {-1 if num_batchs == 0 else running_loss / num_batchs}. "
+                f"Learning rate {optimizer.state_dict()['param_groups'][0]['lr']}"
             )
             writer.add_scalar("Loss/train", running_loss / num_batchs, iteration_no)
 
@@ -222,6 +228,9 @@ def train(
                 )
 
             iteration_no += 1
+            data = data_loader.get_next()
+
+        data_loader.close()
 
     return max_acc
 
@@ -236,6 +245,7 @@ def train_new_model(
     num_epoch=20,
     optimizer_name="SGD",
     learning_rate: float = 0.01,
+    scheduler_patience: int = 20,
     resnet: int = 18,
     pretrained_resnet: bool = True,
     sequence_size: int = 5,
@@ -319,7 +329,9 @@ def train_new_model(
             f"Optimizer {optimizer_name} not implemented. Available optimizers: SGD, Adam"
         )
 
-    scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, verbose=True)
+    scheduler = optim.lr_scheduler.ReduceLROnPlateau(
+        optimizer, verbose=True, patience=scheduler_patience, factor=0.5
+    )
 
     if fp16:
         try:
@@ -576,6 +588,13 @@ if __name__ == "__main__":
     )
 
     parser.add_argument(
+        "--scheduler_patience",
+        type=int,
+        default=20,
+        help="[new_model] Number of steps where the loss does not decrease until decrease the learning rate",
+    )
+
+    parser.add_argument(
         "--resnet",
         type=int,
         default=18,
@@ -679,6 +698,7 @@ if __name__ == "__main__":
             num_load_files_training=args.num_load_files_training,
             optimizer_name=args.optimizer_name,
             learning_rate=args.learning_rate,
+            scheduler_patience=args.scheduler_patience,
             resnet=args.resnet,
             pretrained_resnet=args.do_not_load_pretrained_resnet,
             sequence_size=args.sequence_size,
