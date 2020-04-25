@@ -61,7 +61,8 @@ def train(
     - num_epochs: Number of epochs to do
     - max_acc: Accuracy in the development set (0 unless the model has been
       restored from checkpoint)
-    - hide_map_prob: Probability for removing the minimap (black square) from the image (0<=hide_map_prob<=1)
+    - hide_map_prob: Probability for removing the minimap (put a black square)
+       from a training example (0<=hide_map_prob<=1)
     - fp16: Use FP16 for training
     - amp_opt_level: If FP16 training Nvidia apex opt level
     - save_checkpoints: save a checkpoint each epoch (Each checkpoint will rewrite the previous one)
@@ -292,7 +293,8 @@ def train_new_model(
     - dropout_cnn_out: dropout probability for the cnn features (output layer)
     - dropout_lstm: dropout probability for the LSTM
     - dropout_lstm_out: dropout probability for the LSTM features (output layer)
-    - hide_map_prob: Probability for removing the minimap (black square) from the image (0<=hide_map_prob<=1)
+    - hide_map_prob: Probability for removing the minimap (put a black square)
+      from a training example (0<=hide_map_prob<=1)
     - fp16: Use FP16 for training
     - amp_opt_level: If FP16 training Nvidia apex opt level
     - save_checkpoints: save a checkpoint each epoch (Each checkpoint will rewrite the previous one)
@@ -408,7 +410,8 @@ def continue_training(
     - batch_size: Batch size (Around 10 for 8GB GPU)
     - num_epochs: Number of epochs to do
     - optimizer_name: Name of the optimizer to use [SGD, Adam]
-    - hide_map_prob: Probability for removing the minimap (black square) from the image (0<=hide_map_prob<=1)
+    - hide_map_prob: Probability for removing the minimap (put a black square)
+      from a training example (0<=hide_map_prob<=1)
     - save_checkpoints: save a checkpoint each epoch (Each checkpoint will rewrite the previous one)
     - save_best: save the model that achieves the higher accuracy in the development set
 
@@ -519,7 +522,7 @@ if __name__ == "__main__":
         "--hide_map_prob",
         type=float,
         default=0.0,
-        help="Probability for removing the minimap (black square) from the image (0<=hide_map_prob<=1)",
+        help="Probability for removing the minimap (put a black square) from a training example (0<=hide_map_prob<=1)",
     )
 
     parser.add_argument(

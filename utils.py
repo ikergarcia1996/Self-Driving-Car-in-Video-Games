@@ -161,7 +161,8 @@ def reshape_x(
     Input:
      - data: ndarray [num_examples x 6]
      - fp: floating-point precision: Available values: 16, 32, 64
-     -hide_map_prob: Probability for removing the minimap (black square) from the image (0<=hide_map_prob<=1)
+     - hide_map_prob: Probability for removing the minimap (black square) from the image (0<=hide_map_prob<=1)
+     - force_cpu: Use numpy version even if cupy is available (In case the GPU is being used to train the model)
     Output:
     - ndarray [num_examples * 5, num_channels, H, W]
     """
@@ -264,7 +265,8 @@ def load_file(
     Input:
      - path: Path of the dataset
      - fp: floating-point precision: Available values: 16, 32, 64
-     -hide_map_prob: Probability for removing the minimap (black square) from the image (0<=hide_map_prob<=1)
+     - hide_map_prob: Probability for removing the minimap (put a black square)
+       from a training example (0<=hide_map_prob<=1)
     Output:
     - X: input examples [num_examples, 5, 3, H, W]
     - y: golds for the input examples [num_examples]
@@ -330,10 +332,13 @@ def load_and_shuffle_datasets(
     Load multiple dataset files and shuffle the data, useful for training
     Input:
      - paths: List of paths to dataset files
+     - hide_map_prob: Probability for removing the minimap (put a black square)
+       from a training example (0<=hide_map_prob<=1)
      - fp: floating-point precision: Available values: 16, 32, 64
+     - force_cpu: Use numpy version even if cupy is available (In case the GPU is being used to train the model)
     Output:
-    - X: input examples [num_examples_per_file * num_files, 5, 3, H, W]
-    - y: golds for the input examples [num_examples_per_file * num_files]
+    - X: input examples [num_examples_per_file * len(paths), 5, 3, H, W]
+    - y: golds for the input examples [num_examples_per_file * len(paths)]
     """
     data_array: np.ndarray = np.array([])
 
