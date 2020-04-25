@@ -86,7 +86,7 @@ def run_TED1104(
     while True:
         while (
             last_num == screen_recorder.num
-        ):  # Don't run the same sequency again, the resulted key will be the same
+        ):  # Don't run the same sequence again, the resulted key will be the same
             time.sleep(0.0001)
         last_num += 1
         img_seq: np.ndarray = screen_recorder.seq
