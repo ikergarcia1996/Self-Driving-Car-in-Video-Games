@@ -152,21 +152,24 @@ def reshape_x_cupy(
     return reshaped
 
 
-def reshape_x(data: np.ndarray, fp=16, hide_map_prob: float = 0.0) -> np.ndarray:
+def reshape_x(
+    data: np.ndarray, fp=16, hide_map_prob: float = 0.0, force_cpu: bool = False
+) -> np.ndarray:
     """
     Get images from data as a list and preprocess them, if cupy is available it uses the GPU,
     else it uses the CPU (numpy)
     Input:
      - data: ndarray [num_examples x 6]
      - fp: floating-point precision: Available values: 16, 32, 64
-     -hide_map_prob: Probability for removing the minimap (black square) from the image (0<=hide_map_prob<=1)
+     - hide_map_prob: Probability for removing the minimap (black square) from the image (0<=hide_map_prob<=1)
+     - force_cpu: Use numpy version even if cupy is available (In case the GPU is being used to train the model)
     Output:
     - ndarray [num_examples * 5, num_channels, H, W]
     """
     assert (
         0 <= hide_map_prob <= 1
     ), f"Hide map prob must be between 0.0 and 1.0. Hide map prob: {hide_map_prob}"
-    if cupy:
+    if cupy and not force_cpu:
         if fp == 16:
             return reshape_x_cupy(data, dtype=cp.float16, hide_map_prob=hide_map_prob)
         elif fp == 32:
@@ -262,7 +265,8 @@ def load_file(
     Input:
      - path: Path of the dataset
      - fp: floating-point precision: Available values: 16, 32, 64
-     -hide_map_prob: Probability for removing the minimap (black square) from the image (0<=hide_map_prob<=1)
+     - hide_map_prob: Probability for removing the minimap (put a black square)
+       from a training example (0<=hide_map_prob<=1)
     Output:
     - X: input examples [num_examples, 5, 3, H, W]
     - y: golds for the input examples [num_examples]
@@ -322,16 +326,19 @@ def load_dataset(path: str, fp: int = 16) -> (np.ndarray, np.ndarray):
 
 
 def load_and_shuffle_datasets(
-    paths: List[str], hide_map_prob: float, fp: int = 16
+    paths: List[str], hide_map_prob: float, fp: int = 16, force_cpu: bool = False
 ) -> (np.ndarray, np.ndarray):
     """
     Load multiple dataset files and shuffle the data, useful for training
     Input:
      - paths: List of paths to dataset files
+     - hide_map_prob: Probability for removing the minimap (put a black square)
+       from a training example (0<=hide_map_prob<=1)
      - fp: floating-point precision: Available values: 16, 32, 64
+     - force_cpu: Use numpy version even if cupy is available (In case the GPU is being used to train the model)
     Output:
-    - X: input examples [num_examples_per_file * num_files, 5, 3, H, W]
-    - y: golds for the input examples [num_examples_per_file * num_files]
+    - X: input examples [num_examples_per_file * len(paths), 5, 3, H, W]
+    - y: golds for the input examples [num_examples_per_file * len(paths)]
     """
     data_array: np.ndarray = np.array([])
 
@@ -367,7 +374,9 @@ def load_and_shuffle_datasets(
         logging.warning(f"Empty dataset, all files invalid. Path: {paths}")
         return np.array([]), np.array([])
 
-    X: np.ndarray = reshape_x(data_array, fp, hide_map_prob)
+    X: np.ndarray = reshape_x(
+        data_array, fp=fp, hide_map_prob=hide_map_prob, force_cpu=force_cpu
+    )
     y: np.ndarray = reshape_y(data_array)
 
     return X, y
