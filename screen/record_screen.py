@@ -1,9 +1,13 @@
+from numpy.core._multiarray_umath import ndarray
+
 from screen.grabber import Grabber
 import numpy as np
 import time
 import cv2
 from keyboard.getkeys import key_check
 import threading
+import logging
+import math
 
 global fps
 global grb
@@ -111,6 +115,66 @@ def image_sequencer_thread(stop_event: threading.Event) -> None:
         waittime = (1.0 / capturerate) - (time.time() - last_time)
         if waittime > 0.0:
             time.sleep(waittime)
+
+
+def multi_image_sequencer_thread(
+    stop_event: threading.Event, num_sequences: int
+) -> None:
+    """
+    Get the images from img_thread and maintain an updated array seq of the last 5 captured images with a 1/10 secs
+    span between them.
+    Input:
+    - stop_event: threading.Event that will stop the thread
+    Output:
+
+    """
+    global back_buffer
+    global seq
+    global key_out
+    global num
+
+    # Frames per second capture rate
+    capturerate: float = 10.0
+    sequence_delay: float = (1 / capturerate) / float(num_sequences)
+    sequences: ndarray = np.repeat(
+        np.expand_dims(
+            np.asarray(
+                [
+                    np.zeros((270, 480, 3)),
+                    np.zeros((270, 480, 3)),
+                    np.zeros((270, 480, 3)),
+                    np.zeros((270, 480, 3)),
+                    np.zeros((270, 480, 3)),
+                ],
+                dtype=np.uint8,
+            ),
+            0,
+        ),
+        num_sequences,
+        axis=0,
+    )
+
+    last_times: ndarray = np.asarray([sequence_delay * x for x in range(num_sequences)])
+    first_it: bool = True  # Avoid printing delay warning during the first iteration
+    while not stop_event.is_set():
+        for i in range(num_sequences):
+            waittime: float = last_times[i] + sequence_delay - time.time()
+            if waittime > 0.0:
+                time.sleep(waittime)
+            else:
+                if not first_it:
+                    logging.warning(
+                        f"{math.fabs(waittime)} delay in the sequence capture, consider reducing num_sequences"
+                    )
+
+            last_times[i] = time.time()
+            sequences[i] = np.concatenate(
+                (sequences[i][1:], [preprocess_image(np.copy(back_buffer))]), axis=0,
+            )
+
+            seq, num, key_out = sequences[i], num + 1, keys_to_output(key_check())
+
+        first_it = False
 
 
 def initialize_global_variables() -> None:

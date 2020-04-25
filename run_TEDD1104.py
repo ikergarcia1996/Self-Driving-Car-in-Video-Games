@@ -26,6 +26,7 @@ def run_TED1104(
     fp16: bool,
     enable_evasion: bool,
     show_current_control: bool,
+    num_parallel_sequences: int = 1,
     evasion_score=1000,
 ) -> None:
     """
@@ -46,6 +47,10 @@ def run_TED1104(
     - enable_evasion: automatic evasion maneuvers when the car gets stuck somewhere. Note: It adds computation time
     - show_current_control: Show a window with text that indicates if the car is currently being driven by
       the AI or a human
+    - num_parallel_sequences: num_parallel_sequences to record, is the number is larger the recorded sequence of images
+      will be updated faster and the model  will use more recent images as well as being able to do more iterations
+      per second. However if num_parallel_sequences is too high it wont be able to update the sequences with 1/10 secs
+      between images (default capturate to generate training examples).
     -evasion_score: Mean squared error value between images to activate the evasion maneuvers
 
     Output:
@@ -63,7 +68,8 @@ def run_TED1104(
         target=screen_recorder.img_thread, args=[stop_recording]
     )
     th_seq: threading.Thread = threading.Thread(
-        target=screen_recorder.image_sequencer_thread, args=[stop_recording]
+        target=screen_recorder.multi_image_sequencer_thread,
+        args=[stop_recording, num_parallel_sequences],
     )
     th_img.setDaemon(True)
     th_seq.setDaemon(True)
@@ -88,8 +94,8 @@ def run_TED1104(
             last_num == screen_recorder.num
         ):  # Don't run the same sequence again, the resulted key will be the same
             time.sleep(0.0001)
-        last_num += 1
-        img_seq: np.ndarray = screen_recorder.seq
+        last_num = screen_recorder.num
+        img_seq: np.ndarray = np.copy(screen_recorder.seq)
         keys = key_check()
         if not "J" in keys:
             X: torch.Tensor = torch.from_numpy(
@@ -130,10 +136,15 @@ def run_TED1104(
 
         if show_what_ai_sees:
             cv2.imshow("window1", img_seq[0])
+            cv2.waitKey(1)
             cv2.imshow("window2", img_seq[1])
+            cv2.waitKey(1)
             cv2.imshow("window3", img_seq[2])
+            cv2.waitKey(1)
             cv2.imshow("window4", img_seq[3])
+            cv2.waitKey(1)
             cv2.imshow("window5", img_seq[4])
+            cv2.waitKey(1)
 
         if "Q" in keys and "E" in keys:
             print("\nStopping...")
@@ -153,7 +164,7 @@ def run_TED1104(
             else:
                 show_what_ai_sees = True
 
-        time_it = time.time() - last_time
+        time_it: float = time.time() - last_time
         print(
             f"Recording at {screen_recorder.fps} FPS\n"
             f"Actions per second {None if time_it==0 else 1/time_it}\n"
@@ -200,6 +211,16 @@ if __name__ == "__main__":
     )
 
     parser.add_argument(
+        "--num_parallel_sequences",
+        type=int,
+        default=1,
+        help="num_parallel_sequences to record, is the number is larger the recorded sequence of images will be "
+        "updated faster and the model  will use more recent images as well as being able to do more iterations "
+        "per second. However if num_parallel_sequences is too high it wont be able to update the sequences with "
+        "1/10 secs between images (default capturate to generate training examples). ",
+    )
+
+    parser.add_argument(
         "--evasion_score",
         type=float,
         default=200,
@@ -215,5 +236,6 @@ if __name__ == "__main__":
         fp16=args.fp16,
         enable_evasion=args.enable_evasion,
         show_current_control=args.show_current_control,
+        num_parallel_sequences=args.num_parallel_sequences,
         evasion_score=args.evasion_score,
     )
