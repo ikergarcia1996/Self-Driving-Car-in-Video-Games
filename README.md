@@ -164,7 +164,7 @@ As every other neural network, TEDD1104 tries to find the easiest way of replica
  removing each input image for a training example with the parameter --dropout_images_prob followed by 5 floats. 
  Using a bidirectional LSTM can also be useful. 
 * Scheduler:  --scheduler_patience allows setting a number of iterations. If the loss function does not decrease 
- after the specified number of iterations the learning rate is reduced (new_learning_rate = learning rate * 0.1). 
+ after the specified number of iterations the learning rate is reduced (new_learning_rate = learning rate * 0.5). 
  This helps to further improve the model after the loss function stops decreasing. 
 * Gradient accumulation: TEDD1104 is very memory demanding. In my RTX 2080 (8GB VRAM) using FP16, I can only set a
  batch size between 10 and 20 which might be too low. To increase the batch size you can use gradient accumulation.
