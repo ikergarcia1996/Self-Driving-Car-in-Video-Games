@@ -80,7 +80,7 @@ is the only supported SO by most video games.
 
 ### 3.1) Requirements
 ```
-Pytorch
+Pytorch (1.4.0 or newer reccomended)
 Torchvision
 numpy
 glob
