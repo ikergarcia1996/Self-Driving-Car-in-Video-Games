@@ -17,11 +17,29 @@ video game.
     </tr>
     </table>
 
-## News
-**NEW 15/04/2020** First pretrained model released!!, [click here to download it](https://github.com/ikergarcia1996/Self-Driving-Car-in-Video-Games/releases/tag/0.2). For instructions on how to run the AI see the [Run the Model](#run-the-model) Section  
-**NEW 7/04/2020** Let's generate a huge training dataset together!! [Click here so see how to collaborate in the project (Spanish)](https://youtu.be/utQoMGLbCFc)  
 
-## Architecture
+## Table of Contents
+- [T.E.D.D. 1104](#tedd-1104)
+  * [Table of Contents](#table-of-contents)
+  * [1) News](#1--news)
+  * [2) Architecture](#2--architecture)
+  * [3) Software and HOW-TO](#3--software-and-how-to)
+    + [3.1) Requirements](#31--requirements)
+    + [3.2) Generate dataset](#32--generate-dataset)
+    + [3.3) Train the model](#33--train-the-model)
+      - [Improving the robustness of the model](#improving-the-robustness-of-the-model)
+    + [3.4) Run the model](#34--run-the-model)
+      - [Pretrained models:](#pretrained-models-)
+      - [Extra features](#extra-features)
+  * [4) Authors:](#4--authors-)
+
+
+## 1) News
+**NEW 15/04/2020** First pretrained model released!!, [click here to download it](https://github.com/ikergarcia1996/Self-Driving-Car-in-Video-Games/releases/tag/0.2). For instructions on how to run the AI see the [Run the Model](#34--run-the-model) Section  
+**NEW 7/04/2020** Let's generate a huge training dataset together!! [Click here so see how to collaborate in the project (Spanish)](https://youtu.be/utQoMGLbCFc). 
+**We have reached 1,5Tb of training data (~150 hours of gameplay)!!!!**  
+
+## 2) Architecture
 Most previous models that attempt to achieve self-driving in video games consists of a deep convolutional neural network 
 (usually Inception or Resnet). The models take as input a single image.
  Would you be able to know what to do if I give you this image?
@@ -43,8 +61,8 @@ about the motion of other cars, environment and himself.
   <img src="github_images/sequence.png" alt="Sequences 4 the win"/>
 </p>
 
-T.E.D.D. 1104 consists of a Deep Convolutional Neural Network (Resnet: K He et al. 2016) followed by 
-a Recurrent Neural Network (LSTM). The CNN receives as input a sequence of 5 images and generates for each one a 
+T.E.D.D. 1104 follows the End-to-end (E2E) learning approach and it consists of a Deep Convolutional Neural Network (Resnet: K He et al. 2016) 
+followed by a Recurrent Neural Network (LSTM). The CNN receives as input a sequence of 5 images and generates for each one a 
 vector representation. These representations are fed into the RNN that generates a unique vector representation 
 for the entire sequence. Finally, a Feed-Forward Neural Network outputs the key to press in the keyboard based 
 on the vector representation for the sequence.
@@ -55,12 +73,12 @@ on the vector representation for the sequence.
 
 The model has been implemented using Pytorch: https://pytorch.org/
 
-## Software and HOW-TO
+## 3) Software and HOW-TO
 This repository contains all the files need for generating the training data, training the model and use the model to 
 drive in the video game. The software has been written in Python 3. This model has only been tested in Windows 10 because
 is the only supported SO by most video games.  
 
-### Requirements
+### 3.1) Requirements
 ```
 Pytorch
 Torchvision
@@ -75,7 +93,7 @@ json
 win32api (PythonWin) - Should be installed by default in newest Python versions (Python 3.7 reccomended)
 ```
 
-### Run the model Generate dataset 
+### 3.2) Generate dataset 
 * File: generate_data.py
 * Usage example: 
 ```
@@ -97,7 +115,7 @@ python generate_data.py --save_dir tedd1007\training_data
   
 
 
-### Train the model 
+### 3.3) Train the model 
 * File: train.py
 * Usage example: 
 ```
@@ -105,7 +123,7 @@ python train.py --train_new
 --train_dir tedd1007\training_data\train 
 --dev_dir tedd1007\training_data\dev 
 --test_dir tedd1007\training_data\test 
---output_dir tedd1007\models 
+--output_dir tedd1007\models\model1
 --batch_size 10 
 --num_epochs 5 
 --fp16
@@ -131,19 +149,74 @@ python train.py --continue_training
 --output_dir tedd1007\models 
 --batch_size 10 
 --num_epochs 5 
---checkpoint_path tedd1007\checkpoint\epoch1checkpoint.pt
+--checkpoint_path tedd1007\models\model1\checkpoint.pt
 ```
-   
-### Run the model
+
+#### Improving the robustness of the model
+As every other neural network, TEDD1104 tries to find the easiest way of replicating the training examples. 
+* TEDD1104 will tend to focus on the in-game minimap, this will result in a model that is very good following the roads in mini-map but ignores other cars or obstacles. To avoid that "--hide_map_prob" parameter sets a probability of removing (put a black square) the minimap from all the images of a training example. I recommend using a value between 0.4 and 0.5. 
+* Removing (black image) some of the images from an input sequence, especially the last one, can also help to improve 
+ the robustness of the model. If one of the images of the sequence is removed, TEDD1104 will be forced to "imagine" that 
+ image, improving the trajectory prediction capabilities of the model. It will also force the model to use the 
+ information from all the images in the sequence instead of relying on the last one. We can set a probability for 
+ removing each input image for a training example with the parameter --dropout_images_prob followed by 5 floats. 
+ Using a bidirectional LSTM can also be useful. 
+* Scheduler:  --scheduler_patience allows setting a number of iterations. If the loss function does not decrease 
+ after the specified number of iterations the learning rate is reduced (new_learning_rate = learning rate * 0.1). 
+ This helps to further improve the model after the loss function stops decreasing. 
+* Gradient accumulation: TEDD1104 is very memory demanding. In my RTX 2080 (8GB VRAM) using FP16, I can only set a
+ batch size between 10 and 20 which might be too low. To increase the batch size you can use gradient accumulation.
+ Gradient accumulation allows increasing the batch size without increasing the VRAM usage. You can set the number of
+ batches to accumulate with the parameter --gradient_accumulation_steps. The effective batch size will equal
+ --batch_size * --gradient_accumulation_steps. 
+* Validation data: The best validation data (dev and test) are files of routes through the map driving different 
+vehicles and driving in different weather conditions (including day/night). DO NOT USE as dev or test set random examples
+are taken from the training set because they will be part of a sequence of similar data, that is, a high dev and test accuracy
+will correspond to an overfitted model. Note that we save the model that achieves the highest accuracy in the dev test.
+* Since the training data is generated recoding humans driving, each training file will store a sequence of continuous examples, that is,
+similar weather conditions, the same vehicle, a lot of similar training examples... To improve the robustness of the model 
+it would be ideal to shuffle the entire training dataset. When you have a very big dataset shuffling all the examples can
+take many days or even weeks (+1TB data). An alternative is loading multiple random files (i.e. 5) during training and 
+shuffling the examples of the loaded files. The parameter --num_load_files_training sets the number of files that will be loaded
+and shuffled. The higher the value, the higher RAM usage. 
+This is an example of a command for training a small model taking into all the described improvements into account.
+```
+python train.py --train_new 
+--train_dir tedd1007\training_data\train 
+--dev_dir tedd1007\training_data\dev 
+--test_dir tedd1007\training_data\test 
+--output_dir tedd1007\models\small+
+--batch_size 20 
+--gradient_accumulation_steps 4 
+--num_epochs 5 
+--num_load_files_training 5
+--optimizer_name SGD 
+--learning_rate 0.01 
+--scheduler_patience 100 
+--bidirectional_lstm 
+--dropout_lstm_out 0.2 
+--dropout_images_prob 0.2 0.2 0.2 0.2 0.3 
+--hide_map_prob 0.4
+--fp16 
+```
+  
+During training you can use tensorboard to visualize the loss and accuracy:
+```
+tensorboard --logdir='./runs'
+```
+
+### 3.4) Run the model
+
 * File: run_TEDD1104.py
-* Pretrained-Models: [See the releases sections](https://github.com/ikergarcia1996/Self-Driving-Car-in-Video-Games/releases/)
 * Usage example: 
 ```
-python run_TEDD1104.py --model_dir D:\GTAV-AI\models --show_current_control --fp16
+python run_TEDD1104.py --model_dir tedd1007\models\model1 --show_current_control --fp16
 ```
+
 Use the FP16 flag if you have an Nvidia GPU with tensor cores (RTX 2000, RTX Titan, Titan V...) 
 for a nice speed up (~x2 speed up) and half the VRAM usage. 
 Requires the Nvidia Apex library: https://github.com/NVIDIA/apex
+
 
 * How-to:
   * Set your game in windowed mode
@@ -159,10 +232,31 @@ Requires the Nvidia Apex library: https://github.com/NVIDIA/apex
   <img src="github_images/example_config.png" alt="Setup Example"/>
 </p>
 
+#### Pretrained models:
+Pretrained models are available in the releases section: [Releases sections](https://github.com/ikergarcia1996/Self-Driving-Car-in-Video-Games/releases/)
+
+#### Extra features 
+* By default, the model will record a sequence of images with an interval of 0,1secs between each image. 
+This means that the model will predict a key to push 10 times per second (every time the sequence is updated). 
+You can increase this value with the --num_parallel_sequences parameter. num_parallel_sequences=2 means that 20 
+sequences per second will be recorded (2 sequences will be recorded in parallel updating them every 0,05sec), 
+num_parallel_sequences=3 30... Recoding more sequences per second can help TEDD1104 to drive better, 
+but a faster CPU and memory will be required to ensure a 0,1sec delay between each image in all the sequences. 
+A warning will be printed if the CPU is not able to update the sequences fast enough. 
+Using an i7 8700K I can record up to 2 sequences.
+* The model may crash into a wall, car or other obstacle and be unable to return to the road.
+ The model implements an "evasion manoeuvre", if the first and the last images in a sequence of 
+ images are very similar (i.e car is stuck facing a wall) it will automatically drive backwards for 1 
+ second and then randomly turn left or right for 0,2 seconds. To enable this feature use the --enable_evasion 
+ flag and select the sensitivity to trigger the evasion manoeuvre (the difference between images calculated using 
+ mean squared error) with the --evasion_score parameter (default 200). Note that this option requires to calculate 
+ the mean squared error between two images each iteration, so it will increase the time the model needs to process 
+ an input sequence.
+
 
   
 
-# Authors:
+## 4) Authors:
 ```
 - Iker García
   Personal Webpage: https://ikergarcia1996.github.io/Iker-Garcia-Ferrero/
