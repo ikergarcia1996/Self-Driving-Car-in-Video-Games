@@ -5,7 +5,7 @@ regulations, but imitate how humans drive in this game: Drive at full speed thro
 cars and occasionally humans and lampposts.
 A marker will be set in the game map, the model should be able to arrive to the marker driving trough the city. 
 
-The model is trained using human labeled data. We record the game and key inputs of humans while the play the game, this data
+The model is trained using human labeled data. We record the game and key inputs of humans while they play the game, this data
 is used to train the model. 
 
 While we focus on self-driving cars and the video game Grand Theft Auto V this model can be adapted to play any existing
