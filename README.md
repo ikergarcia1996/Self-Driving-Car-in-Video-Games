@@ -83,7 +83,7 @@ is the only supported SO by most video games.
 Pytorch
 Torchvision
 tensorboard (only for training a model)
-Nvidia Apex (only for FP16 training)
+Nvidia Apex (only for using FP16)
 numpy
 cupy (optional but highly recommended, 10x speed up in data preprocessing comparated with numpy)
 cv2 (opencv-python)
