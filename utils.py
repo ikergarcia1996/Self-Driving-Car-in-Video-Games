@@ -93,7 +93,10 @@ def reshape_y(data: np.ndarray) -> np.ndarray:
 
 
 def reshape_x_numpy(
-    data: np.ndarray, dtype=np.float16, hide_map_prob: float = 0.0
+    data: np.ndarray,
+    dtype=np.float16,
+    hide_map_prob: float = 0.0,
+    dropout_images_prob: List[float] = None,
 ) -> np.ndarray:
     """
     Get images from data as a list and preprocess them.
@@ -102,6 +105,8 @@ def reshape_x_numpy(
      -dtype: numpy dtype for the output array
      -hide_map_prob: Probability for removing the minimap (black square)
       from the sequence of images (0<=hide_map_prob<=1)
+    - dropout_images_prob List of 5 floats or None, probability for removing each input image during training
+     (black image) from a training example (0<=dropout_images_prob<=1)
     Output:
     - ndarray [num_examples * 5, num_channels, H, W]
     """
@@ -111,17 +116,30 @@ def reshape_x_numpy(
     for i in range(0, len(data)):
         black_minimap: bool = (random.random() <= hide_map_prob)
         for j in range(0, 5):
-            img = np.array(data[i][j], dtype=dtype)
-            if black_minimap:  # Put a black square over the minimap
-                img[215:, :80] = np.zeros((55, 80, 3), dtype=dtype)
+            black_image: bool = False
+            if dropout_images_prob is not None:
+                black_image = random.random() <= dropout_images_prob[j]
+            if black_image:
+                reshaped[i * 5 + j] = np.zeros(
+                    (3, data[i][j].shape[0], data[i][j].shape[1]), dtype=dtype
+                )
+            else:
+                img = np.array(data[i][j], dtype=dtype)
+                if black_minimap:  # Put a black square over the minimap
+                    img[215:, :80] = np.zeros((55, 80, 3), dtype=dtype)
 
-            reshaped[i * 5 + j] = np.rollaxis((img / dtype(255.0)) - mean / std, 2, 0)
+                reshaped[i * 5 + j] = np.rollaxis(
+                    (img / dtype(255.0)) - mean / std, 2, 0
+                )
 
     return reshaped
 
 
 def reshape_x_cupy(
-    data: np.ndarray, dtype=cp.float16, hide_map_prob: float = 0.0
+    data: np.ndarray,
+    dtype=cp.float16,
+    hide_map_prob: float = 0.0,
+    dropout_images_prob: List[float] = None,
 ) -> np.ndarray:
     """
     Get images from data as a list and preprocess them (using GPU).
@@ -141,19 +159,31 @@ def reshape_x_cupy(
     for i in range(0, len(data)):
         black_minimap: bool = (random.random() <= hide_map_prob)
         for j in range(0, 5):
-            img = cp.array(data[i][j], dtype=dtype)
-            if black_minimap:  # Put a black square over the minimap
-                img[215:, :80] = cp.zeros((55, 80, 3), dtype=dtype)
+            black_image: bool = False
+            if dropout_images_prob is not None:
+                black_image = random.random() <= dropout_images_prob[j]
+            if black_image:
+                reshaped[i * 5 + j] = np.zeros(
+                    (3, data[i][j].shape[0], data[i][j].shape[1]), dtype=dtype
+                )
+            else:
+                img = cp.array(data[i][j], dtype=dtype)
+                if black_minimap:  # Put a black square over the minimap
+                    img[215:, :80] = cp.zeros((55, 80, 3), dtype=dtype)
 
-            reshaped[i * 5 + j] = cp.asnumpy(
-                cp.rollaxis((img / dtype(255.0)) - mean / std, 2, 0,)
-            )
+                reshaped[i * 5 + j] = cp.asnumpy(
+                    cp.rollaxis((img / dtype(255.0)) - mean / std, 2, 0,)
+                )
 
     return reshaped
 
 
 def reshape_x(
-    data: np.ndarray, fp=16, hide_map_prob: float = 0.0, force_cpu: bool = False
+    data: np.ndarray,
+    fp=16,
+    hide_map_prob: float = 0.0,
+    dropout_images_prob: List[float] = None,
+    force_cpu: bool = False,
 ) -> np.ndarray:
     """
     Get images from data as a list and preprocess them, if cupy is available it uses the GPU,
@@ -162,6 +192,8 @@ def reshape_x(
      - data: ndarray [num_examples x 6]
      - fp: floating-point precision: Available values: 16, 32, 64
      - hide_map_prob: Probability for removing the minimap (black square) from the image (0<=hide_map_prob<=1)
+     - dropout_images_prob List of 5 floats or None, probability for removing each input image during training
+     (black image) from a training example (0<=dropout_images_prob<=1)
      - force_cpu: Use numpy version even if cupy is available (In case the GPU is being used to train the model)
     Output:
     - ndarray [num_examples * 5, num_channels, H, W]
@@ -171,22 +203,52 @@ def reshape_x(
     ), f"Hide map prob must be between 0.0 and 1.0. Hide map prob: {hide_map_prob}"
     if cupy and not force_cpu:
         if fp == 16:
-            return reshape_x_cupy(data, dtype=cp.float16, hide_map_prob=hide_map_prob)
+            return reshape_x_cupy(
+                data,
+                dtype=cp.float16,
+                hide_map_prob=hide_map_prob,
+                dropout_images_prob=dropout_images_prob,
+            )
         elif fp == 32:
-            return reshape_x_cupy(data, dtype=cp.float32, hide_map_prob=hide_map_prob)
+            return reshape_x_cupy(
+                data,
+                dtype=cp.float32,
+                hide_map_prob=hide_map_prob,
+                dropout_images_prob=dropout_images_prob,
+            )
         elif fp == 64:
-            return reshape_x_cupy(data, dtype=cp.float64, hide_map_prob=hide_map_prob)
+            return reshape_x_cupy(
+                data,
+                dtype=cp.float64,
+                hide_map_prob=hide_map_prob,
+                dropout_images_prob=dropout_images_prob,
+            )
         else:
             raise ValueError(
                 f"Invalid floating-point precision: {fp}: Available values: 16, 32, 64"
             )
     else:
         if fp == 16:
-            return reshape_x_numpy(data, dtype=np.float16, hide_map_prob=hide_map_prob)
+            return reshape_x_numpy(
+                data,
+                dtype=np.float16,
+                hide_map_prob=hide_map_prob,
+                dropout_images_prob=dropout_images_prob,
+            )
         elif fp == 32:
-            return reshape_x_numpy(data, dtype=np.float32, hide_map_prob=hide_map_prob)
+            return reshape_x_numpy(
+                data,
+                dtype=np.float32,
+                hide_map_prob=hide_map_prob,
+                dropout_images_prob=dropout_images_prob,
+            )
         elif fp == 64:
-            return reshape_x_numpy(data, dtype=np.float64, hide_map_prob=hide_map_prob)
+            return reshape_x_numpy(
+                data,
+                dtype=np.float64,
+                hide_map_prob=hide_map_prob,
+                dropout_images_prob=dropout_images_prob,
+            )
         else:
             raise ValueError(
                 f"Invalid floating-point precision: {fp}: Available values: 16, 32, 64"
@@ -258,7 +320,10 @@ def evaluate(
 
 
 def load_file(
-    path: str, fp: int = 16, hide_map_prob: float = 0.0
+    path: str,
+    fp: int = 16,
+    hide_map_prob: float = 0.0,
+    dropout_images_prob: List[float] = None,
 ) -> (np.ndarray, np.ndarray):
     """
     Load dataset from file: Load, reshape and preprocess data.
@@ -267,6 +332,8 @@ def load_file(
      - fp: floating-point precision: Available values: 16, 32, 64
      - hide_map_prob: Probability for removing the minimap (put a black square)
        from a training example (0<=hide_map_prob<=1)
+    - dropout_images_prob List of 5 floats or None, probability for removing each input image during training
+     (black image) from a training example (0<=dropout_images_prob<=1)
     Output:
     - X: input examples [num_examples, 5, 3, H, W]
     - y: golds for the input examples [num_examples]
@@ -283,7 +350,12 @@ def load_file(
         return np.array([]), np.array([])
 
     if check_valid_y(data):
-        X = reshape_x(data, fp, hide_map_prob)
+        X = reshape_x(
+            data,
+            fp=fp,
+            hide_map_prob=hide_map_prob,
+            dropout_images_prob=dropout_images_prob,
+        )
         y = reshape_y(data)
         return X, y
 
@@ -326,7 +398,11 @@ def load_dataset(path: str, fp: int = 16) -> (np.ndarray, np.ndarray):
 
 
 def load_and_shuffle_datasets(
-    paths: List[str], hide_map_prob: float, fp: int = 16, force_cpu: bool = False
+    paths: List[str],
+    hide_map_prob: float,
+    dropout_images_prob: List[float] = None,
+    fp: int = 16,
+    force_cpu: bool = False,
 ) -> (np.ndarray, np.ndarray):
     """
     Load multiple dataset files and shuffle the data, useful for training
@@ -334,6 +410,8 @@ def load_and_shuffle_datasets(
      - paths: List of paths to dataset files
      - hide_map_prob: Probability for removing the minimap (put a black square)
        from a training example (0<=hide_map_prob<=1)
+     - dropout_images_prob List of 5 floats or None, probability for removing each input image during training
+     (black image) from a training example (0<=dropout_images_prob<=1)
      - fp: floating-point precision: Available values: 16, 32, 64
      - force_cpu: Use numpy version even if cupy is available (In case the GPU is being used to train the model)
     Output:
@@ -375,7 +453,11 @@ def load_and_shuffle_datasets(
         return np.array([]), np.array([])
 
     X: np.ndarray = reshape_x(
-        data_array, fp=fp, hide_map_prob=hide_map_prob, force_cpu=force_cpu
+        data_array,
+        fp=fp,
+        hide_map_prob=hide_map_prob,
+        dropout_images_prob=dropout_images_prob,
+        force_cpu=force_cpu,
     )
     y: np.ndarray = reshape_y(data_array)
 

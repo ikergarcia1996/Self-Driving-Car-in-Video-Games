@@ -29,6 +29,7 @@ def chunks(iterable: Sized, n: int = 1) -> Iterable:
 
 def dataLoaderThread(
     hide_map_prob: float,
+    dropout_images_prob: List[float],
     fp: int,
     load_next_event: threading.Event,
     end_thread_event: threading.Event,
@@ -38,6 +39,8 @@ def dataLoaderThread(
     Input:
      - hide_map_prob: Probability for removing the minimap (put a black square)
        from a training example (0<=hide_map_prob<=1)
+     - dropout_images_prob List of 5 floats or None, probability for removing each input image during training
+     (black image) from a training example (0<=dropout_images_prob<=1)
      - fp: floating-point precision: Available values: 16, 32, 64
      - load_next_event: Event to load the next chunk of data
      - end_thread_event: Event to end the thread that loads the data
@@ -54,6 +57,7 @@ def dataLoaderThread(
             data = load_and_shuffle_datasets(
                 paths=file_chunks[next_file],
                 hide_map_prob=hide_map_prob,
+                dropout_images_prob=dropout_images_prob,
                 fp=fp,
                 force_cpu=True,
             )
@@ -69,7 +73,12 @@ class DataLoaderTEDD:
     """
 
     def __init__(
-        self, dataset_dir: str, nfiles2load: int, hide_map_prob: float, fp: int
+        self,
+        dataset_dir: str,
+        nfiles2load: int,
+        hide_map_prob: float,
+        dropout_images_prob: List[float],
+        fp: int,
     ):
         """
         Dataloader initialization
@@ -78,6 +87,8 @@ class DataLoaderTEDD:
          - nfiles2load: Number of files to load each chunk. The examples in the files will be shuffled
          - hide_map_prob: Probability for removing the minimap (put a black square)
            from a training example (0<=hide_map_prob<=1)
+         - dropout_images_prob List of 5 floats or None, probability for removing each input image during training
+           (black image) from a training example (0<=dropout_images_prob<=1)
          - fp: floating-point precision: Available values: 16, 32, 64
          Output:
         """
@@ -96,7 +107,13 @@ class DataLoaderTEDD:
 
             th_data: threading.Thread = threading.Thread(
                 target=dataLoaderThread,
-                args=[hide_map_prob, fp, self.load_next_event, self.end_thread_event],
+                args=[
+                    hide_map_prob,
+                    dropout_images_prob,
+                    fp,
+                    self.load_next_event,
+                    self.end_thread_event,
+                ],
             )
             th_data.setDaemon(True)
             th_data.start()

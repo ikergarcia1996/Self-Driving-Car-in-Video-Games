@@ -35,6 +35,7 @@ def train(
     num_epoch: int,
     max_acc: float,
     hide_map_prob: float,
+    dropout_images_prob: List[float],
     num_load_files_training: int,
     fp16: bool = True,
     amp_opt_level=None,
@@ -63,6 +64,8 @@ def train(
       restored from checkpoint)
     - hide_map_prob: Probability for removing the minimap (put a black square)
        from a training example (0<=hide_map_prob<=1)
+    - dropout_images_prob List of 5 floats or None, probability for removing each input image during training
+     (black image) from a training example (0<=dropout_images_prob<=1)
     - fp16: Use FP16 for training
     - amp_opt_level: If FP16 training Nvidia apex opt level
     - save_checkpoints: save a checkpoint each epoch (Each checkpoint will rewrite the previous one)
@@ -100,6 +103,7 @@ def train(
             dataset_dir=train_dir,
             nfiles2load=num_load_files_training,
             hide_map_prob=hide_map_prob,
+            dropout_images_prob=dropout_images_prob,
             fp=16 if fp16 else 32,
         )
 
@@ -246,7 +250,7 @@ def train_new_model(
     num_epoch=20,
     optimizer_name="SGD",
     learning_rate: float = 0.01,
-    scheduler_patience: int = 20,
+    scheduler_patience: int = 100,
     resnet: int = 18,
     pretrained_resnet: bool = True,
     sequence_size: int = 5,
@@ -260,6 +264,7 @@ def train_new_model(
     dropout_lstm: float = 0.1,
     dropout_lstm_out: float = 0.1,
     hide_map_prob: float = 0.0,
+    dropout_images_prob=None,
     num_load_files_training: int = 5,
     fp16=True,
     apex_opt_level="O2",
@@ -295,6 +300,8 @@ def train_new_model(
     - dropout_lstm_out: dropout probability for the LSTM features (output layer)
     - hide_map_prob: Probability for removing the minimap (put a black square)
       from a training example (0<=hide_map_prob<=1)
+    - dropout_images_prob List of 5 floats or None, probability for removing each input image during training
+     (black image) from a training example (0<=dropout_images_prob<=1)
     - fp16: Use FP16 for training
     - amp_opt_level: If FP16 training Nvidia apex opt level
     - save_checkpoints: save a checkpoint each epoch (Each checkpoint will rewrite the previous one)
@@ -366,6 +373,7 @@ def train_new_model(
         num_epoch=num_epoch,
         max_acc=0.0,
         hide_map_prob=hide_map_prob,
+        dropout_images_prob=dropout_images_prob,
         num_load_files_training=num_load_files_training,
         fp16=fp16,
         amp_opt_level=apex_opt_level if fp16 else None,
@@ -388,6 +396,7 @@ def continue_training(
     accumulation_steps: int = 1,
     num_epoch: int = 20,
     hide_map_prob: float = 0.0,
+    dropout_images_prob: List[float] = None,
     num_load_files_training: int = 5,
     save_checkpoints=True,
     eval_every: int = 5,
@@ -412,6 +421,8 @@ def continue_training(
     - optimizer_name: Name of the optimizer to use [SGD, Adam]
     - hide_map_prob: Probability for removing the minimap (put a black square)
       from a training example (0<=hide_map_prob<=1)
+    -Probability for removing each input image during training (black image)
+     from a training example (0<=dropout_images_prob<=1)
     - save_checkpoints: save a checkpoint each epoch (Each checkpoint will rewrite the previous one)
     - save_best: save the model that achieves the higher accuracy in the development set
 
@@ -446,6 +457,7 @@ def continue_training(
         num_epoch=num_epoch,
         max_acc=acc_dev,
         hide_map_prob=hide_map_prob,
+        dropout_images_prob=dropout_images_prob,
         num_load_files_training=num_load_files_training,
         fp16=fp16,
         amp_opt_level=opt_level if fp16 else None,
@@ -526,6 +538,15 @@ if __name__ == "__main__":
     )
 
     parser.add_argument(
+        "--dropout_images_prob",
+        type=float,
+        nargs=5,
+        default=[0.0, 0.0, 0.0, 0.0, 0.0],
+        help="List of 5 floats. Probability for removing each input image during training (black image) "
+        "from a training example (0<=dropout_images_prob<=1) ",
+    )
+
+    parser.add_argument(
         "--num_load_files_training",
         type=int,
         default=5,
@@ -593,7 +614,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--scheduler_patience",
         type=int,
-        default=20,
+        default=100,
         help="[new_model] Number of steps where the loss does not decrease until decrease the learning rate",
     )
 
@@ -698,6 +719,7 @@ if __name__ == "__main__":
             accumulation_steps=args.gradient_accumulation_steps,
             num_epoch=args.num_epochs,
             hide_map_prob=args.hide_map_prob,
+            dropout_images_prob=args.dropout_images_prob,
             num_load_files_training=args.num_load_files_training,
             optimizer_name=args.optimizer_name,
             learning_rate=args.learning_rate,
@@ -732,6 +754,7 @@ if __name__ == "__main__":
             batch_size=args.batch_size,
             accumulation_steps=args.gradient_accumulation_steps,
             hide_map_prob=args.hide_map_prob,
+            dropout_images_prob=args.dropout_images_prob,
             num_load_files_training=args.num_load_files_training,
             save_checkpoints=args.not_save_checkpoints,
             eval_every=args.eval_every,
