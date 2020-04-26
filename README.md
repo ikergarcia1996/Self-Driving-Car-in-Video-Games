@@ -85,12 +85,12 @@ Torchvision
 tensorboard (only for training a model)
 Nvidia Apex (only for FP16 training)
 numpy
-cupy (optional but highly recommended especially for training the model, 10x speed up in data preprocessing comparated with numpy)
+cupy (optional but highly recommended, 10x speed up in data preprocessing comparated with numpy)
 cv2 (opencv-python)
 glob
 h5py
 json 
-win32api (PythonWin) - Should be installed by default in newest Python versions (Python 3.7 reccomended)
+win32api (PythonWin) - Should be installed by default in newest Python versions for Windows (Python 3.7 reccomended)
 ```
 
 ### 3.2) Generate dataset 
