@@ -21,21 +21,21 @@ video game.
 ## Table of Contents
 - [T.E.D.D. 1104](#tedd-1104)
   * [Table of Contents](#table-of-contents)
-  * [1) News](#1--news)
-  * [2) Architecture](#2--architecture)
-  * [3) Software and HOW-TO](#3--software-and-how-to)
-    + [3.1) Requirements](#31--requirements)
-    + [3.2) Generate dataset](#32--generate-dataset)
-    + [3.3) Train the model](#33--train-the-model)
+  * [1) News](#1-news)
+  * [2) Architecture](#2-architecture)
+  * [3) Software and HOW-TO](#3-software-and-how-to)
+    + [3.1) Requirements](#31-requirements)
+    + [3.2) Generate dataset](#32-generate-dataset)
+    + [3.3) Train the model](#33-train-the-model)
       - [Improving the robustness of the model](#improving-the-robustness-of-the-model)
-    + [3.4) Run the model](#34--run-the-model)
-      - [Pretrained models:](#pretrained-models-)
+    + [3.4) Run the model](#34-run-the-model)
+      - [Pretrained models:](#pretrained-models)
       - [Extra features](#extra-features)
-  * [4) Authors:](#4--authors-)
+  * [4) Authors:](#4-authors)
 
 
 ## 1) News
-**NEW 15/04/2020** First pretrained model released!!, [click here to download it](https://github.com/ikergarcia1996/Self-Driving-Car-in-Video-Games/releases/tag/0.2). For instructions on how to run the AI see the [Run the Model](#34--run-the-model) Section  
+**NEW 15/04/2020** First pretrained model released!!, [click here to download it](https://github.com/ikergarcia1996/Self-Driving-Car-in-Video-Games/releases/tag/0.2). For instructions on how to run the AI see the [Run the Model](#34-run-the-model) Section  
 **NEW 7/04/2020** Let's generate a huge training dataset together!! [Click here so see how to collaborate in the project (Spanish)](https://youtu.be/utQoMGLbCFc). 
 **We have reached 1,5Tb of training data (~150 hours of gameplay)!!!!**  
 
