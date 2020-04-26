@@ -107,6 +107,8 @@ python generate_data.py --save_dir tedd1007\training_data
   * Play the game! The program will capture your screen and generate the training examples. There will be saved
          as files named "training_dataX.npz" (numpy compressed array). Don't worry if you re-launch this script,
           the program will search for already existing dataset files in the directory and it won't overwrite them.
+          Currently the model captures the keys A W S D (including combinations of two keys pushed at the same time).
+          In the future, I consider implementing support for controllers. 
   * At any moment push Q + E to stop the program.
   
 <p align="center">
