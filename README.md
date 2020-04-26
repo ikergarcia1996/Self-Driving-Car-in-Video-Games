@@ -82,15 +82,15 @@ is the only supported SO by most video games.
 ```
 Pytorch
 Torchvision
-tensorboard (only for training a model)
-Nvidia Apex (only for using FP16)
 numpy
-cupy (optional but highly recommended, 10x speed up in data preprocessing comparated with numpy)
-cv2 (opencv-python)
 glob
 h5py
 json 
+cv2 (opencv-python)
 win32api (PythonWin) - Should be installed by default in newest Python versions for Windows (Python 3.7 reccomended)
+cupy (optional but highly recommended, 10x speed up in data preprocessing comparated with numpy)
+Nvidia Apex (only for using FP16)
+tensorboard (only for training a model)
 ```
 
 ### 3.2) Generate dataset 
