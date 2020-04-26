@@ -29,7 +29,7 @@ video game.
     + [3.3) Train the model](#33-train-the-model)
       - [Improving the robustness of the model](#improving-the-robustness-of-the-model)
     + [3.4) Run the model](#34-run-the-model)
-      - [Pretrained models:](#pretrained-models)
+      - [Pretrained models](#pretrained-models)
       - [Extra features](#extra-features)
   * [4) Authors:](#4-authors)
 
