@@ -181,7 +181,7 @@ take many days or even weeks (+1TB data). An alternative is loading multiple ran
 shuffling the examples of the loaded files. The parameter --num_load_files_training sets the number of files that will be loaded
 and shuffled. The higher the value, the higher RAM usage.  
 
-This is an example of a command for training a small model taking into all the described improvements into account.
+This is an example of a command for training a small model taking into account all the described improvements.
 ```
 python train.py --train_new 
 --train_dir tedd1007\training_data\train 
