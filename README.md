@@ -180,6 +180,7 @@ it would be ideal to shuffle the entire training dataset. When you have a very b
 take many days or even weeks (+1TB data). An alternative is loading multiple random files (i.e. 5) during training and 
 shuffling the examples of the loaded files. The parameter --num_load_files_training sets the number of files that will be loaded
 and shuffled. The higher the value, the higher RAM usage.  
+
 This is an example of a command for training a small model taking into all the described improvements into account.
 ```
 python train.py --train_new 
