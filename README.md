@@ -172,15 +172,14 @@ As every other neural network, TEDD1104 tries to find the easiest way of replica
  batches to accumulate with the parameter --gradient_accumulation_steps. The effective batch size will equal
  --batch_size * --gradient_accumulation_steps. 
 * Validation data: The best validation data (dev and test) are files of routes through the map driving different 
-vehicles and driving in different weather conditions (including day/night). DO NOT USE as dev or test set random examples
-are taken from the training set because they will be part of a sequence of similar data, that is, a high dev and test accuracy
+vehicles and driving in different weather conditions (including day/night). DO NOT USE as dev or test set random examples taken from the training set because they will be part of a sequence of similar data, that is, a high dev and test accuracy
 will correspond to an overfitted model. Note that we save the model that achieves the highest accuracy in the dev test.
 * Since the training data is generated recoding humans driving, each training file will store a sequence of continuous examples, that is,
 similar weather conditions, the same vehicle, a lot of similar training examples... To improve the robustness of the model 
 it would be ideal to shuffle the entire training dataset. When you have a very big dataset shuffling all the examples can
 take many days or even weeks (+1TB data). An alternative is loading multiple random files (i.e. 5) during training and 
 shuffling the examples of the loaded files. The parameter --num_load_files_training sets the number of files that will be loaded
-and shuffled. The higher the value, the higher RAM usage. 
+and shuffled. The higher the value, the higher RAM usage.  
 This is an example of a command for training a small model taking into all the described improvements into account.
 ```
 python train.py --train_new 
