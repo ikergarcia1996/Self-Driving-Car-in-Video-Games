@@ -245,7 +245,7 @@ sequences per second will be recorded (2 sequences will be recorded in parallel 
 num_parallel_sequences=3 30... Recoding more sequences per second can help TEDD1104 to drive better, 
 but a faster CPU and memory will be required to ensure a 0,1sec delay between each image in all the sequences. 
 A warning will be printed if the CPU is not able to update the sequences fast enough. 
-Using an i7 8700K I can record up to 2 sequences.
+
 * The model may crash into a wall, car or other obstacle and be unable to return to the road.
  The model implements an "evasion manoeuvre", if the first and the last images in a sequence of 
  images are very similar (i.e car is stuck facing a wall) it will automatically drive backwards for 1 
