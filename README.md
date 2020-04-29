@@ -35,6 +35,7 @@ video game.
 
 
 ## 1) News
+**NEW 29/04/2020** Youtube live streaming of T.E.D.D. 1104 driving different vehicles around the city!! Yo can see the stream reuploaded here (Spanish) https://youtu.be/4NUdgSDSKSQ  
 **NEW 15/04/2020** First pretrained model released!!, [click here to download it](https://github.com/ikergarcia1996/Self-Driving-Car-in-Video-Games/releases/tag/0.2). For instructions on how to run the AI see the [Run the Model](#34-run-the-model) Section  
 **NEW 7/04/2020** Let's generate a huge training dataset together!! [Click here so see how to collaborate in the project (Spanish)](https://youtu.be/utQoMGLbCFc). 
 **We have reached 1,5Tb of training data (~150 hours of gameplay)!!!!**  
