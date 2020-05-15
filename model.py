@@ -526,8 +526,6 @@ def load_checkpoint(
      - epoch: Num of epoch used to train the model
      - fp16: true if the model uses fp16 else false
      - amp_opt_level: If the model uses FP16, the AMP opt_level
-
-    Output:
     """
 
     checkpoint = torch.load(path)
