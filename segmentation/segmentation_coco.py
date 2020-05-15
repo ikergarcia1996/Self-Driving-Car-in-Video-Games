@@ -10,7 +10,6 @@ import torch.hub
 from PIL import Image
 from torchvision import transforms
 import numpy as np
-import time
 
 
 class ImageSegmentation:
@@ -21,6 +20,16 @@ class ImageSegmentation:
         fp16: bool,
         apex_opt_level: str = "O2",
     ):
+        """
+        Image segmentation
+
+        Input:
+        -model_name: Name of the pretrained model to use from pytorch/vision
+        -device: Torch.device where the model will be loaded (GPU recommended)
+        -fp16: Use FP16 (only available if device = cuda:x)
+        -apex_opt_level: Apex opt level for FP16
+        Output:
+        """
         if model_name == "fcn_resnet101":
             self.model = torch.hub.load(
                 "pytorch/vision", "fcn_resnet101", pretrained=True
@@ -66,6 +75,15 @@ class ImageSegmentation:
         self.device = device
 
     def add_segmentation(self, images: np.ndarray):
+        """
+        Given a list of images, we will perform image segmentation and the detected entities will be
+        printed over the original image to highlight them.
+
+        Input:
+        -images: Array of images (num_images x height x width x num_channels)
+        Output:
+        -images modified with segmented entities printed over them: (num_images x height x width x num_channels)
+        """
         img_size = images.shape[1:-1]
         img_size = (img_size[1], img_size[0])
         input_batch = torch.stack(
