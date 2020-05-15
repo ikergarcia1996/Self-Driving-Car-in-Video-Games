@@ -84,8 +84,8 @@ class ImageSegmentation:
         Output:
         -images modified with segmented entities printed over them: (num_images x height x width x num_channels)
         """
-        img_size = images.shape[1:-1]
-        img_size = (img_size[1], img_size[0])
+
+        img_size = (images.shape[2], images.shape[1])
         input_batch = torch.stack(
             [self.preprocess(Image.fromarray(image).convert("RGB")) for image in images]
         )
