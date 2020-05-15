@@ -11,6 +11,7 @@ from tkinter import *
 from utils import reshape_x, mse
 import numpy as np
 import cv2
+from segmentation.segmentation_coco import ImageSegmentation
 
 if torch.cuda.is_available():
     device = torch.device("cuda:0")
@@ -28,6 +29,7 @@ def run_TED1104(
     show_current_control: bool,
     num_parallel_sequences: int = 1,
     evasion_score=1000,
+    enable_segmentation: bool = False,
 ) -> None:
     """
     Generate dataset exampled from a human playing a videogame
@@ -52,10 +54,18 @@ def run_TED1104(
       per second. However if num_parallel_sequences is too high it wont be able to update the sequences with 1/10 secs
       between images (default capturate to generate training examples).
     -evasion_score: Mean squared error value between images to activate the evasion maneuvers
+    -enable_segmentation: Image segmentation will be performed using a pretrained model. Cars, persons, bikes.. will be
+     highlighted to help the model to identify them.
 
     Output:
 
     """
+    if enable_segmentation:
+        image_segmentation = ImageSegmentation(
+            model_name="fcn_resnet101", device=device, fp16=fp16
+        )
+    else:
+        image_segmentation = None
 
     show_what_ai_sees: bool = False
     fp16: bool
@@ -95,7 +105,13 @@ def run_TED1104(
         ):  # Don't run the same sequence again, the resulted key will be the same
             time.sleep(0.0001)
         last_num = screen_recorder.num
-        img_seq: np.ndarray = np.copy(screen_recorder.seq)
+        if enable_segmentation:
+            img_seq: np.ndarray = image_segmentation.add_segmentation(
+                np.copy(screen_recorder.seq)
+            )
+        else:
+            img_seq: np.ndarray = np.copy(screen_recorder.seq)
+
         keys = key_check()
         if not "J" in keys:
             X: torch.Tensor = torch.from_numpy(
@@ -227,6 +243,14 @@ if __name__ == "__main__":
         help="Mean squared error value between images to activate the evasion maneuvers",
     )
 
+    parser.add_argument(
+        "--enable_segmentation",
+        action="store_true",
+        help="Image segmentation will be performed using a pretrained model. "
+        "Cars, persons, bikes.. will be highlighted to help the model to identify them. "
+        "Note: Segmentation will very significantly increase compuation time",
+    )
+
     args = parser.parse_args()
 
     screen_recorder.initialize_global_variables()
@@ -238,4 +262,5 @@ if __name__ == "__main__":
         show_current_control=args.show_current_control,
         num_parallel_sequences=args.num_parallel_sequences,
         evasion_score=args.evasion_score,
+        enable_segmentation=args.enable_segmentation,
     )
