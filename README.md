@@ -30,7 +30,7 @@ video game.
     + [3.4) Run the model](#34-run-the-model)
       - [Pretrained models](#pretrained-models)
       - [Extra features](#extra-features)
-  * [4) Authors:](#4-authors)
+  * [4) Authors](#4-authors)
 
 
 ## 1) News
