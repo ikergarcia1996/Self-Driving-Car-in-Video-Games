@@ -1,15 +1,19 @@
 from torch.nn import CrossEntropyLoss
-from utils import *
+from torch.utils.data import DataLoader
+from utils import evaluate, print_message
 from model import TEDD1104, save_model, load_checkpoint, save_checkpoint
 import torch
 import torch.optim as optim
 from typing import List
 import time
 import argparse
-import random
-import math
 from torch.utils.tensorboard import SummaryWriter
-from DataLoader import DataLoaderTEDD
+from Dataset import Tedd1104Dataset
+from torch.cuda.amp import GradScaler, autocast
+import datetime
+import os
+import logging
+import math
 
 if torch.cuda.is_available():
     device: torch.device = torch.device("cuda:0")
@@ -25,6 +29,7 @@ def train(
     optimizer_name: str,
     optimizer: torch.optim,
     scheduler: torch.optim.lr_scheduler,
+    scaler: GradScaler,
     train_dir: str,
     dev_dir: str,
     test_dir: str,
@@ -33,14 +38,14 @@ def train(
     accumulation_steps: int,
     initial_epoch: int,
     num_epoch: int,
+    running_loss: float,
+    total_batches: int,
+    total_training_examples: int,
     max_acc: float,
     hide_map_prob: float,
     dropout_images_prob: List[float],
-    num_load_files_training: int,
     fp16: bool = True,
-    amp_opt_level=None,
     save_checkpoints: bool = True,
-    eval_every: int = 5,
     save_every: int = 20,
     save_best: bool = True,
 ):
@@ -67,175 +72,207 @@ def train(
     - dropout_images_prob List of 5 floats or None, probability for removing each input image during training
      (black image) from a training example (0<=dropout_images_prob<=1)
     - fp16: Use FP16 for training
-    - amp_opt_level: If FP16 training Nvidia apex opt level
     - save_checkpoints: save a checkpoint each epoch (Each checkpoint will rewrite the previous one)
     - save_best: save the model that achieves the higher accuracy in the development set
 
     Output:
      - float: Accuracy in the development test of the best model
     """
+
+    if not os.path.exists(output_dir):
+        print(f"{output_dir} does not exits. We will create it.")
+        os.makedirs(output_dir)
+
     writer: SummaryWriter = SummaryWriter()
 
-    if fp16:
-        try:
-            from apex import amp
-        except ImportError:
-            raise ImportError(
-                "Please install apex from https://www.github.com/nvidia/apex to use fp16 training."
-            )
-
-    criterion: CrossEntropyLoss = torch.nn.CrossEntropyLoss()
-    print("Loading dev set")
-    X_dev, y_dev = load_dataset(dev_dir, fp=16 if fp16 else 32)
-    X_dev = torch.from_numpy(X_dev)
-    print("Loading test set")
-    X_test, y_test = load_dataset(test_dir, fp=16 if fp16 else 32)
-    X_test = torch.from_numpy(X_test)
-    total_training_exampels: int = 0
+    criterion: CrossEntropyLoss = torch.nn.CrossEntropyLoss().to(device)
     model.zero_grad()
-
-    printTrace("Training...")
+    print_message("Training...")
     for epoch in range(num_epoch):
+        acc_dev: float = 0.0
+        num_batches: int = 0
         step_no: int = 0
-        iteration_no: int = 0
-        num_used_files: int = 0
-        data_loader = DataLoaderTEDD(
-            dataset_dir=train_dir,
-            nfiles2load=num_load_files_training,
-            hide_map_prob=hide_map_prob,
-            dropout_images_prob=dropout_images_prob,
-            fp=16 if fp16 else 32,
+
+        data_loader_train = DataLoader(
+            Tedd1104Dataset(
+                dataset_dir=train_dir,
+                hide_map_prob=hide_map_prob,
+                dropout_images_prob=dropout_images_prob,
+            ),
+            batch_size=batch_size,
+            shuffle=True,
+            num_workers=os.cpu_count(),
+            pin_memory=True,
         )
+        start_time: float = time.time()
+        step_start_time: float = time.time()
+        dataloader_delay: float = 0
+        model.train()
+        for batch in data_loader_train:
 
-        data = data_loader.get_next()
-        # Get files in batches, all files will be loaded and data will be shuffled
-        while data:
-            X, y = data
-            model.train()
-            start_time: float = time.time()
-            total_training_exampels += len(y)
-            running_loss: float = 0.0
-            num_batchs: int = 0
-            acc_dev: float = 0.0
+            x = torch.flatten(
+                torch.stack(
+                    (
+                        batch["image1"],
+                        batch["image2"],
+                        batch["image3"],
+                        batch["image4"],
+                        batch["image5"],
+                    ),
+                    dim=1,
+                ),
+                start_dim=0,
+                end_dim=1,
+            ).to(device)
 
-            for X_bacth, y_batch in nn_batchs(X, y, batch_size):
-                X_bacth, y_batch = (
-                    torch.from_numpy(X_bacth).to(device),
-                    torch.from_numpy(y_batch).long().to(device),
-                )
+            y = batch["y"].to(device)
+            dataloader_delay += time.time() - step_start_time
 
-                outputs = model.forward(X_bacth)
-                loss = criterion(outputs, y_batch) / accumulation_steps
+            total_training_examples += len(y)
+
+            if fp16:
+                with autocast():
+                    outputs = model.forward(x)
+                    loss = criterion(outputs, y)
+                    loss = loss / accumulation_steps
+
                 running_loss += loss.item()
+                scaler.scale(loss).backward()
 
-                if fp16:
-                    with amp.scale_loss(loss, optimizer) as scaled_loss:
-                        scaled_loss.backward()
-                else:
-                    loss.backward()
+            else:
+                outputs = model.forward(x)
+                loss = criterion(outputs, y) / accumulation_steps
+                running_loss += loss.item()
+                loss.backward()
 
+            if ((step_no + 1) % accumulation_steps == 0) or (
+                step_no + 1 >= len(data_loader_train)
+            ):  # If we are in the last bach of the epoch we also want to perform gradient descent
                 if fp16:
-                    torch.nn.utils.clip_grad_norm_(amp.master_params(optimizer), 1.0)
-                else:
+                    # Gradient clipping
+                    scaler.unscale_(optimizer)
                     torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
 
-                if (step_no + 1) % accumulation_steps or (
-                    num_used_files + 1 > len(data_loader) - num_load_files_training
-                    and num_batchs == math.ceil(len(y) / batch_size) - 1
-                ):  # If we are in the last bach of the epoch we also want to perform gradient descent
-                    optimizer.step()
-                    model.zero_grad()
-
-                num_batchs += 1
-                step_no += 1
-
-            num_used_files += num_load_files_training
-
-            # Print Statistics
-            printTrace(
-                f"EPOCH: {initial_epoch+epoch}. Iteration {iteration_no}. "
-                f"{num_used_files} of {len(data_loader)} files. "
-                f"Total examples used for training {total_training_exampels}. "
-                f"Iteration time: {round(time.time() - start_time,2)} secs."
-            )
-            printTrace(
-                f"Loss: {-1 if num_batchs == 0 else running_loss / num_batchs}. "
-                f"Learning rate {optimizer.state_dict()['param_groups'][0]['lr']}"
-            )
-            writer.add_scalar("Loss/train", running_loss / num_batchs, iteration_no)
-
-            scheduler.step(running_loss / num_batchs)
-
-            if (iteration_no + 1) % eval_every == 0:
-                start_time_eval: float = time.time()
-                if len(X) > 0 and len(y) > 0:
-                    acc_train: float = evaluate(
-                        model=model,
-                        X=torch.from_numpy(X),
-                        golds=y,
-                        device=device,
-                        batch_size=batch_size,
-                    )
+                    scaler.step(optimizer)
+                    scaler.update()
+                    optimizer.zero_grad()
                 else:
-                    acc_train = -1.0
+                    # Gradient clipping
+                    torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
 
-                acc_dev: float = evaluate(
-                    model=model,
-                    X=X_dev,
-                    golds=y_dev,
-                    device=device,
-                    batch_size=batch_size,
+                    optimizer.step()
+                    optimizer.zero_grad()
+
+                total_batches += 1
+                num_batches += 1
+                scheduler.step(running_loss / total_batches)
+
+                batch_time = round(time.time() - start_time, 2)
+                est: float = batch_time * (
+                    math.ceil(len(data_loader_train) / accumulation_steps) - num_batches
+                )
+                print_message(
+                    f"EPOCH: {initial_epoch + epoch}. "
+                    f"{num_batches} of {math.ceil(len(data_loader_train)/accumulation_steps)} batches. "
+                    f"Total examples used for training {total_training_examples}. "
+                    f"Iteration time: {batch_time} secs. "
+                    f"Data Loading bottleneck: {round(dataloader_delay, 2)} secs. "
+                    f"Epoch estimated time: "
+                    f"{str(datetime.timedelta(seconds=est)).split('.')[0]}"
                 )
 
-                acc_test: float = evaluate(
-                    model=model,
-                    X=X_test,
-                    golds=y_test,
-                    device=device,
-                    batch_size=batch_size,
+                print_message(
+                    f"Loss: {running_loss / total_batches}. "
+                    f"Learning rate {optimizer.state_dict()['param_groups'][0]['lr']}"
                 )
 
-                printTrace(
-                    f"Acc training set: {round(acc_train,2)}. "
-                    f"Acc dev set: {round(acc_dev,2)}. "
-                    f"Acc test set: {round(acc_test,2)}.  "
-                    f"Eval time: {round(time.time() - start_time_eval,2)} secs."
+                writer.add_scalar(
+                    "Loss/train", running_loss / total_batches, total_batches
                 )
 
-                if 0.0 < acc_dev > max_acc and save_best:
-                    max_acc = acc_dev
-                    printTrace(
-                        f"New max acc in dev set {round(max_acc,2)}. Saving model..."
-                    )
-                    save_model(
+                if save_checkpoints and (total_batches + 1) % save_every == 0:
+                    print_message("Saving checkpoint...")
+                    save_checkpoint(
+                        path=os.path.join(output_dir, "checkpoint.pt"),
                         model=model,
-                        save_dir=output_dir,
+                        optimizer_name=optimizer_name,
+                        optimizer=optimizer,
+                        scheduler=scheduler,
+                        running_loss=running_loss,
+                        total_batches=total_batches,
+                        total_training_examples=total_training_examples,
+                        acc_dev=max_acc,
+                        epoch=initial_epoch + epoch,
                         fp16=fp16,
-                        amp_opt_level=amp_opt_level,
+                        scaler=None if not fp16 else scaler,
                     )
-                if acc_train > -1:
-                    writer.add_scalar("Accuracy/train", acc_train, iteration_no)
-                writer.add_scalar("Accuracy/dev", acc_dev, iteration_no)
-                writer.add_scalar("Accuracy/test", acc_test, iteration_no)
 
-            if save_checkpoints and (iteration_no + 1) % save_every == 0:
-                printTrace("Saving checkpoint...")
-                save_checkpoint(
-                    path=os.path.join(output_dir, "checkpoint.pt"),
-                    model=model,
-                    optimizer_name=optimizer_name,
-                    optimizer=optimizer,
-                    scheduler=scheduler,
-                    acc_dev=acc_dev,
-                    epoch=initial_epoch + epoch,
-                    fp16=fp16,
-                    opt_level=amp_opt_level,
-                )
+                dataloader_delay: float = 0
+                start_time: float = time.time()
 
-            iteration_no += 1
-            data = data_loader.get_next()
+            step_no += 1
+            step_start_time = time.time()
 
-        data_loader.close()
+        del data_loader_train
+
+        print_message("Dev set evaluation...")
+
+        start_time_eval: float = time.time()
+
+        data_loader_dev = DataLoader(
+            Tedd1104Dataset(
+                dataset_dir=dev_dir,
+                hide_map_prob=0,
+                dropout_images_prob=[0, 0, 0, 0, 0],
+            ),
+            batch_size=batch_size // 2,  # Use smaller batch size to prevent OOM issues
+            shuffle=False,
+            num_workers=os.cpu_count() // 2,  # Use less cores to save RAM
+            pin_memory=True,
+        )
+
+        acc_dev: float = evaluate(
+            model=model, data_loader=data_loader_dev, device=device, fp16=fp16,
+        )
+
+        del data_loader_dev
+
+        print_message("Test set evaluation...")
+        data_loader_test = DataLoader(
+            Tedd1104Dataset(
+                dataset_dir=test_dir,
+                hide_map_prob=0,
+                dropout_images_prob=[0, 0, 0, 0, 0],
+            ),
+            batch_size=batch_size // 2,  # Use smaller batch size to prevent OOM issues
+            shuffle=False,
+            num_workers=os.cpu_count() // 2,  # Use less cores to save RAM
+            pin_memory=True,
+        )
+
+        acc_test: float = evaluate(
+            model=model, data_loader=data_loader_test, device=device, fp16=fp16,
+        )
+
+        del data_loader_test
+
+        print_message(
+            f"Acc dev set: {round(acc_dev*100,2)}. "
+            f"Acc test set: {round(acc_test*100,2)}.  "
+            f"Eval time: {round(time.time() - start_time_eval,2)} secs."
+        )
+
+        if 0.0 < acc_dev > max_acc and save_best:
+            max_acc = acc_dev
+            print_message(
+                f"New max acc in dev set {round(max_acc, 2)}. Saving model..."
+            )
+            save_model(
+                model=model, save_dir=output_dir, fp16=fp16,
+            )
+
+        writer.add_scalar("Accuracy/dev", acc_dev, epoch)
+        writer.add_scalar("Accuracy/test", acc_test, epoch)
 
     return max_acc
 
@@ -250,7 +287,7 @@ def train_new_model(
     num_epoch=20,
     optimizer_name="SGD",
     learning_rate: float = 0.01,
-    scheduler_patience: int = 100,
+    scheduler_patience: int = 10000,
     resnet: int = 18,
     pretrained_resnet: bool = True,
     sequence_size: int = 5,
@@ -265,11 +302,8 @@ def train_new_model(
     dropout_lstm_out: float = 0.1,
     hide_map_prob: float = 0.0,
     dropout_images_prob=None,
-    num_load_files_training: int = 5,
     fp16=True,
-    apex_opt_level="O2",
     save_checkpoints=True,
-    eval_every: int = 5,
     save_every: int = 20,
     save_best=True,
 ):
@@ -342,22 +376,6 @@ def train_new_model(
         optimizer, verbose=True, patience=scheduler_patience, factor=0.5
     )
 
-    if fp16:
-        try:
-            from apex import amp
-        except ImportError:
-            raise ImportError(
-                "Please install apex from https://www.github.com/nvidia/apex to use fp16 training."
-            )
-
-        model, optimizer = amp.initialize(
-            model,
-            optimizer,
-            opt_level=apex_opt_level,
-            keep_batchnorm_fp32=True,
-            loss_scale="dynamic",
-        )
-
     max_acc = train(
         model=model,
         optimizer_name=optimizer_name,
@@ -371,14 +389,15 @@ def train_new_model(
         accumulation_steps=accumulation_steps,
         initial_epoch=0,
         num_epoch=num_epoch,
+        running_loss=0.0,
+        total_batches=0,
+        total_training_examples=0,
         max_acc=0.0,
         hide_map_prob=hide_map_prob,
         dropout_images_prob=dropout_images_prob,
-        num_load_files_training=num_load_files_training,
         fp16=fp16,
-        amp_opt_level=apex_opt_level if fp16 else None,
+        scaler=GradScaler() if fp16 else None,
         save_checkpoints=save_checkpoints,
-        eval_every=eval_every,
         save_every=save_every,
         save_best=save_best,
     )
@@ -397,9 +416,7 @@ def continue_training(
     num_epoch: int = 20,
     hide_map_prob: float = 0.0,
     dropout_images_prob: List[float] = None,
-    num_load_files_training: int = 5,
     save_checkpoints=True,
-    eval_every: int = 5,
     save_every: int = 100,
     save_best=True,
 ):
@@ -435,10 +452,13 @@ def continue_training(
         optimizer_name,
         optimizer,
         scheduler,
+        running_loss,
+        total_batches,
+        total_training_examples,
         acc_dev,
         epoch,
         fp16,
-        opt_level,
+        scaler,
     ) = load_checkpoint(checkpoint_path, device)
     model = model.to(device)
 
@@ -455,14 +475,15 @@ def continue_training(
         accumulation_steps=accumulation_steps,
         initial_epoch=epoch,
         num_epoch=num_epoch,
+        running_loss=running_loss,
+        total_batches=total_batches,
+        total_training_examples=total_training_examples,
         max_acc=acc_dev,
         hide_map_prob=hide_map_prob,
         dropout_images_prob=dropout_images_prob,
-        num_load_files_training=num_load_files_training,
         fp16=fp16,
-        amp_opt_level=opt_level if fp16 else None,
+        scaler=scaler,
         save_checkpoints=save_checkpoints,
-        eval_every=eval_every,
         save_every=save_every,
         save_best=save_best,
     )
@@ -547,31 +568,16 @@ if __name__ == "__main__":
     )
 
     parser.add_argument(
-        "--num_load_files_training",
-        type=int,
-        default=5,
-        help="Number of dataset files to load each iteration for training. Files will be merged and shuffled. Loading"
-        "more may be helpful for training, but it will use more RAM",
-    )
-
-    parser.add_argument(
         "--not_save_checkpoints",
         action="store_false",
         help="Do NOT save a checkpoint each epoch (Each checkpoint will rewrite the previous one)",
     )
 
     parser.add_argument(
-        "--eval_every",
-        type=int,
-        default=5,
-        help="Evaluate the model every --eval_every iterations (1 iteration = --num_load_files_training files used) ",
-    )
-
-    parser.add_argument(
         "--save_every",
         type=int,
-        default=20,
-        help="Save the model every --save_every iterations (1 iteration = --num_load_files_training files used) ",
+        default=1000,
+        help="Save the model every --save_every batches",
     )
 
     parser.add_argument(
@@ -584,16 +590,8 @@ if __name__ == "__main__":
         "--fp16",
         action="store_true",
         help="[new_model] Use FP16 floating point precision: "
-        "Requires Nvidia Apex: https://www.github.com/nvidia/apex "
-        "and a modern Nvidia GPU FP16 capable (Volta, Turing and future architectures)."
+        "Requires a modern FP16 capable Nvidia GPU (Volta, Turing, Ampere and future architectures)."
         "If you restore a checkpoint the original FP configuration of the model will be restored.",
-    )
-
-    parser.add_argument(
-        "--amp_opt_level",
-        type=str,
-        default="O2",
-        help="[new_model] If FP16 training, the Apex OPT level",
     )
 
     parser.add_argument(
@@ -614,7 +612,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--scheduler_patience",
         type=int,
-        default=100,
+        default=1000,
         help="[new_model] Number of steps where the loss does not decrease until decrease the learning rate",
     )
 
@@ -637,7 +635,7 @@ if __name__ == "__main__":
         "--sequence_size",
         type=int,
         default=5,
-        help="[new_model] Number of images to use to decide witch key press. Note: Only 5 supported for right now",
+        help="[new_model] Number of images to use to decide witch key press. Note: Only 5 supported right now",
     )
 
     parser.add_argument(
@@ -668,7 +666,7 @@ if __name__ == "__main__":
         type=int,
         required=False,
         help="[new_model] list of integer, for each integer i a linear layer with i neurons will be added to the "
-        " output, if none layers are provided the ouput layer will be just a linear layer with input size hidden_size "
+        " output, if none layers are provided the output layer will be just a linear layer with input size hidden_size "
         "and output size 9. Note: The input size of the first layer and last layer will automatically be added "
         "regardless of the user input, so you don't need to care about the size of these layers. ",
     )
@@ -690,7 +688,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--dropout_lstm",
         type=float,
-        default=0.1,
+        default=0.0,
         help="[new_model] Dropout of the LSTM layer between 0.0 and 1.0",
     )
 
@@ -720,7 +718,6 @@ if __name__ == "__main__":
             num_epoch=args.num_epochs,
             hide_map_prob=args.hide_map_prob,
             dropout_images_prob=args.dropout_images_prob,
-            num_load_files_training=args.num_load_files_training,
             optimizer_name=args.optimizer_name,
             learning_rate=args.learning_rate,
             scheduler_patience=args.scheduler_patience,
@@ -737,9 +734,7 @@ if __name__ == "__main__":
             dropout_lstm=args.dropout_lstm,
             dropout_lstm_out=args.dropout_lstm_out,
             fp16=args.fp16,
-            apex_opt_level=args.amp_opt_level,
             save_checkpoints=args.not_save_checkpoints,
-            eval_every=args.eval_every,
             save_every=args.save_every,
             save_best=args.not_save_best,
         )
@@ -755,9 +750,7 @@ if __name__ == "__main__":
             accumulation_steps=args.gradient_accumulation_steps,
             hide_map_prob=args.hide_map_prob,
             dropout_images_prob=args.dropout_images_prob,
-            num_load_files_training=args.num_load_files_training,
             save_checkpoints=args.not_save_checkpoints,
-            eval_every=args.eval_every,
             save_every=args.save_every,
             save_best=args.not_save_best,
         )

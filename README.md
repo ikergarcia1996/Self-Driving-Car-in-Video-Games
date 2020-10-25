@@ -22,6 +22,7 @@ video game.
 - [T.E.D.D. 1104](#tedd-1104)
   * [Table of Contents](#table-of-contents)
   * [1) News](#1-news)
+    + [1.1) Planned Updates](#11-planned-updates)
   * [2) Architecture](#2-architecture)
   * [3) Software and HOW-TO](#3-software-and-how-to)
     + [3.1) Requirements](#31-requirements)
@@ -35,10 +36,17 @@ video game.
 
 
 ## 1) News
+**NEW 25/10/2020** V3 released! This new version completely changes how the dataset is stored. The dataset now uses around 10x less disk space (Yes, the previous version was terrible :S) and loading the data for training is much faster, you can update your V2 dataset files to the V3 dataset format using the dataset_update/v2_to_v3.py script. I updated the code to Pytorch 1.6+ to take advantage of the automated mixed-precision feature  (https://pytorch.org/docs/stable/notes/amp_examples.html) since the external amp module provided by Nvidia has been merged into Pytorch 1.6 as is no longer maintained.  
 **NEW 29/04/2020** Youtube live streaming of T.E.D.D. 1104 driving different vehicles around the city!! Yo can see the stream reuploaded here (Spanish) https://youtu.be/4NUdgSDSKSQ  
 **NEW 15/04/2020** First pretrained model released!!, [click here to download it](https://github.com/ikergarcia1996/Self-Driving-Car-in-Video-Games/releases/tag/0.2). For instructions on how to run the AI see the [Run the Model](#34-run-the-model) Section  
 **NEW 7/04/2020** Let's generate a huge training dataset together!! [Click here so see how to collaborate in the project (Spanish)](https://youtu.be/utQoMGLbCFc). 
 **We have reached 1,5Tb of training data (~150 hours of gameplay)!!!!**  
+
+## 1.1) Planned Updates
+The V3 update allowed me to train different models with up to 10x more training examples than before. Thanks to a new 24GB GPU I also was able to increase the number of parameters of the model. However, the quality of the model didn't improve. Fundamental changes in the architecture are necessary to continue improving the result, for the V4 update I plan to:
+* Switch from keyboard input to Xbox controller input. This way we will have continuous values for steering and brake/throttle instead of 1 or 0. 
+* Add to the sequence the info of the state of the controller for each image. This may or may not help the model but having this information in the dataset will allow testing different architectures. 
+* Add a speedometer: The model has problems with speed, it will brake even when the car is driving very slow when it approaches a curve causing the car to completely stop or even drive backwards. The model does not learn to infer the speed form the sequence of images, so I will explicitly provide it. 
 
 ## 2) Architecture
 Most previous models that attempt to achieve self-driving in video games consists of a deep convolutional neural network 
@@ -81,17 +89,17 @@ is the only supported SO by most video games.
 
 ### 3.1) Requirements
 ```
-Pytorch (1.4.0 or newer reccomended)
-Torchvision
+Python 3.7 or newer (3.8.3 tested)
+Pytorch 1.6.0 or newer (1.8.0 nightly with cuda 11.0 tested)
+Torchvision (0.8.0 tested)
 numpy
-glob
-h5py
-json 
+Pillow (7.2.0 tested)
 cv2 (opencv-python)
-win32api (PythonWin) - Should be installed by default in newest Python versions for Windows (Python 3.7 reccomended)
-cupy (optional but highly recommended, 10x speed up in data preprocessing comparated with numpy)
-Nvidia Apex (only for using FP16)
+tqdm
+json
+cupy (optional, highly recommended if you want to use the evasion manoeuvre feature)
 tensorboard (only for training a model)
+win32api (PythonWin) - Should be installed by default in newest Python versions for Windows 
 ```
 
 ### 3.2) Generate dataset 
@@ -157,7 +165,7 @@ python train.py --continue_training
 
 #### Improving the robustness of the model
 As every other neural network, TEDD1104 tries to find the easiest way of replicating the training examples. 
-* TEDD1104 will tend to focus on the in-game minimap, this will result in a model that is very good following the roads in mini-map but ignores other cars or obstacles. To avoid that "--hide_map_prob" parameter sets a probability of removing (put a black square) the minimap from all the images of a training example. I recommend using a value between 0.4 and 0.5. 
+* TEDD1104 will tend to focus on the in-game minimap, this will result in a model that is very good following the roads in mini-map but ignores other cars or obstacles. To avoid that "--hide_map_prob" parameter sets a probability of removing (put a black square) the minimap from all the images of a training example.
 * Removing (black image) some of the images from an input sequence, especially the last one, can also help to improve 
  the robustness of the model. If one of the images of the sequence is removed, TEDD1104 will be forced to "imagine" that 
  image, improving the trajectory prediction capabilities of the model. It will also force the model to use the 
@@ -167,7 +175,7 @@ As every other neural network, TEDD1104 tries to find the easiest way of replica
 * Scheduler:  --scheduler_patience allows setting a number of iterations. If the loss function does not decrease 
  after the specified number of iterations the learning rate is reduced (new_learning_rate = learning rate * 0.5). 
  This helps to further improve the model after the loss function stops decreasing. 
-* Gradient accumulation: TEDD1104 is very memory demanding. In my RTX 2080 (8GB VRAM) using FP16, I can only set a
+* Gradient accumulation: TEDD1104 is very memory demanding. Using a  RTX 2080 (8GB VRAM) using FP16, I can only set a
  batch size between 10 and 20 which might be too low. To increase the batch size you can use gradient accumulation.
  Gradient accumulation allows increasing the batch size without increasing the VRAM usage. You can set the number of
  batches to accumulate with the parameter --gradient_accumulation_steps. The effective batch size will equal
@@ -175,12 +183,6 @@ As every other neural network, TEDD1104 tries to find the easiest way of replica
 * Validation data: The best validation data (dev and test) are files of routes through the map driving different 
 vehicles and driving in different weather conditions (including day/night). DO NOT USE as dev or test set random examples taken from the training set because they will be part of a sequence of similar data, that is, a high dev and test accuracy
 will correspond to an overfitted model. Note that we save the model that achieves the highest accuracy in the dev test.
-* Since the training data is generated recoding humans driving, each training file will store a sequence of continuous examples, that is,
-similar weather conditions, the same vehicle, a lot of similar training examples... To improve the robustness of the model 
-it would be ideal to shuffle the entire training dataset. When you have a very big dataset shuffling all the examples can
-take many days or even weeks (+1TB data). An alternative is loading multiple random files (i.e. 5) during training and 
-shuffling the examples of the loaded files. The parameter --num_load_files_training sets the number of files that will be loaded
-and shuffled. The higher the value, the higher RAM usage.  
 
 This is an example of a command for training a small model taking into account all the described improvements.
 ```
@@ -195,17 +197,17 @@ python train.py --train_new
 --num_load_files_training 5
 --optimizer_name SGD 
 --learning_rate 0.01 
---scheduler_patience 100 
+--scheduler_patience 1000 
 --bidirectional_lstm 
 --dropout_lstm_out 0.2 
---dropout_images_prob 0.2 0.2 0.2 0.2 0.3 
+--dropout_images_prob 0.1 0.1 0.1 0.1 0.2 
 --hide_map_prob 0.4
 --fp16 
 ```
   
 During training you can use tensorboard to visualize the loss and accuracy:
 ```
-tensorboard --logdir='./runs'
+tensorboard --logdir runs
 ```
 
 ### 3.4) Run the model
@@ -243,7 +245,8 @@ Pretrained models are available in the releases section: [Releases sections](htt
 This means that the model will predict a key to push 10 times per second (every time the sequence is updated). 
 You can increase this value with the --num_parallel_sequences parameter. num_parallel_sequences=2 means that 20 
 sequences per second will be recorded (2 sequences will be recorded in parallel updating them every 0,05sec), 
-num_parallel_sequences=3 30... Recoding more sequences per second can help TEDD1104 to drive better, 
+num_parallel_sequences=3 30... Recoding more sequences per second will reduce the latency (delay from the sequence that 
+TEDD1104 uses to calculate a prediction and the current state of the game) and can help TEDD1104 to drive better, 
 but a faster CPU and memory will be required to ensure a 0,1sec delay between each image in all the sequences. 
 A warning will be printed if the CPU is not able to update the sequences fast enough. 
 
@@ -254,7 +257,8 @@ A warning will be printed if the CPU is not able to update the sequences fast en
  flag and select the sensitivity to trigger the evasion manoeuvre (the difference between images calculated using 
  mean squared error) with the --evasion_score parameter (default 200). Note that this option requires to calculate 
  the mean squared error between two images each iteration, so it will increase the time the model needs to process 
- an input sequence.
+ an input sequence. If you install cupy (https://docs.cupy.dev/en/stable/install.html) the mean squared error will
+ be calculated using the GPU which is around 10x faster than using the CPU. 
 
 
   
@@ -265,5 +269,5 @@ A warning will be printed if the CPU is not able to update the sequences fast en
   Personal Webpage: https://ikergarcia1996.github.io/Iker-Garcia-Ferrero/
 ```
 
-This repository is a greatly improved version of the model we published 2 years ago: https://github.com/ikergarcia1996/GTAV-Self-driving-car (by Eritz Yerga and Iker García)
+This repository is a greatly improved version of the model we published some years ago: https://github.com/ikergarcia1996/GTAV-Self-driving-car (by [Aiden Yerga](https://github.com/aidenyg)  and [Iker García](https://github.com/ikergarcia1996))
   

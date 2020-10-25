@@ -21,7 +21,7 @@ def keys_to_output(keys: np.ndarray) -> np.ndarray:
     Convert keys to a ...multi-hot... array
     Input:
      - np.ndarray of strings ["A","W"]
-    Ouput:
+    Output:
      - multi-hot array of integers (0,1) representing which keys are pressed (1). Array: [A,D,W,S]
     """
     output = np.asarray([0, 0, 0, 0])

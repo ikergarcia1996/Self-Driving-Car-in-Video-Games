@@ -1,11 +1,13 @@
 import os
 import json
-from typing import List, Union
+import logging
+from typing import List, Union, Optional
 
 import torch
 import torch.nn as nn
 import torchvision.models as models
 import torchvision.models.resnet
+from torch.cuda.amp import GradScaler
 
 
 def get_resnet(model: int, pretrained: bool) -> torchvision.models.resnet.ResNet:
@@ -336,27 +338,18 @@ class TEDD1104(nn.Module):
             return self.OutputLayer.predict(x)
 
 
-def save_model(model: TEDD1104, save_dir: str, fp16, amp_opt_level: str = None) -> None:
+def save_model(model: TEDD1104, save_dir: str, fp16) -> None:
     """
     Save model to a directory. This function stores two files, the hyperparameters and the weights.
 
     Input:
      - model: TEDD1104 model to save
      - save_dir: directory where the model will be saved, if it doesn't exists we create it
-     - amp: If the model uses FP16, Nvidia Apex AMP
-     - amp_opt_level: If the model uses FP16, the AMP opt_level
+     - fp16: If the model uses FP16
 
     Output:
 
     """
-
-    if fp16:
-        try:
-            from apex import amp
-        except ImportError:
-            raise ImportError(
-                "Please install apex from https://www.github.com/nvidia/apex to use fp16 training."
-            )
 
     if not os.path.exists(save_dir):
         os.makedirs(save_dir)
@@ -375,12 +368,10 @@ def save_model(model: TEDD1104, save_dir: str, fp16, amp_opt_level: str = None) 
         "dropout_lstm": model.dropout_lstm,
         "dropout_lstm_out": model.dropout_lstm_out,
         "fp16": fp16,
-        "amp_opt_level": amp_opt_level,
     }
 
     model_weights: dict = {
         "model": model.state_dict(),
-        "amp": None if not fp16 else amp.state_dict(),
     }
 
     with open(os.path.join(save_dir, "model_hyperparameters.json"), "w+") as file:
@@ -389,7 +380,7 @@ def save_model(model: TEDD1104, save_dir: str, fp16, amp_opt_level: str = None) 
     torch.save(obj=model_weights, f=os.path.join(save_dir, "model.bin"))
 
 
-def load_model(save_dir: str, device: torch.device, fp16: bool) -> TEDD1104:
+def load_model(save_dir: str, device: torch.device) -> [TEDD1104, bool]:
     """
     Load a model from directory. The directory should contain a json with the model hyperparameters and a bin file
     with the model weights.
@@ -422,22 +413,9 @@ def load_model(save_dir: str, device: torch.device, fp16: bool) -> TEDD1104:
     ).to(device=device)
 
     model_weights = torch.load(f=os.path.join(save_dir, "model.bin"))
-
-    if fp16:
-        try:
-            from apex import amp
-        except ImportError:
-            raise ImportError(
-                "You used the fp16 training flag but you don't seem have Nvidia Apex installed. "
-                "For using FP16, please install apex from https://www.github.com/nvidia/apex"
-            )
-
-        model = amp.initialize(model, opt_level=dict_hyperparams["amp_opt_level"])
-        amp.load_state_dict(model_weights["amp"])
-
     model.load_state_dict(model_weights["model"])
 
-    return model
+    return model, dict_hyperparams["fp16"]
 
 
 def save_checkpoint(
@@ -446,10 +424,13 @@ def save_checkpoint(
     optimizer_name: str,
     optimizer: torch.optim,
     scheduler: torch.optim.lr_scheduler,
+    running_loss: float,
+    total_batches: int,
+    total_training_examples: int,
     acc_dev: float,
     epoch: int,
     fp16: bool,
-    opt_level: str = None,
+    scaler: Optional[GradScaler],
 ) -> None:
 
     """
@@ -462,19 +443,11 @@ def save_checkpoint(
      - optimizer: Optimizer used for training
      - acc_dev: Accuracy of the model in the development set
      - epoch: Num of epoch used to train the model
-     - amp: If the model uses FP16, Nvidia Apex AMP
-     - amp_opt_level: If the model uses FP16, the AMP opt_level
+     - fp16: If the model uses FP16
+     - scaler: If the model uses FP16, the scaler used for training
 
     Output:
     """
-
-    if fp16:
-        try:
-            from apex import amp
-        except ImportError:
-            raise ImportError(
-                "Please install apex from https://www.github.com/nvidia/apex to use fp16 training."
-            )
 
     dict_hyperparams: dict = {
         "sequence_size": model.sequence_size,
@@ -490,7 +463,6 @@ def save_checkpoint(
         "dropout_lstm": model.dropout_lstm,
         "dropout_lstm_out": model.dropout_lstm_out,
         "fp16": fp16,
-        "amp_opt_level": opt_level,
     }
 
     checkpoint = {
@@ -499,10 +471,12 @@ def save_checkpoint(
         "optimizer_name": optimizer_name,
         "optimizer": optimizer.state_dict(),
         "scheduler": scheduler.state_dict(),
+        "running_loss": running_loss,
+        "total_batches": total_batches,
+        "total_training_examples": total_training_examples,
         "acc_dev": acc_dev,
         "epoch": epoch,
-        "amp": None if not fp16 else amp.state_dict(),
-        "opt_level": opt_level,
+        "scaler": None if not fp16 else scaler.state_dict(),
     }
 
     torch.save(checkpoint, path)
@@ -525,7 +499,7 @@ def load_checkpoint(
      - acc_dev: Accuracy of the model in the development set
      - epoch: Num of epoch used to train the model
      - fp16: true if the model uses fp16 else false
-     - amp_opt_level: If the model uses FP16, the AMP opt_level
+     - scaler: If the model uses FP16, the scaler used for training
     """
 
     checkpoint = torch.load(path)
@@ -534,9 +508,8 @@ def load_checkpoint(
     optimizer_name = checkpoint["optimizer_name"]
     optimizer_state = checkpoint["optimizer"]
     acc_dev = checkpoint["acc_dev"]
-    epoch = checkpoint["acc_dev"]
-    amp_state = checkpoint["amp"]
-    opt_level = checkpoint["opt_level"]
+    epoch = checkpoint["epoch"]
+    scaler_state = checkpoint["scaler"]
     fp16 = dict_hyperparams["fp16"]
 
     model: TEDD1104 = TEDD1104(
@@ -572,29 +545,49 @@ def load_checkpoint(
         scheduler_state = checkpoint["scheduler"]
         scheduler.load_state_dict(scheduler_state)
     except KeyError:
-        print(f"Legacy checkpoint, a new scheduler will be created")
+        logging.warning(f"Legacy checkpoint, a new scheduler will be created")
 
+    try:
+        running_loss = checkpoint["running_loss"]
+    except KeyError:
+        logging.warning(
+            "Legacy checkpoint, running loss will be initialized with 0.0 value"
+        )
+        running_loss = 0.0
+
+    try:
+        total_training_examples = checkpoint["total_training_examples"]
+    except KeyError:
+        logging.warning(
+            "Legacy checkpoint, total training examples will be initialized with 0 value"
+        )
+        total_training_examples = 0
+
+    try:
+        total_batches = checkpoint["total_batches"]
+    except KeyError:
+        logging.warning(
+            "Legacy checkpoint, total batches will be initialized with 0 value"
+        )
+        total_batches = 0
+
+    scaler: Optional[GradScaler]
     if fp16:
-        try:
-            from apex import amp
-        except ImportError:
-            raise ImportError(
-                "The model you are trying to load uses FP16 training."
-                "Please install Nvidia Apex from https://www.github.com/nvidia/apex"
-            )
-
-        model, optimizer = amp.initialize(model, optimizer, opt_level=opt_level)
-        amp.load_state_dict(amp_state)
-
-
+        scaler = GradScaler()
+        scaler.load_state_dict(scaler_state)
+    else:
+        scaler = None
 
     return (
         model,
         optimizer_name,
         optimizer,
         scheduler,
+        running_loss,
+        total_batches,
+        total_training_examples,
         acc_dev,
         epoch,
         fp16,
-        opt_level,
+        scaler,
     )

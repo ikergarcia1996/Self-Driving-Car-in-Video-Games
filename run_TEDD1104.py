@@ -8,23 +8,24 @@ import torch
 import logging
 import time
 from tkinter import *
-from utils import reshape_x, mse
 import numpy as np
 import cv2
 from segmentation.segmentation_coco import ImageSegmentation
+from torch.cuda.amp import autocast
+from torchvision import transforms
+from utils import mse
 
 if torch.cuda.is_available():
     device = torch.device("cuda:0")
 else:
     device = torch.device("cpu")
     logging.warning(
-        "GPU not found, using CPU, training will be very slow. CPU NOT COMPATIBLE WITH FP16"
+        "GPU not found, using CPU, inference will be very slow. CPU NOT COMPATIBLE WITH FP16"
     )
 
 
-def run_TED1104(
+def run_ted1104(
     model_dir,
-    fp16: bool,
     enable_evasion: bool,
     show_current_control: bool,
     num_parallel_sequences: int = 1,
@@ -60,6 +61,12 @@ def run_TED1104(
     Output:
 
     """
+
+    show_what_ai_sees: bool = False
+    fp16: bool
+    model: TEDD1104
+    model, fp16 = load_model(save_dir=model_dir, device=device)
+
     if enable_segmentation:
         image_segmentation = ImageSegmentation(
             model_name="fcn_resnet101", device=device, fp16=fp16
@@ -67,10 +74,13 @@ def run_TED1104(
     else:
         image_segmentation = None
 
-    show_what_ai_sees: bool = False
-    fp16: bool
-    model: TEDD1104
-    model = load_model(save_dir=model_dir, device=device, fp16=fp16)
+    transform = transforms.Compose(
+        [
+            transforms.ToTensor(),
+            transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
+        ]
+    )
+
     model.eval()
     stop_recording: threading.Event = threading.Event()
 
@@ -105,6 +115,8 @@ def run_TED1104(
         ):  # Don't run the same sequence again, the resulted key will be the same
             time.sleep(0.0001)
         last_num = screen_recorder.num
+
+        init_copy_time: float = time.time()
         if enable_segmentation:
             img_seq: np.ndarray = image_segmentation.add_segmentation(
                 np.copy(screen_recorder.seq)
@@ -113,12 +125,27 @@ def run_TED1104(
             img_seq: np.ndarray = np.copy(screen_recorder.seq)
 
         keys = key_check()
-        if not "J" in keys:
-            X: torch.Tensor = torch.from_numpy(
-                reshape_x(np.array([img_seq]), fp=16 if fp16 else 32)
-            )
-            model_prediction = model.predict(X.to(device)).cpu().numpy()
+        if "J" not in keys:
+
+            X = torch.stack(
+                (
+                    transform(img_seq[0] / 255.0).half(),
+                    transform(img_seq[1] / 255.0).half(),
+                    transform(img_seq[2] / 255.0).half(),
+                    transform(img_seq[3] / 255.0).half(),
+                    transform(img_seq[4] / 255.0).half(),
+                ),
+                dim=0,
+            ).to(device)
+
+            if fp16:
+                with autocast():
+                    model_prediction: torch.tensor = model.predict(X).cpu().numpy()
+            else:
+                model_prediction: torch.tensor = model.predict(X).cpu().numpy()
+
             select_key(int(model_prediction[0]))
+            key_push_time: float = time.time()
 
             if show_current_control:
                 var.set("T.E.D.D. 1104 Driving")
@@ -149,6 +176,8 @@ def run_TED1104(
                 var.set("Manual Control")
                 l.config(fg="red")
                 root.update()
+
+            key_push_time: float = 0.0
 
         if show_what_ai_sees:
             cv2.imshow("window1", img_seq[0])
@@ -184,6 +213,7 @@ def run_TED1104(
         print(
             f"Recording at {screen_recorder.fps} FPS\n"
             f"Actions per second {None if time_it==0 else 1/time_it}\n"
+            f"Reaction time: {round(key_push_time-init_copy_time,3) if key_push_time>0 else 0} secs"
             f"Key predicted by nn: {key_press(model_prediction[0])}\n"
             f"Difference from img 1 to img 5 {None if not enable_evasion else score}\n"
             f"Push QE to exit\n"
@@ -204,14 +234,6 @@ if __name__ == "__main__":
         type=str,
         required=True,
         help="Directory where the model to use is stored",
-    )
-
-    parser.add_argument(
-        "--fp16",
-        action="store_true",
-        help="Use FP16 floating point precision: "
-        "Requires Nvidia Apex: https://www.github.com/nvidia/apex "
-        "and a modern Nvidia GPU FP16 capable (Volta, Turing and future architectures).",
     )
 
     parser.add_argument(
@@ -255,9 +277,8 @@ if __name__ == "__main__":
 
     screen_recorder.initialize_global_variables()
 
-    run_TED1104(
+    run_ted1104(
         model_dir=args.model_dir,
-        fp16=args.fp16,
         enable_evasion=args.enable_evasion,
         show_current_control=args.show_current_control,
         num_parallel_sequences=args.num_parallel_sequences,

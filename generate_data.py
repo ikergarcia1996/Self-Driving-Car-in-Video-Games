@@ -6,36 +6,39 @@ import argparse
 import threading
 import screen.record_screen as screen_recorder
 from keyboard.getkeys import key_check
+import cv2
+from PIL import Image
 
 
-def save_data(dir_path: str, data: np.ndarray, number: int):
+def save_data(dir_path: str, images: np.ndarray, y: int, number: int):
     """
-    Save a numpy ndarray to a directory and delete it from RAM
+    Save a trainign example
     Input:
      - dir_path path of the directory where the files are going to be stored
-     - data umpy ndarray
+     - data numpy ndarray
      - number integer used to name the file
-    Ouput:
+    Output:
 
     """
-    file_name = os.path.join(dir_path, f"training_data{number}.npz")
-    np.savez_compressed(file_name, data)
-    del data
+
+    Image.fromarray(
+        cv2.cvtColor(np.concatenate(images, axis=1), cv2.COLOR_BGR2RGB)
+    ).save(os.path.join(dir_path, f"{number}_{y}.jpeg"))
 
 
 def get_last_file_num(dir_path: str) -> int:
     """
-    Given a directory with files in the format training_data[number].npz return the higher number
+    Given a directory with files in the format [number].jpeg return the higher number
     Input:
      - dir_path path of the directory where the files are stored
-    Ouput:
+    Output:
      - int max number in the directory. -1 if no file exits
      """
 
     files = [
-        int(f.split(".")[0][13:])
+        int(f.split(".")[0])
         for f in os.listdir(dir_path)
-        if os.path.isfile(os.path.join(dir_path, f)) and f.startswith("training_data")
+        if os.path.isfile(os.path.join(dir_path, f)) and f.endswith(".jpeg")
     ]
 
     return -1 if len(files) == 0 else max(files)
@@ -46,7 +49,7 @@ def counter_keys(key: np.ndarray) -> int:
     Multi-hot vector to one hot vector (represented as an integer)
     Input:
      - key numpy array of integers (1,0) of size 4
-    Ouput:
+    Output:
     - One hot vector encoding represented as an index (int). If the vector does not represent any valid key
     input the returned value will be -1
 
@@ -73,9 +76,7 @@ def counter_keys(key: np.ndarray) -> int:
         return -1
 
 
-def generate_dataset(
-    output_dir: str, num_training_examples_per_file: int, use_probability: bool = True
-) -> None:
+def generate_dataset(output_dir: str, use_probability: bool = True) -> None:
     """
     Generate dataset exampled from a human playing a videogame
     HOWTO:
@@ -96,6 +97,9 @@ def generate_dataset(
     Output:
 
     """
+    if not os.path.exists(output_dir):
+        print(f"{output_dir} does not exits. We will create it.")
+        os.makedirs(output_dir)
 
     training_data: list = []
     stop_recording: threading.Event = threading.Event()
@@ -111,14 +115,11 @@ def generate_dataset(
     th_seq.setDaemon(True)
     th_img.start()
     # Wait to launch the image_sequencer_thread, it needs the img_thread to be running
-    time.sleep(1)
+    time.sleep(2)
     th_seq.start()
     number_of_files: int = get_last_file_num(output_dir) + 1
-    total_examples_in_dataset: int = (
-        number_of_files * num_training_examples_per_file
-    ) + number_of_files
-    time.sleep(4)
-    last_num: int = 5  # The image sequence starts with images containing zeros, wait until it is filled with real images
+    time.sleep(6)
+    last_num: int = 5  # The image sequence starts with images containing zeros, wait until it is filled
 
     number_of_keys = np.asarray([0, 0, 0, 0, 0, 0, 0, 0, 0])
 
@@ -133,7 +134,7 @@ def generate_dataset(
         print(
             f"Recording at {screen_recorder.fps} FPS\n"
             f"Images in sequence {len(img_seq)}\n"
-            f"Training data len {total_examples_in_dataset - number_of_files} sequences\n"
+            f"Training data len {number_of_files} sequences\n"
             f"Number of archives {number_of_files}\n"
             f"Keys pressed: {output}\n"
             f"Keys samples recorded: "
@@ -165,47 +166,29 @@ def generate_dataset(
                     prop = 1.0
                 if np.random.rand() <= prop:
                     number_of_keys[key] += 1
-                    total_examples_in_dataset += 1
-                    training_data.append(
-                        [
-                            img_seq[0],
-                            img_seq[1],
-                            img_seq[2],
-                            img_seq[3],
-                            img_seq[4],
-                            output,
-                        ]
+
+                    save_data(
+                        dir_path=output_dir,
+                        images=img_seq,
+                        y=key,
+                        number=number_of_files,
                     )
+                    number_of_files += 1
 
             else:
                 number_of_keys[key] += 1
-                total_examples_in_dataset += 1
-                training_data.append(
-                    [img_seq[0], img_seq[1], img_seq[2], img_seq[3], img_seq[4], output]
+                save_data(
+                    dir_path=output_dir, images=img_seq, y=key, number=number_of_files
                 )
+                number_of_files += 1
 
         keys = key_check()
         if "Q" in keys and "E" in keys:
             print("\nStopping...")
             stop_recording.set()
-            save_thread = threading.Thread(
-                target=save_data,
-                args=(output_dir, training_data.copy(), number_of_files,),
-            )
-            save_thread.start()
             th_seq.join()
             th_img.join()
-            save_thread.join()
             break
-
-        if total_examples_in_dataset % num_training_examples_per_file == 0:
-            threading.Thread(
-                target=save_data,
-                args=(output_dir, training_data.copy(), number_of_files,),
-            ).start()
-            number_of_files += 1
-            training_data = []
-            total_examples_in_dataset += 1
 
 
 if __name__ == "__main__":
@@ -217,13 +200,6 @@ if __name__ == "__main__":
         type=str,
         default=os.getcwd(),
         help="Directory where the training data will be saved",
-    )
-
-    parser.add_argument(
-        "--num_training_examples_per_file",
-        type=int,
-        default=500,
-        help="Number of sequences per file",
     )
 
     parser.add_argument(
@@ -240,7 +216,5 @@ if __name__ == "__main__":
     screen_recorder.initialize_global_variables()
 
     generate_dataset(
-        output_dir=args.save_dir,
-        num_training_examples_per_file=args.num_training_examples_per_file,
-        use_probability=not args.save_everything,
+        output_dir=args.save_dir, use_probability=not args.save_everything,
     )
