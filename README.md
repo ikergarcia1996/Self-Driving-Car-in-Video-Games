@@ -34,8 +34,14 @@ video game.
 
 
 ## 1) News
-**NEW 25/10/2020** V3 released! This new version completely changes how the dataset is stored. The dataset now uses around 10x less disk space (Yes, the previous version was terrible :S) and loading the data for training is much faster, you can update your V2 dataset files to the V3 dataset format using the dataset_update/v2_to_v3.py script. I updated the code to Pytorch 1.6+ to take advantage of the automated mixed-precision feature  (https://pytorch.org/docs/stable/notes/amp_examples.html) since the external amp module provided by Nvidia has been merged into Pytorch 1.6 as is no longer maintained.  
-**NEW 29/04/2020** Youtube live streaming of T.E.D.D. 1104 driving different vehicles around the city!! Yo can see the stream reuploaded here (Spanish) https://youtu.be/4NUdgSDSKSQ  
+**NEW 25/10/2020** V3 released! This new version completely changes how the dataset is stored. The dataset now uses 
+around 10x less disk space (Yes, the previous version was terrible :S) and loading the data for training is much faster, 
+you can update your V2 dataset files to the V3 dataset format using the dataset_update/v2_to_v3.py script. I updated 
+the code to Pytorch 1.6+ to take advantage of the automated mixed-precision feature 
+(https://pytorch.org/docs/stable/notes/amp_examples.html) since the external amp module provided by Nvidia has been 
+merged into Pytorch 1.6 and is no longer maintained.  
+**NEW 29/04/2020** Youtube live streaming of T.E.D.D. 1104 driving different vehicles around the city!! Yo can see the 
+stream reuploaded here (Spanish) https://youtu.be/4NUdgSDSKSQ  
 **NEW 15/04/2020** First pretrained model released!!, [click here to download it](https://github.com/ikergarcia1996/Self-Driving-Car-in-Video-Games/releases/tag/0.2). For instructions on how to run the AI see the [Run the Model](#34-run-the-model) Section  
 **NEW 7/04/2020** Let's generate a huge training dataset together!! [Click here so see how to collaborate in the project (Spanish)](https://youtu.be/utQoMGLbCFc). 
 **We have reached 1,5Tb of training data (~150 hours of gameplay)!!!!**  
