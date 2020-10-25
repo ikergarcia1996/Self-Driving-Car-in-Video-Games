@@ -19,8 +19,6 @@ video game.
 
 
 ## Table of Contents
-- [T.E.D.D. 1104](#tedd-1104)
-  * [Table of Contents](#table-of-contents)
   * [1) News](#1-news)
     + [1.1) Planned Updates](#11-planned-updates)
   * [2) Architecture](#2-architecture)
