@@ -13,7 +13,6 @@ from torch.cuda.amp import autocast
 from torchvision import transforms
 from utils import mse
 from controller.xbox_controller_emulator import XboxControllerEmulator
-from typing import Union
 
 if torch.cuda.is_available():
     device = torch.device("cuda:0")

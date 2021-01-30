@@ -184,10 +184,7 @@ def train(
                     f"Iteration time: {batch_time} secs. "
                     f"Data Loading bottleneck: {round(dataloader_delay, 2)} secs. "
                     f"Epoch estimated time: "
-                    f"{str(datetime.timedelta(seconds=est)).split('.')[0]}"
-                )
-
-                print_message(
+                    f"{str(datetime.timedelta(seconds=est)).split('.')[0]}\n"
                     f"Loss: {running_loss / total_batches}. "
                     f"Learning rate {optimizer.state_dict()['param_groups'][0]['lr']}"
                 )
@@ -595,7 +592,6 @@ if __name__ == "__main__":
     parser.add_argument(
         "--model_type",
         type=str,
-        required=True,
         choices=["lstm", "transformer"],
         default="transformer",
         help="Type of encoder to use, lstm or transformer",

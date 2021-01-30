@@ -32,7 +32,6 @@ def checkpoint2model(checkpoint_path: str, model_dir: str):
         total_training_examples,
         acc_dev,
         epoch,
-        fp16,
         _,
     ) = model.load_checkpoint(path=checkpoint_path, device=model.torch.device("cpu"))
 
@@ -42,12 +41,11 @@ def checkpoint2model(checkpoint_path: str, model_dir: str):
         f"Num epochs: {epoch+1}\n"
         f"Total training examples: {total_training_examples}\n"
         f"Loss dev set: {round(acc_dev*100,2)}\n"
-        f"FP16: {fp16}\n"
     )
 
     print_message(f"Saving model in {model_dir}")
 
-    tedd1104_model.save_model(model=tedd1104_model, save_dir=model_dir)
+    tedd1104_model.save_model(save_dir=model_dir)
 
     print_message(f"Done!")
 
