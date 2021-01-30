@@ -238,7 +238,18 @@ class Tedd1104Dataset(Dataset):
             idx = idx.tolist()
 
         img_name = self.dataset_files[idx]
-        image = io.imread(img_name)
+        image = None
+        while image is None:
+            try:
+                image = io.imread(img_name)
+            except (ValueError, FileNotFoundError) as err:
+                error_message = str(err).split("\n")[-1]
+                print(
+                    f"Error reading image: {img_name} probably a corrupted file.\n"
+                    f"Exception: {error_message}\n"
+                    f"We will load a random image instead."
+                )
+                img_name = random.choice(self.dataset_files)
 
         if not self.keyboard_dataset:
             y = np.asarray(
