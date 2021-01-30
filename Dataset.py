@@ -3,8 +3,8 @@ import os
 import torch
 from skimage import io
 import numpy as np
-from torch.utils.data import Dataset, DataLoader
-from torchvision import transforms, utils
+from torch.utils.data import Dataset
+from torchvision import transforms
 import glob
 import random
 from typing import List
@@ -118,7 +118,7 @@ class ToTensor(object):
             "image3": torch.from_numpy(image3),
             "image4": torch.from_numpy(image4),
             "image5": torch.from_numpy(image5),
-            "y": torch.tensor(y).long(),
+            "y": torch.tensor(y),
         }
 
 
@@ -148,11 +148,42 @@ class Normalize(object):
         }
 
 
+def keys2controller(keys: int) -> np.ndarray:
+    """
+    Translate a keyboard input into a controller input
+    Input:
+        keys: integer representing keys pressed
+    Output:
+        np.ndarray [3] translated controller input
+    """
+    if keys == 1:
+        return np.asarray([-1.0, -1.0, -1.0], dtype=np.float32)
+    if keys == 2:
+        return np.asarray([1.0, -1.0, -1.0], dtype=np.float32)
+    if keys == 3:
+        return np.asarray([0.0, -1.0, 1.0], dtype=np.float32)
+    if keys == 4:
+        return np.asarray([0.0, 1.0, -1.0], dtype=np.float32)
+    if keys == 5:
+        return np.asarray([-1.0, -1.0, 1.0], dtype=np.float32)
+    if keys == 6:
+        return np.asarray([-1.0, 1.0, -1.0], dtype=np.float32)
+    if keys == 7:
+        return np.asarray([1.0, -1.0, 1.0], dtype=np.float32)
+    if keys == 8:
+        return np.asarray([1.0, 1.0, -1.0], dtype=np.float32)
+    return np.asarray([0.0, -1.0, -1.0], dtype=np.float32)
+
+
 class Tedd1104Dataset(Dataset):
     """TEDD1104 dataset."""
 
     def __init__(
-        self, dataset_dir: str, hide_map_prob: float, dropout_images_prob: List[float]
+        self,
+        dataset_dir: str,
+        hide_map_prob: float,
+        dropout_images_prob: List[float],
+        keyboard_dataset: bool = False,
     ):
         """
         Init
@@ -163,6 +194,8 @@ class Tedd1104Dataset(Dataset):
           from the sequence of images (0<=hide_map_prob<=1)
         - dropout_images_prob List of 5 floats or None, probability for removing each input image during training
          (black image) from a training example (0<=dropout_images_prob<=1)
+        -keyboard_dataset: Set this flag if dataset uses keyboard input (V2 dataset), the keys will be converted to
+         controller input
         """
 
         assert 0 <= hide_map_prob <= 1.0, (
@@ -184,6 +217,7 @@ class Tedd1104Dataset(Dataset):
         self.dataset_dir = dataset_dir
         self.hide_map_prob = hide_map_prob
         self.dropout_images_prob = dropout_images_prob
+        self.keyboard_dataset = keyboard_dataset
         self.transform = transforms.Compose(
             [
                 RemoveMinimap(hide_map_prob=hide_map_prob),
@@ -205,7 +239,19 @@ class Tedd1104Dataset(Dataset):
 
         img_name = self.dataset_files[idx]
         image = io.imread(img_name)
-        y = int(os.path.basename(img_name)[-6])
+
+        if not self.keyboard_dataset:
+            y = np.asarray(
+                [
+                    float(x)
+                    for x in os.path.basename(img_name)[:-5].split("_")[-1].split(",")
+                ],
+                dtype=np.float32,
+            )
+        else:
+            keys: int = int(os.path.basename(img_name)[-6])
+            y = keys2controller(keys)
+
         sample = {"image": image, "y": y}
 
         return self.transform(sample)

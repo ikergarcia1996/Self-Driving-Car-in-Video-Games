@@ -41,13 +41,13 @@ def checkpoint2model(checkpoint_path: str, model_dir: str):
         f"Running loss: {running_loss/total_batches}\n"
         f"Num epochs: {epoch+1}\n"
         f"Total training examples: {total_training_examples}\n"
-        f"Acc dev set: {round(acc_dev*100,2)}\n"
+        f"Loss dev set: {round(acc_dev*100,2)}\n"
         f"FP16: {fp16}\n"
     )
 
     print_message(f"Saving model in {model_dir}")
 
-    model.save_model(model=tedd1104_model, save_dir=model_dir, fp16=fp16)
+    tedd1104_model.save_model(model=tedd1104_model, save_dir=model_dir)
 
     print_message(f"Done!")
 

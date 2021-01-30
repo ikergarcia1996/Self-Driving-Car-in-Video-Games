@@ -1,13 +1,27 @@
+from typing import List, Union, Optional
 import os
 import json
-import logging
-from typing import List, Union, Optional
-
 import torch
 import torch.nn as nn
 import torchvision.models as models
 import torchvision.models.resnet
 from torch.cuda.amp import GradScaler
+
+
+def weighted_mse_loss(
+    predicted: torch.tensor, target: torch.tensor, weights: torch.tensor
+) -> torch.tensor:
+    """
+    Weighted_mse_loss
+    Input:
+    - predicted: torch.tensor [batch_size, 3] Output from the model
+    - predicted: torch.tensor [batch_size, 3] Gold values
+    -weights:  torch.tensor [3] Weights for each variable
+
+    Output:
+    -weighted_mse_loss: torch.tensor [batch_size]
+    """
+    return torch.sum(weights * (predicted - target) ** 2)
 
 
 def get_resnet(model: int, pretrained: bool) -> torchvision.models.resnet.ResNet:
@@ -63,31 +77,33 @@ class EncoderCNN(nn.Module):
     ):
         super(EncoderCNN, self).__init__()
         resnet: models.resnet.ResNet = get_resnet(resnet, pretrained_resnet)
-        modules: List[nn.Module] = list(resnet.children())[
-            :-1
-        ]  # delete the last fc layer.
-        modules_dropout: List[Union[nn.Module, nn.Dropout]] = []
-        for layer in modules:
-            modules_dropout.append(layer)
-            modules_dropout.append(nn.Dropout(dropout_cnn))
+        original_modules: List[nn.Module] = list(resnet.children())[:-1]
+        modules: List[nn.Module, nn.Dropout] = []  # delete the last fc layer.
 
-        self.resnet: nn.Module = nn.Sequential(*modules_dropout)
-        self.fc: nn.Linear = nn.Linear(resnet.fc.in_features, embedded_size)
-        self.dropout: nn.Dropout = nn.Dropout(p=dropout_cnn_out)
-        self.bn: nn.BatchNorm1d = nn.BatchNorm1d(embedded_size, momentum=0.01)
+        for layer_no, layer in enumerate(original_modules):
+            modules.append(layer)
+            if layer_no + 1 != len(original_modules):
+                modules.append(nn.Dropout(dropout_cnn))
+
+        if resnet.fc.in_features != embedded_size:
+            modules.append = nn.Linear(resnet.fc.in_features, embedded_size)
+            modules.append(nn.Dropout(p=dropout_cnn_out))
+        else:
+            modules.append(nn.Dropout(p=dropout_cnn_out))
+
+        self.resnet: nn.Module = nn.Sequential(*modules)
+
+        # self.bn: nn.BatchNorm1d = nn.BatchNorm1d(embedded_size, momentum=0.01)
 
     def forward(self, images):
         features = self.resnet(images)
         features = features.reshape(features.size(0), -1)
-        features = self.bn(self.fc(features))
-        features = self.dropout(features)
         return features
 
     def predict(self, images):
         with torch.no_grad():
             features = self.resnet(images)
             features = features.reshape(features.size(0), -1)
-            features = self.bn(self.fc(features))
             return features
 
 
@@ -186,6 +202,49 @@ class EncoderRNN(nn.Module):
             return x
 
 
+class EncoderTransformer(nn.Module):
+    """
+    Extract feature vectors from input images (Transformer Encoder)
+
+    Input:
+     torch.tensor [batch_size, sequence_size, embedded_size]
+
+    Output:
+     torch.tensor [batch_size, hidden_size]
+
+     Hyperparameters:
+    - embedded_size: Size of the input feature vectors
+    - nhead: LSTM hidden size
+    - num_layers_transformer: number of transformer layers in the encoder
+    - dropout_transformer_out: dropout probability for the transformer features (output layer)
+
+    """
+
+    def __init__(
+        self, embedded_size: int, nhead: int, num_layers: int, dropout_out: float,
+    ):
+        super(EncoderTransformer, self).__init__()
+
+        self.encoder_layer = nn.TransformerEncoderLayer(
+            d_model=embedded_size, nhead=nhead
+        )
+        self.transformer_encoder = nn.TransformerEncoder(
+            self.encoder_layer, num_layers=num_layers
+        )
+
+        self.dropout: nn.Dropout = nn.Dropout(p=dropout_out)
+
+    def forward(self, features: torch.tensor):
+        x = self.transformer_encoder(features)
+        x = torch.flatten(x, start_dim=1)
+        return self.dropout(x)
+
+    def predict(self, features):
+        with torch.no_grad():
+            x = self.transformer_encoder(features)
+            return torch.flatten(x, start_dim=1)
+
+
 class OutputLayer(nn.Module):
     """
     Output linear layer that produces the predictions
@@ -205,43 +264,41 @@ class OutputLayer(nn.Module):
     def __init__(self, hidden_size: int, layers: List[int] = None):
         super(OutputLayer, self).__init__()
 
-        linear_layers: List[Union[nn.Linear, nn.ReLU]] = []
+        linear_layers: List[Union[nn.Linear, nn.LeakyReLU]] = []
         if layers:
             linear_layers.append(nn.Linear(hidden_size, layers[0]))
-            linear_layers.append(nn.ReLU())
+            linear_layers.append(nn.LeakyReLU())
             for i in range(1, len(layers)):
                 linear_layers.append(nn.Linear(layers[i - 1], layers[i]))
-                linear_layers.append(nn.ReLU())
-            linear_layers.append(nn.Linear(layers[-1], 9))
+                linear_layers.append(nn.LeakyReLU())
+            linear_layers.append(nn.Linear(layers[-1], 3))
 
         else:
-            linear_layers.append(nn.Linear(hidden_size, 9))
+            linear_layers.append(nn.Linear(hidden_size, 3))
 
         self.linear = nn.Sequential(*linear_layers)
-        self.softmax = nn.Softmax(dim=1)
 
     def forward(self, inputs):
         return self.linear(inputs)
 
     def predict(self, inputs):
         with torch.no_grad():
-            value, index = torch.max(self.softmax(self.linear(inputs)), 1)
-            return index
+            return self.linear(inputs)
 
 
-class TEDD1104(nn.Module):
+class TEDD1104LSTM(nn.Module):
     """
     T.E.D.D. 1104 (https://nazizombiesplus.fandom.com/wiki/T.E.D.D.) is the neural network that learns
     how to drive in videogames. It has been develop with Grand Theft Auto V (GTAV) in mind. However
     it can learn how to drive in any videogame and if the model and controls are modified accordingly
     it can play any game. The model receive as input 5 consecutive images that have been captured
-    with a fixed time interval between then (by default 1/10 seconds) and learn the correct
-    key to push in the keyboard (None,W,A,S,D,WA,WD,SA,SD).
+    with a fixed time interval between then (by default 1/10 seconds) and learns the correct
+    controller input.
 
     T.E.D.D 1104 consists of 3 modules:
         [*] A CNN (Resnet) that extract features from the images
         [*] A RNN (LSTM) that generates a representation of the sequence of features from the CNN
-        [*] A linear output layer that predicts the key to push.
+        [*] A linear output layer that predicts the controller input.
 
     Input:
      torch.tensor [batch_size, num_channels, H, W]
@@ -284,7 +341,7 @@ class TEDD1104(nn.Module):
         dropout_lstm: float,
         dropout_lstm_out: float,
     ):
-        super(TEDD1104, self).__init__()
+        super(TEDD1104LSTM, self).__init__()
 
         # Remember hyperparameters.
         self.resnet: int = resnet
@@ -337,50 +394,307 @@ class TEDD1104(nn.Module):
             x = self.EncoderRNN.predict(x)
             return self.OutputLayer.predict(x)
 
+    def save_model(self, save_dir: str) -> None:
+        """
+        Save model to a directory. This function stores two files, the hyperparameters and the weights.
 
-def save_model(model: TEDD1104, save_dir: str, fp16) -> None:
+        Input:
+         - model: TEDD1104 model to save
+         - save_dir: directory where the model will be saved, if it doesn't exists we create it
+
+        Output:
+
+        """
+
+        if not os.path.exists(save_dir):
+            os.makedirs(save_dir)
+
+        dict_hyperparams: dict = {
+            "resnet": self.resnet,
+            "pretrained_resnet": self.pretrained_resnet,
+            "sequence_size": self.sequence_size,
+            "embedded_size": self.embedded_size,
+            "hidden_size": self.hidden_size,
+            "num_layers_lstm": self.num_layers_lstm,
+            "bidirectional_lstm": self.bidirectional_lstm,
+            "layers_out": self.layers_out,
+            "dropout_cnn": self.dropout_cnn,
+            "dropout_cnn_out": self.dropout_cnn_out,
+            "dropout_lstm": self.dropout_lstm,
+            "dropout_lstm_out": self.dropout_lstm_out,
+        }
+
+        model_weights: dict = {
+            "model": self.state_dict(),
+        }
+
+        with open(os.path.join(save_dir, "model_hyperparameters.json"), "w+") as file:
+            json.dump(dict_hyperparams, file)
+
+        torch.save(obj=model_weights, f=os.path.join(save_dir, "model.bin"))
+
+    def save_checkpoint(
+        self,
+        path: str,
+        optimizer_name: str,
+        optimizer: torch.optim,
+        scheduler: torch.optim.lr_scheduler,
+        running_loss: float,
+        total_batches: int,
+        total_training_examples: int,
+        min_loss_dev: float,
+        epoch: int,
+        scaler: Optional[GradScaler],
+    ) -> None:
+
+        """
+        Save a checkpoint that allows to continue training the model in the future
+
+        Input:
+         - path: path where the model is going to be saved
+         - model: TEDD1104 model to save
+         - optimizer_name: Name of the optimizer used for training: SGD or Adam
+         - optimizer: Optimizer used for training
+         - acc_dev: Accuracy of the model in the development set
+         - epoch: Num of epoch used to train the model
+         - scaler: The scaler used for FP16 training
+
+        Output:
+        """
+
+        dict_hyperparams: dict = {
+            "sequence_size": self.sequence_size,
+            "resnet": self.resnet,
+            "pretrained_resnet": self.pretrained_resnet,
+            "embedded_size": self.embedded_size,
+            "hidden_size": self.hidden_size,
+            "num_layers_lstm": self.num_layers_lstm,
+            "bidirectional_lstm": self.bidirectional_lstm,
+            "layers_out": self.layers_out,
+            "dropout_cnn": self.dropout_cnn,
+            "dropout_cnn_out": self.dropout_cnn_out,
+            "dropout_lstm": self.dropout_lstm,
+            "dropout_lstm_out": self.dropout_lstm_out,
+        }
+
+        checkpoint = {
+            "hyper_params": dict_hyperparams,
+            "model": self.state_dict(),
+            "optimizer_name": optimizer_name,
+            "optimizer": optimizer.state_dict(),
+            "scheduler": scheduler.state_dict(),
+            "running_loss": running_loss,
+            "total_batches": total_batches,
+            "total_training_examples": total_training_examples,
+            "min_loss_dev": min_loss_dev,
+            "epoch": epoch,
+            "scaler": None if not scaler else scaler.state_dict(),
+        }
+
+        torch.save(checkpoint, path)
+
+
+class TEDD1104Transformer(nn.Module):
     """
-    Save model to a directory. This function stores two files, the hyperparameters and the weights.
+    T.E.D.D. 1104 (https://nazizombiesplus.fandom.com/wiki/T.E.D.D.) is the neural network that learns
+    how to drive in videogames. It has been develop with Grand Theft Auto V (GTAV) in mind. However
+    it can learn how to drive in any videogame and if the model and controls are modified accordingly
+    it can play any game. The model receive as input 5 consecutive images that have been captured
+    with a fixed time interval between then (by default 1/10 seconds) and learns the correct
+    controller input.
+
+    T.E.D.D 1104 consists of 3 modules:
+        [*] A CNN (Resnet) that extract features from the images
+        [*] A Transformer that generates a representation of the sequence of features from the CNN
+        [*] A linear output layer that predicts the controller input.
 
     Input:
-     - model: TEDD1104 model to save
-     - save_dir: directory where the model will be saved, if it doesn't exists we create it
-     - fp16: If the model uses FP16
+     torch.tensor [batch_size, num_channels, H, W]
+     For efficiency the input input is not packed as sequence of 5 images, all the images in the batch will be
+     encoded in the CNN and the features vectors will be packed as sequences of 5 vectors before feeding them to the
+     RNN.
 
     Output:
+     Forward: torch.tensor [batch_size, 12] (output values without softmax)
+     Predict: torch.tensor [batch_size, 1] (index of the max value after softmax)
+
+    Hyperparameters:
+    - resnet: resnet module to use [18,34,50,101,152]
+    - pretrained_resnet: Load pretrained resnet weights
+    - sequence_size: Length of each series of features
+    - embedded_size: Size of the feature vectors
+    - nhead: number of heads for the transformer layer
+    - num_layers_transformer: number of transformer layers in the encoder
+    - layers_out: list of integer, for each integer i a linear layer with i neurons will be added.
+    - dropout_cnn: dropout probability for the CNN layers
+    - dropout_cnn_out: dropout probability for the cnn features (output layer)
+    - dropout_transformer_out: dropout probability for the transformer features (output layer)
 
     """
 
-    if not os.path.exists(save_dir):
-        os.makedirs(save_dir)
+    def __init__(
+        self,
+        resnet: int,
+        pretrained_resnet: bool,
+        sequence_size: int,
+        embedded_size: int,
+        nhead: int,
+        num_layers_transformer: int,
+        layers_out: List[int],
+        dropout_cnn: float,
+        dropout_cnn_out: float,
+        dropout_transformer_out: float,
+    ):
+        super(TEDD1104Transformer, self).__init__()
 
-    dict_hyperparams: dict = {
-        "resnet": model.resnet,
-        "pretrained_resnet": model.pretrained_resnet,
-        "sequence_size": model.sequence_size,
-        "embedded_size": model.embedded_size,
-        "hidden_size": model.hidden_size,
-        "num_layers_lstm": model.num_layers_lstm,
-        "bidirectional_lstm": model.bidirectional_lstm,
-        "layers_out": model.layers_out,
-        "dropout_cnn": model.dropout_cnn,
-        "dropout_cnn_out": model.dropout_cnn_out,
-        "dropout_lstm": model.dropout_lstm,
-        "dropout_lstm_out": model.dropout_lstm_out,
-        "fp16": fp16,
-    }
+        # Remember hyperparameters.
+        self.resnet: int = resnet
+        self.pretrained_resnet: bool = pretrained_resnet
+        self.sequence_size: int = sequence_size
+        self.embedded_size: int = embedded_size
+        self.nhead: int = nhead
+        self.num_layers_transformer: int = num_layers_transformer
+        self.layers_out: List[int] = layers_out
+        self.dropout_cnn: float = dropout_cnn
+        self.dropout_cnn_out: float = dropout_cnn_out
+        self.dropout_transformer_out: float = dropout_transformer_out
 
-    model_weights: dict = {
-        "model": model.state_dict(),
-    }
+        self.EncoderCNN = EncoderCNN(
+            embedded_size=embedded_size,
+            dropout_cnn=dropout_cnn,
+            dropout_cnn_out=dropout_cnn_out,
+            resnet=resnet,
+            pretrained_resnet=pretrained_resnet,
+        )
 
-    with open(os.path.join(save_dir, "model_hyperparameters.json"), "w+") as file:
-        json.dump(dict_hyperparams, file)
+        self.PackFeatureVectors = PackFeatureVectors(sequence_size=sequence_size)
 
-    torch.save(obj=model_weights, f=os.path.join(save_dir, "model.bin"))
+        self.EncoderRNN = EncoderTransformer(
+            embedded_size=embedded_size,
+            nhead=nhead,
+            num_layers=num_layers_transformer,
+            dropout_out=dropout_transformer_out,
+        )
+
+        self.OutputLayer = OutputLayer(
+            hidden_size=embedded_size * sequence_size, layers=layers_out,
+        )
+
+    def forward(self, x):
+        x = self.EncoderCNN(x)
+        x = self.PackFeatureVectors(x)
+        x = self.EncoderRNN(x)
+        return self.OutputLayer(x)
+
+    def predict(self, x):
+        with torch.no_grad():
+            x = self.EncoderCNN.predict(x)
+            x = self.PackFeatureVectors.predict(x)
+            x = self.EncoderRNN.predict(x)
+            return self.OutputLayer.predict(x)
+
+    def save_model(self, save_dir: str) -> None:
+        """
+        Save model to a directory. This function stores two files, the hyperparameters and the weights.
+
+        Input:
+         - model: TEDD1104 model to save
+         - save_dir: directory where the model will be saved, if it doesn't exists we create it
+
+        Output:
+
+        """
+
+        if not os.path.exists(save_dir):
+            os.makedirs(save_dir)
+
+        dict_hyperparams: dict = {
+            "resnet": self.resnet,
+            "pretrained_resnet": self.pretrained_resnet,
+            "sequence_size": self.sequence_size,
+            "embedded_size": self.embedded_size,
+            "nhead": self.nhead,
+            "num_layers_transformer": self.num_layers_transformer,
+            "layers_out": self.layers_out,
+            "dropout_cnn": self.dropout_cnn,
+            "dropout_cnn_out": self.dropout_cnn_out,
+            "dropout_transformer_out": self.dropout_transformer_out,
+        }
+
+        model_weights: dict = {
+            "model": self.state_dict(),
+        }
+
+        with open(os.path.join(save_dir, "model_hyperparameters.json"), "w+") as file:
+            json.dump(dict_hyperparams, file)
+
+        torch.save(obj=model_weights, f=os.path.join(save_dir, "model.bin"))
+
+    def save_checkpoint(
+        self,
+        path: str,
+        optimizer_name: str,
+        optimizer: torch.optim,
+        scheduler: torch.optim.lr_scheduler,
+        running_loss: float,
+        total_batches: int,
+        total_training_examples: int,
+        min_loss_dev: float,
+        epoch: int,
+        scaler: Optional[GradScaler],
+    ) -> None:
+
+        """
+        Save a checkpoint that allows to continue training the model in the future
+
+        Input:
+         - path: path where the model is going to be saved
+         - model: TEDD1104 model to save
+         - optimizer_name: Name of the optimizer used for training: SGD or Adam
+         - optimizer: Optimizer used for training
+         - acc_dev: Accuracy of the model in the development set
+         - epoch: Num of epoch used to train the model
+         - scaler: The scaler used for FP16 training
+
+        Output:
+        """
+
+        dict_hyperparams: dict = {
+            "resnet": self.resnet,
+            "pretrained_resnet": self.pretrained_resnet,
+            "sequence_size": self.sequence_size,
+            "embedded_size": self.embedded_size,
+            "nhead": self.nhead,
+            "num_layers_transformer": self.num_layers_transformer,
+            "layers_out": self.layers_out,
+            "dropout_cnn": self.dropout_cnn,
+            "dropout_cnn_out": self.dropout_cnn_out,
+            "dropout_transformer_out": self.dropout_transformer_out,
+        }
+
+        checkpoint = {
+            "hyper_params": dict_hyperparams,
+            "model": self.state_dict(),
+            "optimizer_name": optimizer_name,
+            "optimizer": optimizer.state_dict(),
+            "scheduler": scheduler.state_dict(),
+            "running_loss": running_loss,
+            "total_batches": total_batches,
+            "total_training_examples": total_training_examples,
+            "min_loss_dev": min_loss_dev,
+            "epoch": epoch,
+            "scaler": None if not scaler else scaler.state_dict(),
+        }
+
+        torch.save(checkpoint, path)
 
 
-def load_model(save_dir: str, device: torch.device) -> [TEDD1104, bool]:
+TEDD1104 = Union[TEDD1104LSTM, TEDD1104Transformer]
+
+
+def load_model(
+    save_dir: str, device: torch.device
+) -> Union[TEDD1104LSTM, TEDD1104Transformer]:
     """
     Load a model from directory. The directory should contain a json with the model hyperparameters and a bin file
     with the model weights.
@@ -390,101 +704,64 @@ def load_model(save_dir: str, device: torch.device) -> [TEDD1104, bool]:
 
     Output:
     - TEDD1104 model
-    - fp16: True if the model uses FP16 else False
 
     """
 
     with open(os.path.join(save_dir, "model_hyperparameters.json"), "r") as file:
         dict_hyperparams = json.load(file)
 
-    model: TEDD1104 = TEDD1104(
-        resnet=dict_hyperparams["resnet"],
-        pretrained_resnet=dict_hyperparams["pretrained_resnet"],
-        sequence_size=dict_hyperparams["sequence_size"],
-        embedded_size=dict_hyperparams["embedded_size"],
-        hidden_size=dict_hyperparams["hidden_size"],
-        num_layers_lstm=dict_hyperparams["num_layers_lstm"],
-        bidirectional_lstm=dict_hyperparams["bidirectional_lstm"],
-        layers_out=dict_hyperparams["layers_out"],
-        dropout_cnn=dict_hyperparams["dropout_cnn"],
-        dropout_cnn_out=dict_hyperparams["dropout_cnn_out"],
-        dropout_lstm=dict_hyperparams["dropout_lstm"],
-        dropout_lstm_out=dict_hyperparams["dropout_lstm_out"],
-    ).to(device=device)
+    if "num_layers_lstm" in dict_hyperparams:
+        print(f"Loading TEDD1104LSTM model")
+        model: TEDD1104LSTM = TEDD1104LSTM(
+            resnet=dict_hyperparams["resnet"],
+            pretrained_resnet=dict_hyperparams["pretrained_resnet"],
+            sequence_size=dict_hyperparams["sequence_size"],
+            embedded_size=dict_hyperparams["embedded_size"],
+            hidden_size=dict_hyperparams["hidden_size"],
+            num_layers_lstm=dict_hyperparams["num_layers_lstm"],
+            bidirectional_lstm=dict_hyperparams["bidirectional_lstm"],
+            layers_out=dict_hyperparams["layers_out"],
+            dropout_cnn=dict_hyperparams["dropout_cnn"],
+            dropout_cnn_out=dict_hyperparams["dropout_cnn_out"],
+            dropout_lstm=dict_hyperparams["dropout_lstm"],
+            dropout_lstm_out=dict_hyperparams["dropout_lstm_out"],
+        ).to(device=device)
+
+    else:
+        print(f"Loading TEDD1104Transformer model")
+        model: TEDD1104Transformer = TEDD1104Transformer(
+            resnet=dict_hyperparams["resnet"],
+            pretrained_resnet=dict_hyperparams["pretrained_resnet"],
+            sequence_size=dict_hyperparams["sequence_size"],
+            embedded_size=dict_hyperparams["embedded_size"],
+            nhead=dict_hyperparams["nhead"],
+            num_layers_transformer=dict_hyperparams["num_layers_transformer"],
+            layers_out=dict_hyperparams["layers_out"],
+            dropout_cnn=dict_hyperparams["dropout_cnn"],
+            dropout_cnn_out=dict_hyperparams["dropout_cnn_out"],
+            dropout_transformer_out=dict_hyperparams["dropout_transformer_out"],
+        ).to(device=device)
 
     model_weights = torch.load(f=os.path.join(save_dir, "model.bin"))
     model.load_state_dict(model_weights["model"])
 
-    return model, dict_hyperparams["fp16"]
-
-
-def save_checkpoint(
-    path: str,
-    model: TEDD1104,
-    optimizer_name: str,
-    optimizer: torch.optim,
-    scheduler: torch.optim.lr_scheduler,
-    running_loss: float,
-    total_batches: int,
-    total_training_examples: int,
-    acc_dev: float,
-    epoch: int,
-    fp16: bool,
-    scaler: Optional[GradScaler],
-) -> None:
-
-    """
-    Save a checkpoint that allows to continue training the model in the future
-
-    Input:
-     - path: path where the model is going to be saved
-     - model: TEDD1104 model to save
-     - optimizer_name: Name of the optimizer used for training: SGD or Adam
-     - optimizer: Optimizer used for training
-     - acc_dev: Accuracy of the model in the development set
-     - epoch: Num of epoch used to train the model
-     - fp16: If the model uses FP16
-     - scaler: If the model uses FP16, the scaler used for training
-
-    Output:
-    """
-
-    dict_hyperparams: dict = {
-        "sequence_size": model.sequence_size,
-        "resnet": model.resnet,
-        "pretrained_resnet": model.pretrained_resnet,
-        "embedded_size": model.embedded_size,
-        "hidden_size": model.hidden_size,
-        "num_layers_lstm": model.num_layers_lstm,
-        "bidirectional_lstm": model.bidirectional_lstm,
-        "layers_out": model.layers_out,
-        "dropout_cnn": model.dropout_cnn,
-        "dropout_cnn_out": model.dropout_cnn_out,
-        "dropout_lstm": model.dropout_lstm,
-        "dropout_lstm_out": model.dropout_lstm_out,
-        "fp16": fp16,
-    }
-
-    checkpoint = {
-        "hyper_params": dict_hyperparams,
-        "model": model.state_dict(),
-        "optimizer_name": optimizer_name,
-        "optimizer": optimizer.state_dict(),
-        "scheduler": scheduler.state_dict(),
-        "running_loss": running_loss,
-        "total_batches": total_batches,
-        "total_training_examples": total_training_examples,
-        "acc_dev": acc_dev,
-        "epoch": epoch,
-        "scaler": None if not fp16 else scaler.state_dict(),
-    }
-
-    torch.save(checkpoint, path)
+    return model
 
 
 def load_checkpoint(
     path: str, device: torch.device
-) -> (TEDD1104, str, torch.optim, torch.optim.lr_scheduler, float, int, bool, str):
+) -> (
+    Union[TEDD1104LSTM, TEDD1104Transformer],
+    str,
+    torch.optim,
+    torch.optim.lr_scheduler,
+    float,
+    int,
+    int,
+    float,
+    int,
+    Union[GradScaler, None],
+):
 
     """
     Restore checkpoint
@@ -495,10 +772,12 @@ def load_checkpoint(
     Output:
      - model: restored TEDD1104 model
      - optimizer_name: Name of the optimizer used for training: SGD or Adam
-     - optimizer: Optimizer used for training
-     - acc_dev: Accuracy of the model in the development set
+     - scheduler: Scheduler used for training
+     - running_loss:Running loss  of the model
+     - total_batches: Total batches used for training
+     - total_training_examples: Training examples used for training
+     - min_loss_dev: Min loss in development set
      - epoch: Num of epoch used to train the model
-     - fp16: true if the model uses fp16 else false
      - scaler: If the model uses FP16, the scaler used for training
     """
 
@@ -507,25 +786,41 @@ def load_checkpoint(
     model_weights = checkpoint["model"]
     optimizer_name = checkpoint["optimizer_name"]
     optimizer_state = checkpoint["optimizer"]
-    acc_dev = checkpoint["acc_dev"]
+    min_loss_dev = checkpoint["min_loss_dev"]
     epoch = checkpoint["epoch"]
     scaler_state = checkpoint["scaler"]
-    fp16 = dict_hyperparams["fp16"]
 
-    model: TEDD1104 = TEDD1104(
-        resnet=dict_hyperparams["resnet"],
-        pretrained_resnet=dict_hyperparams["pretrained_resnet"],
-        sequence_size=dict_hyperparams["sequence_size"],
-        embedded_size=dict_hyperparams["embedded_size"],
-        hidden_size=dict_hyperparams["hidden_size"],
-        num_layers_lstm=dict_hyperparams["num_layers_lstm"],
-        bidirectional_lstm=dict_hyperparams["bidirectional_lstm"],
-        layers_out=dict_hyperparams["layers_out"],
-        dropout_cnn=dict_hyperparams["dropout_cnn"],
-        dropout_cnn_out=dict_hyperparams["dropout_cnn_out"],
-        dropout_lstm=dict_hyperparams["dropout_lstm"],
-        dropout_lstm_out=dict_hyperparams["dropout_lstm_out"],
-    ).to(device=device)
+    if "num_layers_lstm" in dict_hyperparams:
+        print(f"Loading TEDD1104LSTM model")
+        model: TEDD1104LSTM = TEDD1104LSTM(
+            resnet=dict_hyperparams["resnet"],
+            pretrained_resnet=dict_hyperparams["pretrained_resnet"],
+            sequence_size=dict_hyperparams["sequence_size"],
+            embedded_size=dict_hyperparams["embedded_size"],
+            hidden_size=dict_hyperparams["hidden_size"],
+            num_layers_lstm=dict_hyperparams["num_layers_lstm"],
+            bidirectional_lstm=dict_hyperparams["bidirectional_lstm"],
+            layers_out=dict_hyperparams["layers_out"],
+            dropout_cnn=dict_hyperparams["dropout_cnn"],
+            dropout_cnn_out=dict_hyperparams["dropout_cnn_out"],
+            dropout_lstm=dict_hyperparams["dropout_lstm"],
+            dropout_lstm_out=dict_hyperparams["dropout_lstm_out"],
+        ).to(device=device)
+
+    else:
+        print(f"Loading TEDD1104Transformer model")
+        model: TEDD1104Transformer = TEDD1104Transformer(
+            resnet=dict_hyperparams["resnet"],
+            pretrained_resnet=dict_hyperparams["pretrained_resnet"],
+            sequence_size=dict_hyperparams["sequence_size"],
+            embedded_size=dict_hyperparams["embedded_size"],
+            nhead=dict_hyperparams["nhead"],
+            num_layers_transformer=dict_hyperparams["num_layers_transformer"],
+            layers_out=dict_hyperparams["layers_out"],
+            dropout_cnn=dict_hyperparams["dropout_cnn"],
+            dropout_cnn_out=dict_hyperparams["dropout_cnn_out"],
+            dropout_transformer_out=dict_hyperparams["dropout_transformer_out"],
+        ).to(device=device)
 
     if optimizer_name == "SGD":
         optimizer = torch.optim.SGD(model.parameters(), lr=0.01, momentum=0.9)
@@ -541,38 +836,18 @@ def load_checkpoint(
 
     model.load_state_dict(model_weights)
     optimizer.load_state_dict(optimizer_state)
-    try:
-        scheduler_state = checkpoint["scheduler"]
-        scheduler.load_state_dict(scheduler_state)
-    except KeyError:
-        logging.warning(f"Legacy checkpoint, a new scheduler will be created")
 
-    try:
-        running_loss = checkpoint["running_loss"]
-    except KeyError:
-        logging.warning(
-            "Legacy checkpoint, running loss will be initialized with 0.0 value"
-        )
-        running_loss = 0.0
+    scheduler_state = checkpoint["scheduler"]
+    scheduler.load_state_dict(scheduler_state)
 
-    try:
-        total_training_examples = checkpoint["total_training_examples"]
-    except KeyError:
-        logging.warning(
-            "Legacy checkpoint, total training examples will be initialized with 0 value"
-        )
-        total_training_examples = 0
+    running_loss = checkpoint["running_loss"]
 
-    try:
-        total_batches = checkpoint["total_batches"]
-    except KeyError:
-        logging.warning(
-            "Legacy checkpoint, total batches will be initialized with 0 value"
-        )
-        total_batches = 0
+    total_training_examples = checkpoint["total_training_examples"]
+
+    total_batches = checkpoint["total_batches"]
 
     scaler: Optional[GradScaler]
-    if fp16:
+    if scaler_state:
         scaler = GradScaler()
         scaler.load_state_dict(scaler_state)
     else:
@@ -586,8 +861,7 @@ def load_checkpoint(
         running_loss,
         total_batches,
         total_training_examples,
-        acc_dev,
+        min_loss_dev,
         epoch,
-        fp16,
         scaler,
     )

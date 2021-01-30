@@ -1,5 +1,3 @@
-from typing import Set
-
 from model import TEDD1104
 import datetime
 import torch
@@ -15,60 +13,23 @@ except ModuleNotFoundError:
     import numpy as np
 
 
-def check_valid_y(data: np.ndarray) -> bool:
-    """
-    Check if any key has been pressed in the datased. Some files may not have any key recorded due to windows
-    permission errors on some computers, people not using WASD or other problems, we want to discard these files.
-    Input:
-     - data: ndarray [num_examples x 6]
-    Output:
-    - Bool: True if the file is valid, False is there no key recorded
-    """
-    seen_keys: Set[int] = set()
-    for i in range(0, data.shape[0]):
-        if np.array_equal(data[i][5], [0, 0, 0, 0]):
-            seen_keys.add(0)
-        elif np.array_equal(data[i][5], [1, 0, 0, 0]):
-            seen_keys.add(1)
-        elif np.array_equal(data[i][5], [0, 1, 0, 0]):
-            seen_keys.add(2)
-        elif np.array_equal(data[i][5], [0, 0, 1, 0]):
-            seen_keys.add(3)
-        elif np.array_equal(data[i][5], [0, 0, 0, 1]):
-            seen_keys.add(4)
-        elif np.array_equal(data[i][5], [1, 0, 1, 0]):
-            seen_keys.add(5)
-        elif np.array_equal(data[i][5], [1, 0, 0, 1]):
-            seen_keys.add(6)
-        elif np.array_equal(data[i][5], [0, 1, 1, 0]):
-            seen_keys.add(7)
-        elif np.array_equal(data[i][5], [0, 1, 0, 1]):
-            seen_keys.add(8)
-
-        if len(seen_keys) >= 3:
-            return True
-
-    else:
-        return False
-
-
 def evaluate(
     model: TEDD1104, data_loader: DataLoader, device: torch.device, fp16: bool,
 ) -> float:
     """
-    Given a set of input examples and the golds for these examples evaluates the model accuracy
+    Given a set of input examples and the golds for these examples evaluates the model mse
     Input:
      - model: TEDD1104 model to evaluate
      - data_loader: torch.utils.data.DataLoader with the examples to evaluate
      - device: string, use cuda or cpu
      -batch_size: integer batch size
     Output:
-    - Accuracy: float
+    - mse loss: float
     """
     model.eval()
-    correct = 0
-    total = 0
-
+    loss: torch.tensor = 0
+    criterion: torch.nn.MSELoss = torch.nn.MSELoss(reduction="sum")
+    total_examples: int = 0
     for batch in tqdm(data_loader, desc="Evaluating model"):
         x = torch.flatten(
             torch.stack(
@@ -85,18 +46,15 @@ def evaluate(
             end_dim=1,
         ).to(device)
 
-        y = batch["y"]
+        y = batch["y"].to(device)
 
-        if fp16:
-            with autocast():
-                predictions: np.ndarray = model.predict(x).cpu()
-        else:
-            predictions: np.ndarray = model.predict(x).cpu()
+        with autocast(enabled=fp16):
+            predictions: np.ndarray = model.predict(x)
 
-        correct += (predictions == y).sum().numpy()
-        total += len(predictions)
+        loss += criterion(predictions, y)
+        total_examples += len(y)
 
-    return correct / total
+    return (loss / total_examples).cpu().item()
 
 
 def print_message(message: str) -> None:
