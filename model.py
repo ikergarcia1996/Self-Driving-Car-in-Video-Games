@@ -95,12 +95,12 @@ class EncoderCNN(nn.Module):
 
         # self.bn: nn.BatchNorm1d = nn.BatchNorm1d(embedded_size, momentum=0.01)
 
-    def forward(self, images):
+    def forward(self, images: torch.tensor) -> torch.tensor:
         features = self.resnet(images)
         features = features.reshape(features.size(0), -1)
         return features
 
-    def predict(self, images):
+    def predict(self, images: torch.tensor) -> torch.tensor:
         with torch.no_grad():
             features = self.resnet(images)
             features = features.reshape(features.size(0), -1)
@@ -125,12 +125,12 @@ class PackFeatureVectors(nn.Module):
         super(PackFeatureVectors, self).__init__()
         self.sequence_size: int = sequence_size
 
-    def forward(self, images):
+    def forward(self, images: torch.tensor) -> torch.tensor:
         return images.view(
             int(images.size(0) / self.sequence_size), self.sequence_size, images.size(1)
         )
 
-    def predict(self, images):
+    def predict(self, images: torch.tensor) -> torch.tensor:
         with torch.no_grad():
             return images.view(
                 int(images.size(0) / self.sequence_size),
@@ -184,7 +184,7 @@ class EncoderRNN(nn.Module):
 
         self.dropout: nn.Dropout = nn.Dropout(p=dropout_lstm_out)
 
-    def forward(self, features: torch.tensor):
+    def forward(self, features: torch.tensor) -> torch.tensor:
         output, (h_n, c_n) = self.lstm(features)
         if self.bidirectional_lstm:
             x = torch.cat((h_n[-2], h_n[-1]), 1)
@@ -192,7 +192,7 @@ class EncoderRNN(nn.Module):
             x = h_n[-1]
         return self.dropout(x)
 
-    def predict(self, features):
+    def predict(self, features: torch.tensor) -> torch.tensor:
         with torch.no_grad():
             output, (h_n, c_n) = self.lstm(features)
             if self.bidirectional_lstm:
@@ -357,7 +357,7 @@ class TEDD1104LSTM(nn.Module):
         self.dropout_lstm: float = dropout_lstm
         self.dropout_lstm_out: float = dropout_lstm_out
 
-        self.EncoderCNN = EncoderCNN(
+        self.EncoderCNN: EncoderCNN = EncoderCNN(
             embedded_size=embedded_size,
             dropout_cnn=dropout_cnn,
             dropout_cnn_out=dropout_cnn_out,
@@ -365,9 +365,11 @@ class TEDD1104LSTM(nn.Module):
             pretrained_resnet=pretrained_resnet,
         )
 
-        self.PackFeatureVectors = PackFeatureVectors(sequence_size=sequence_size)
+        self.PackFeatureVectors: PackFeatureVectors = PackFeatureVectors(
+            sequence_size=sequence_size
+        )
 
-        self.EncoderRNN = EncoderRNN(
+        self.EncoderRNN: EncoderRNN = EncoderRNN(
             embedded_size=embedded_size,
             hidden_size=hidden_size,
             num_layers=num_layers_lstm,
@@ -376,18 +378,18 @@ class TEDD1104LSTM(nn.Module):
             dropout_lstm_out=dropout_lstm_out,
         )
 
-        self.OutputLayer = OutputLayer(
+        self.OutputLayer: OutputLayer = OutputLayer(
             hidden_size=int(hidden_size * 2) if bidirectional_lstm else hidden_size,
             layers=layers_out,
         )
 
-    def forward(self, x):
+    def forward(self, x: torch.tensor) -> torch.tensor:
         x = self.EncoderCNN(x)
         x = self.PackFeatureVectors(x)
         x = self.EncoderRNN(x)
         return self.OutputLayer(x)
 
-    def predict(self, x):
+    def predict(self, x: torch.tensor) -> torch.tensor:
         with torch.no_grad():
             x = self.EncoderCNN.predict(x)
             x = self.PackFeatureVectors.predict(x)
@@ -559,7 +561,7 @@ class TEDD1104Transformer(nn.Module):
         self.dropout_cnn_out: float = dropout_cnn_out
         self.dropout_transformer_out: float = dropout_transformer_out
 
-        self.EncoderCNN = EncoderCNN(
+        self.EncoderCNN: EncoderCNN = EncoderCNN(
             embedded_size=embedded_size,
             dropout_cnn=dropout_cnn,
             dropout_cnn_out=dropout_cnn_out,
@@ -567,26 +569,28 @@ class TEDD1104Transformer(nn.Module):
             pretrained_resnet=pretrained_resnet,
         )
 
-        self.PackFeatureVectors = PackFeatureVectors(sequence_size=sequence_size)
+        self.PackFeatureVectors: PackFeatureVectors = PackFeatureVectors(
+            sequence_size=sequence_size
+        )
 
-        self.EncoderRNN = EncoderTransformer(
+        self.EncoderRNN: EncoderTransformer = EncoderTransformer(
             embedded_size=embedded_size,
             nhead=nhead,
             num_layers=num_layers_transformer,
             dropout_out=dropout_transformer_out,
         )
 
-        self.OutputLayer = OutputLayer(
+        self.OutputLayer: OutputLayer = OutputLayer(
             hidden_size=embedded_size * sequence_size, layers=layers_out,
         )
 
-    def forward(self, x):
+    def forward(self, x: torch.tensor) -> torch.tensor:
         x = self.EncoderCNN(x)
         x = self.PackFeatureVectors(x)
         x = self.EncoderRNN(x)
         return self.OutputLayer(x)
 
-    def predict(self, x):
+    def predict(self, x: torch.tensor) -> torch.tensor:
         with torch.no_grad():
             x = self.EncoderCNN.predict(x)
             x = self.PackFeatureVectors.predict(x)
