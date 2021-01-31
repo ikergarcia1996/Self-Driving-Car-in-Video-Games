@@ -315,7 +315,7 @@ def train_new_model(
     num_epoch=20,
     optimizer_name="SGD",
     learning_rate: float = 0.01,
-    scheduler_patience: int = 10000,
+    scheduler_patience: int = 50000,
     resnet: int = 18,
     pretrained_resnet: bool = True,
     sequence_size: int = 5,
@@ -684,7 +684,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--scheduler_patience",
         type=int,
-        default=1000,
+        default=50000,
         help="[new_model] Number of steps where the loss does not decrease until decrease the learning rate",
     )
 
