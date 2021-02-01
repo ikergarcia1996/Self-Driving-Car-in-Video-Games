@@ -327,6 +327,7 @@ def train_new_model(
     layers_out: List[int] = None,
     dropout_cnn: float = 0.1,
     dropout_cnn_out: float = 0.1,
+    positional_embeddings_dropout: float = 0.0,
     dropout_lstm: float = 0.1,
     dropout_encoder_out: float = 0.1,
     hide_map_prob: float = 0.0,
@@ -362,6 +363,7 @@ def train_new_model(
     - layers_out: list of integer, for each integer i a linear layer with i neurons will be added.
     - dropout_cnn: dropout probability for the CNN layers
     - dropout_cnn_out: dropout probability for the cnn features (output layer)
+    - positional_embeddings_dropout: dropout probability for the transformer input embeddings
     - dropout_lstm: dropout probability for the LSTM
     - dropout_encoder_out: dropout probability for the LSTM or transformer features (output layer)
     - hide_map_prob: Probability for removing the minimap (put a black square)
@@ -406,6 +408,7 @@ def train_new_model(
             layers_out=layers_out,
             dropout_cnn=dropout_cnn,
             dropout_cnn_out=dropout_cnn_out,
+            positional_embeddings_dropout=positional_embeddings_dropout,
             dropout_transformer_out=dropout_encoder_out,
         ).to(device)
     else:
@@ -764,6 +767,13 @@ if __name__ == "__main__":
         type=float,
         default=0.1,
         help="[new_model] Dropout of the CNN representations (output layer) between 0.0 and 1.0",
+    )
+
+    parser.add_argument(
+        "--positional_embeddings_dropout",
+        type=float,
+        default=0.0,
+        help="[new_model transformer] dropout probability for the transformer input embeddings between 0.0 and 1.0",
     )
 
     parser.add_argument(

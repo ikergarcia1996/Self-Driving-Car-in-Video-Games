@@ -1,6 +1,7 @@
 from typing import List, Union, Optional
 import os
 import json
+import math
 import torch
 import torch.nn as nn
 import torchvision.models as models
@@ -243,6 +244,45 @@ class EncoderTransformer(nn.Module):
         with torch.no_grad():
             x = self.transformer_encoder(features)
             return torch.flatten(x, start_dim=1)
+
+
+class PositionalEncoding(nn.Module):
+    """
+    Add positional encodings to the transformer input features
+
+    Input:
+     torch.tensor [batch_size, sequence_size, embedded_size]
+
+    Output:
+     torch.tensor [batch_size, sequence_size, embedded_size]
+
+     Hyperparameters:
+    - embedded_size: Size of the input feature vectors
+    - dropout: dropout probability for the embeddings
+
+    """
+
+    def __init__(self, d_model, dropout=0.0):
+        super(PositionalEncoding, self).__init__()
+        self.dropout = nn.Dropout(p=dropout)
+
+        pe = torch.zeros(5, d_model)
+        position = torch.arange(0, 5, dtype=torch.float).unsqueeze(1)
+        div_term = torch.exp(
+            torch.arange(0, d_model, 2).float() * (-math.log(10000.0) / d_model)
+        )
+        pe[:, 0::2] = torch.sin(position * div_term)
+        pe[:, 1::2] = torch.cos(position * div_term)
+        pe = pe.unsqueeze(0).transpose(0, 1)
+        self.register_buffer("pe", pe)
+
+    def forward(self, x: torch.tensor) -> torch.tensor:
+        x = x + self.pe[: x.size(0), :]
+        return self.dropout(x)
+
+    def predict(self, x: torch.tensor) -> torch.tensor:
+        with torch.no_grad():
+            return x + self.pe[: x.size(0), :]
 
 
 class OutputLayer(nn.Module):
@@ -530,6 +570,7 @@ class TEDD1104Transformer(nn.Module):
     - layers_out: list of integer, for each integer i a linear layer with i neurons will be added.
     - dropout_cnn: dropout probability for the CNN layers
     - dropout_cnn_out: dropout probability for the cnn features (output layer)
+    - positional_embeddings_dropout: dropout probability for the transformer input embeddings
     - dropout_transformer_out: dropout probability for the transformer features (output layer)
 
     """
@@ -545,6 +586,7 @@ class TEDD1104Transformer(nn.Module):
         layers_out: List[int],
         dropout_cnn: float,
         dropout_cnn_out: float,
+        positional_embeddings_dropout: float,
         dropout_transformer_out: float,
     ):
         super(TEDD1104Transformer, self).__init__()
@@ -559,6 +601,7 @@ class TEDD1104Transformer(nn.Module):
         self.layers_out: List[int] = layers_out
         self.dropout_cnn: float = dropout_cnn
         self.dropout_cnn_out: float = dropout_cnn_out
+        self.positional_embeddings_dropout: float = positional_embeddings_dropout
         self.dropout_transformer_out: float = dropout_transformer_out
 
         self.EncoderCNN: EncoderCNN = EncoderCNN(
@@ -573,7 +616,11 @@ class TEDD1104Transformer(nn.Module):
             sequence_size=sequence_size
         )
 
-        self.EncoderRNN: EncoderTransformer = EncoderTransformer(
+        self.PositionalEncoding = PositionalEncoding(
+            d_model=embedded_size, dropout=self.positional_embeddings_dropout
+        )
+
+        self.EncoderTransformer: EncoderTransformer = EncoderTransformer(
             embedded_size=embedded_size,
             nhead=nhead,
             num_layers=num_layers_transformer,
@@ -587,14 +634,16 @@ class TEDD1104Transformer(nn.Module):
     def forward(self, x: torch.tensor) -> torch.tensor:
         x = self.EncoderCNN(x)
         x = self.PackFeatureVectors(x)
-        x = self.EncoderRNN(x)
+        x = self.PositionalEncoding(x)
+        x = self.EncoderTransformer(x)
         return self.OutputLayer(x)
 
     def predict(self, x: torch.tensor) -> torch.tensor:
         with torch.no_grad():
             x = self.EncoderCNN.predict(x)
             x = self.PackFeatureVectors.predict(x)
-            x = self.EncoderRNN.predict(x)
+            x = self.PositionalEncoding.predict(x)
+            x = self.EncoderTransformer.predict(x)
             return self.OutputLayer.predict(x)
 
     def save_model(self, save_dir: str) -> None:
@@ -622,6 +671,7 @@ class TEDD1104Transformer(nn.Module):
             "layers_out": self.layers_out,
             "dropout_cnn": self.dropout_cnn,
             "dropout_cnn_out": self.dropout_cnn_out,
+            "positional_embeddings_dropout": self.positional_embeddings_dropout,
             "dropout_transformer_out": self.dropout_transformer_out,
         }
 
@@ -673,6 +723,7 @@ class TEDD1104Transformer(nn.Module):
             "layers_out": self.layers_out,
             "dropout_cnn": self.dropout_cnn,
             "dropout_cnn_out": self.dropout_cnn_out,
+            "positional_embeddings_dropout": self.positional_embeddings_dropout,
             "dropout_transformer_out": self.dropout_transformer_out,
         }
 
@@ -743,6 +794,9 @@ def load_model(
             layers_out=dict_hyperparams["layers_out"],
             dropout_cnn=dict_hyperparams["dropout_cnn"],
             dropout_cnn_out=dict_hyperparams["dropout_cnn_out"],
+            positional_embeddings_dropout=dict_hyperparams[
+                "positional_embeddings_dropout"
+            ],
             dropout_transformer_out=dict_hyperparams["dropout_transformer_out"],
         ).to(device=device)
 
@@ -823,6 +877,9 @@ def load_checkpoint(
             layers_out=dict_hyperparams["layers_out"],
             dropout_cnn=dict_hyperparams["dropout_cnn"],
             dropout_cnn_out=dict_hyperparams["dropout_cnn_out"],
+            positional_embeddings_dropout=dict_hyperparams[
+                "positional_embeddings_dropout"
+            ],
             dropout_transformer_out=dict_hyperparams["dropout_transformer_out"],
         ).to(device=device)
 
