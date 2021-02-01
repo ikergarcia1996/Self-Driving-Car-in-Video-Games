@@ -266,23 +266,23 @@ class PositionalEncoding(nn.Module):
         super(PositionalEncoding, self).__init__()
         self.dropout = nn.Dropout(p=dropout)
 
-        pe = torch.zeros(5, d_model)
+        positional_encoding = torch.zeros(5, d_model)
         position = torch.arange(0, 5, dtype=torch.float).unsqueeze(1)
         div_term = torch.exp(
             torch.arange(0, d_model, 2).float() * (-math.log(10000.0) / d_model)
         )
-        pe[:, 0::2] = torch.sin(position * div_term)
-        pe[:, 1::2] = torch.cos(position * div_term)
-        pe = pe.unsqueeze(0).transpose(0, 1)
-        self.register_buffer("pe", pe)
+        positional_encoding[:, 0::2] = torch.sin(position * div_term)
+        positional_encoding[:, 1::2] = torch.cos(position * div_term)
+        positional_encoding = positional_encoding.unsqueeze(0)
+        self.register_buffer("positional_encoding", positional_encoding)
 
     def forward(self, x: torch.tensor) -> torch.tensor:
-        x = x + self.pe[: x.size(0), :]
+        x = x + self.positional_encoding[: x.size(0), :]
         return self.dropout(x)
 
     def predict(self, x: torch.tensor) -> torch.tensor:
         with torch.no_grad():
-            return x + self.pe[: x.size(0), :]
+            return x + self.positional_encoding[: x.size(0), :]
 
 
 class OutputLayer(nn.Module):
