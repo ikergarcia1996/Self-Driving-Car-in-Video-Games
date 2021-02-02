@@ -86,25 +86,27 @@ class EncoderCNN(nn.Module):
             if layer_no + 1 != len(original_modules):
                 modules.append(nn.Dropout(dropout_cnn))
 
-        if resnet.fc.in_features != embedded_size:
-            modules.append = nn.Linear(resnet.fc.in_features, embedded_size)
-            modules.append(nn.Dropout(p=dropout_cnn_out))
-        else:
-            modules.append(nn.Dropout(p=dropout_cnn_out))
-
         self.resnet: nn.Module = nn.Sequential(*modules)
 
-        # self.bn: nn.BatchNorm1d = nn.BatchNorm1d(embedded_size, momentum=0.01)
+        # if resnet.fc.in_features != embedded_size:
+        self.fc: nn.Linear = nn.Linear(resnet.fc.in_features, embedded_size)
+        self.dropout: nn.Dropout = nn.Dropout(p=dropout_cnn_out)
+
+        self.bn: nn.BatchNorm1d = nn.BatchNorm1d(embedded_size, momentum=0.01)
 
     def forward(self, images: torch.tensor) -> torch.tensor:
         features = self.resnet(images)
         features = features.reshape(features.size(0), -1)
+        features = self.dropout(self.fc(features))
+        features = self.bn(features)
         return features
 
     def predict(self, images: torch.tensor) -> torch.tensor:
         with torch.no_grad():
             features = self.resnet(images)
             features = features.reshape(features.size(0), -1)
+            features = self.dropout(self.fc(features))
+            features = self.bn(features)
             return features
 
 
