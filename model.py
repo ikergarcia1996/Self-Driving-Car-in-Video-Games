@@ -336,14 +336,16 @@ class OutputLayer(nn.Module):
 
         self.linear = nn.Sequential(*linear_layers)
 
-        self.sigmoid: nn.Sigmoid = nn.Sigmoid()
+        self.sigmoid: nn.Sigmoid = (
+            nn.Sigmoid()
+        )  # We want the output to be in range [-1,1], sigmoid will ensure it.
 
     def forward(self, inputs):
-        return self.sigmoid(self.linear(inputs))
+        return -1.0 + 2.0 * self.sigmoid(self.linear(inputs))
 
     def predict(self, inputs):
         with torch.no_grad():
-            return self.sigmoid(self.linear(inputs))
+            return -1.0 + 2.0 * self.sigmoid(self.linear(inputs))
 
 
 class TEDD1104LSTM(nn.Module):
