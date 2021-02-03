@@ -118,13 +118,14 @@ def train(
             ),
             batch_size=batch_size,
             shuffle=True,
-            num_workers=os.cpu_count(),
+            num_workers=os.cpu_count() // 2,
             pin_memory=True,
         )
         start_time: float = time.time()
         step_start_time: float = time.time()
         dataloader_delay: float = 0
         model.train()
+
         for batch in data_loader_train:
 
             x = torch.flatten(
@@ -185,7 +186,7 @@ def train(
                     f"Data Loading bottleneck: {round(dataloader_delay, 2)} secs. "
                     f"Epoch estimated time: "
                     f"{str(datetime.timedelta(seconds=est)).split('.')[0]}\n"
-                    f"Loss: {running_loss / total_batches}. "
+                    f"Running_loss Loss: {running_loss / total_batches}. "
                     f"Learning rate {optimizer.state_dict()['param_groups'][0]['lr']}"
                 )
 
@@ -208,6 +209,7 @@ def train(
                         scaler=scaler,
                     )
 
+                batch_loss = 0
                 dataloader_delay: float = 0
                 start_time: float = time.time()
 
@@ -249,7 +251,10 @@ def train(
         )
 
         dev_loss: float = evaluate(
-            model=model, data_loader=data_loader_dev, device=device, fp16=fp16,
+            model=model,
+            data_loader=data_loader_dev,
+            device=device,
+            fp16=fp16,
         )
 
         del data_loader_dev
@@ -269,7 +274,10 @@ def train(
         )
 
         test_loss: float = evaluate(
-            model=model, data_loader=data_loader_test, device=device, fp16=fp16,
+            model=model,
+            data_loader=data_loader_test,
+            device=device,
+            fp16=fp16,
         )
 
         del data_loader_test
@@ -283,7 +291,9 @@ def train(
         if dev_loss < min_loss and save_best:
             min_loss = dev_loss
             print_message(f"New min loss in dev set {min_loss}. Saving model...")
-            model.save_model(save_dir=output_dir,)
+            model.save_model(
+                save_dir=output_dir,
+            )
             if save_checkpoints:
                 model.save_checkpoint(
                     path=os.path.join(output_dir, "checkpoint.pt"),
@@ -421,7 +431,7 @@ def train_new_model(
             model.parameters(), lr=learning_rate, momentum=0.9, nesterov=True
         )
     elif optimizer_name == "Adam":
-        optimizer = optim.Adam(model.parameters(), lr=learning_rate, weight_decay=0.01)
+        optimizer = optim.AdamW(model.parameters(), lr=learning_rate)
     else:
         raise ValueError(
             f"Optimizer {optimizer_name} not implemented. Available optimizers: SGD, Adam"
@@ -555,7 +565,9 @@ if __name__ == "__main__":
 
     group = parser.add_mutually_exclusive_group(required=True)
     group.add_argument(
-        "--train_new", action="store_true", help="Train a new model",
+        "--train_new",
+        action="store_true",
+        help="Train a new model",
     )
 
     group.add_argument(
@@ -615,7 +627,10 @@ if __name__ == "__main__":
     )
 
     parser.add_argument(
-        "--num_epochs", type=int, required=True, help="Number of epochs to perform",
+        "--num_epochs",
+        type=int,
+        required=True,
+        help="Number of epochs to perform",
     )
 
     parser.add_argument(
