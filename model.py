@@ -22,7 +22,19 @@ def weighted_mse_loss(
     Output:
     -weighted_mse_loss: torch.tensor [batch_size]
     """
-    return torch.sum(weights * (predicted - target) ** 2)
+
+    """
+    DEBUG LOSS FUNCTION
+        print(
+            f"weights: {weights}\n"
+            f"predicted: {predicted}\n"
+            f"target: {target}\n"
+            f"Distances: {weights * (predicted - target) ** 2}\n"
+            f"Mean: {torch.mean(weights * (predicted - target) ** 2)}\n\n"
+        )
+    """
+
+    return torch.mean(weights * (predicted - target) ** 2)
 
 
 def get_resnet(model: int, pretrained: bool) -> torchvision.models.resnet.ResNet:
@@ -224,7 +236,11 @@ class EncoderTransformer(nn.Module):
     """
 
     def __init__(
-        self, embedded_size: int, nhead: int, num_layers: int, dropout_out: float,
+        self,
+        embedded_size: int,
+        nhead: int,
+        num_layers: int,
+        dropout_out: float,
     ):
         super(EncoderTransformer, self).__init__()
 
@@ -320,12 +336,14 @@ class OutputLayer(nn.Module):
 
         self.linear = nn.Sequential(*linear_layers)
 
+        self.sigmoid: nn.Sigmoid = nn.Sigmoid()
+
     def forward(self, inputs):
-        return self.linear(inputs)
+        return self.sigmoid(self.linear(inputs))
 
     def predict(self, inputs):
         with torch.no_grad():
-            return self.linear(inputs)
+            return self.sigmoid(self.linear(inputs))
 
 
 class TEDD1104LSTM(nn.Module):
@@ -630,7 +648,8 @@ class TEDD1104Transformer(nn.Module):
         )
 
         self.OutputLayer: OutputLayer = OutputLayer(
-            hidden_size=embedded_size * sequence_size, layers=layers_out,
+            hidden_size=embedded_size * sequence_size,
+            layers=layers_out,
         )
 
     def forward(self, x: torch.tensor) -> torch.tensor:
@@ -888,7 +907,7 @@ def load_checkpoint(
     if optimizer_name == "SGD":
         optimizer = torch.optim.SGD(model.parameters(), lr=0.01, momentum=0.9)
     elif optimizer_name == "Adam":
-        optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
+        optimizer = torch.optim.AdamW(model.parameters(), lr=0.001, eps=1e-04)
     else:
         raise ValueError(
             f"The optimizer you are trying to load is unknown: "

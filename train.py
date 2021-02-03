@@ -431,7 +431,7 @@ def train_new_model(
             model.parameters(), lr=learning_rate, momentum=0.9, nesterov=True
         )
     elif optimizer_name == "Adam":
-        optimizer = optim.AdamW(model.parameters(), lr=learning_rate)
+        optimizer = optim.AdamW(model.parameters(), lr=learning_rate, eps=1e-04)
     else:
         raise ValueError(
             f"Optimizer {optimizer_name} not implemented. Available optimizers: SGD, Adam"
