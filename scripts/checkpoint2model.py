@@ -14,7 +14,7 @@ def checkpoint2model(checkpoint_path: str, model_dir: str):
      - checkpoint_path path of checkpoint file (checkpoint.pt)
      - model_path directory where the model is going to be saved (model.bin and model_hyperparameters.json)
     Output:
-     """
+    """
 
     if not os.path.exists(model_dir):
         print(f"{model_dir} does not exits. We will create it.")
@@ -30,7 +30,7 @@ def checkpoint2model(checkpoint_path: str, model_dir: str):
         running_loss,
         total_batches,
         total_training_examples,
-        acc_dev,
+        loss_dev,
         epoch,
         _,
     ) = model.load_checkpoint(path=checkpoint_path, device=model.torch.device("cpu"))
@@ -40,7 +40,7 @@ def checkpoint2model(checkpoint_path: str, model_dir: str):
         f"Running loss: {running_loss/total_batches}\n"
         f"Num epochs: {epoch+1}\n"
         f"Total training examples: {total_training_examples}\n"
-        f"Loss dev set: {round(acc_dev*100,2)}\n"
+        f"Loss dev set: {loss_dev}\n"
     )
 
     print_message(f"Saving model in {model_dir}")
