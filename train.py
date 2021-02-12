@@ -98,7 +98,7 @@ def train(
 
     criterion: WeightedMseLoss = WeightedMseLoss(
         weights=variable_weights, reduction="mean"
-    )
+    ).to(device=device)
     model.zero_grad()
 
     print_message("Training...")

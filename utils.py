@@ -34,7 +34,9 @@ def evaluate(
     """
     model.eval()
     loss: torch.tensor = 0
-    criterion: WeightedMseLoss = WeightedMseLoss(weights=weights, reduction="sum")
+    criterion: WeightedMseLoss = WeightedMseLoss(weights=weights, reduction="sum").to(
+        device=device
+    )
     total_examples: torch.tensor = torch.tensor(0)
     for batch in tqdm(data_loader, desc="Evaluating model"):
         x = torch.flatten(
