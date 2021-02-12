@@ -9,32 +9,67 @@ import torchvision.models.resnet
 from torch.cuda.amp import GradScaler
 
 
-def weighted_mse_loss(
-    predicted: torch.tensor, target: torch.tensor, weights: torch.tensor
-) -> torch.tensor:
-    """
-    Weighted_mse_loss
-    Input:
-    - predicted: torch.tensor [batch_size, 3] Output from the model
-    - predicted: torch.tensor [batch_size, 3] Gold values
-    -weights:  torch.tensor [3] Weights for each variable
+class WeightedMseLoss(torch.nn):
+    "Weighted mse loss columwise"
 
-    Output:
-    -weighted_mse_loss: torch.tensor [batch_size]
-    """
+    def __init__(
+        self,
+        weights=None,
+        reduction: str = "mean",
+    ):
+        """
+        INIT
+        Input:
+        - weights:  torch.tensor [3] Weights for each variable
+        - reduction:  reduction method: sum or mean
 
-    """
-    DEBUG LOSS FUNCTION
-        print(
-            f"weights: {weights}\n"
-            f"predicted: {predicted}\n"
-            f"target: {target}\n"
-            f"Distances: {weights * (predicted - target) ** 2}\n"
-            f"Mean: {torch.mean(weights * (predicted - target) ** 2)}\n\n"
+        """
+        assert reduction in ["sum", "mean",], (
+            f"Reduction method: {reduction} not implemented. "
+            f"Available reduction methods: [sum,mean]"
         )
-    """
 
-    return torch.mean(weights * (predicted - target) ** 2)
+        super(WeightedMseLoss, self).__init__()
+
+        if weights is None:
+            weights = [1.0, 1.0, 1.0]
+
+        self.reduction = reduction
+        self.register_buffer("weights", torch.tensor(weights))
+
+    def forward(
+        self,
+        predicted: torch.tensor,
+        target: torch.tensor,
+    ) -> torch.tensor:
+
+        """
+        Input:
+        - predicted: torch.tensor [batch_size, 3] Output from the model
+        - predicted: torch.tensor [batch_size, 3] Gold values
+
+
+        Output:
+        -weighted_mse_loss columwise: torch.tensor  [1] if reduction == "mean"
+                                                    [3] if reduction == "sum"
+        """
+
+        """
+        DEBUG LOSS FUNCTION
+            print(
+                f"weights: {weights}\n"
+                f"predicted: {predicted}\n"
+                f"target: {target}\n"
+                f"Distances: {weights * (predicted - target) ** 2}\n"
+                f"Mean: {torch.mean(weights * (predicted - target) ** 2)}\n\n"
+            )
+        """
+        if self.reduction == "mean":
+            return torch.mean(
+                self.weights * torch.mean((predicted - target) ** 2, dim=0)
+            )
+        else:
+            return self.weights * torch.sum((predicted - target) ** 2, dim=0)
 
 
 def get_resnet(model: int, pretrained: bool) -> torchvision.models.resnet.ResNet:

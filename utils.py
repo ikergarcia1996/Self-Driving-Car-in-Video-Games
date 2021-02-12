@@ -4,6 +4,8 @@ import torch
 from torch.utils.data import DataLoader
 from torch.cuda.amp import autocast
 from tqdm import tqdm
+from model import WeightedMseLoss
+from typing import List
 
 try:
     import cupy as np
@@ -14,7 +16,11 @@ except ModuleNotFoundError:
 
 
 def evaluate(
-    model: TEDD1104, data_loader: DataLoader, device: torch.device, fp16: bool,
+    model: TEDD1104,
+    data_loader: DataLoader,
+    device: torch.device,
+    fp16: bool,
+    weights: List[float] = None,
 ) -> float:
     """
     Given a set of input examples and the golds for these examples evaluates the model mse
@@ -28,8 +34,8 @@ def evaluate(
     """
     model.eval()
     loss: torch.tensor = 0
-    criterion: torch.nn.MSELoss = torch.nn.MSELoss(reduction="sum")
-    total_examples: int = 0
+    criterion: WeightedMseLoss = WeightedMseLoss(weights=weights, reduction="sum")
+    total_examples: torch.tensor = torch.tensor(0)
     for batch in tqdm(data_loader, desc="Evaluating model"):
         x = torch.flatten(
             torch.stack(
@@ -51,10 +57,10 @@ def evaluate(
         with autocast(enabled=fp16):
             predictions: np.ndarray = model.predict(x)
 
-        loss += criterion(predictions, y)
+        loss += criterion.forward(predictions, y)
         total_examples += len(y)
 
-    return (loss / total_examples).cpu().item()
+    return torch.mean(loss / total_examples).cpu().item()
 
 
 def print_message(message: str) -> None:
@@ -76,7 +82,7 @@ def mse(image1: np.ndarray, image2: np.ndarray) -> np.float:
      - image2: second numpy ndarray
     Ouput:
      - Mean squared error numpy.float
-     """
+    """
     err = np.float(np.sum((np.asarray(image1) - np.asarray(image2)) ** 2))
     err /= np.float(image1.shape[0] * image1.shape[1])
     return err

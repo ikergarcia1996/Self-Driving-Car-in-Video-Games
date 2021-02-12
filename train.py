@@ -5,7 +5,7 @@ from model import (
     TEDD1104LSTM,
     TEDD1104Transformer,
     load_checkpoint,
-    weighted_mse_loss,
+    WeightedMseLoss,
 )
 import torch
 import torch.optim as optim
@@ -49,7 +49,7 @@ def train(
     min_loss: float,
     hide_map_prob: float,
     dropout_images_prob: List[float],
-    variable_weights=None,
+    variable_weights: List[float] = None,
     fp16: bool = True,
     save_checkpoints: bool = True,
     save_every: int = 20,
@@ -90,19 +90,16 @@ def train(
      - float: Loss in the development test of the best model
     """
 
-    if variable_weights is None:
-        variable_weights: List[float] = [1.0, 0.5, 0.5]
-
     if not os.path.exists(output_dir):
         print(f"{output_dir} does not exits. We will create it.")
         os.makedirs(output_dir)
 
     writer: SummaryWriter = SummaryWriter()
 
-    criterion: callable = weighted_mse_loss
+    criterion: WeightedMseLoss = WeightedMseLoss(
+        weights=variable_weights, reduction="mean"
+    )
     model.zero_grad()
-
-    weights = torch.tensor(variable_weights).to(device)
 
     print_message("Training...")
     for epoch in range(num_epoch):
@@ -151,8 +148,7 @@ def train(
             with autocast(enabled=fp16):
                 outputs = model.forward(x)
                 loss = (
-                    criterion(predicted=outputs, target=y, weights=weights)
-                    / accumulation_steps
+                    criterion.forward(predicted=outputs, target=y) / accumulation_steps
                 )
 
             running_loss += loss.item()
