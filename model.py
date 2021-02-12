@@ -9,12 +9,14 @@ import torchvision.models.resnet
 from torch.cuda.amp import GradScaler
 
 
-class WeightedMseLoss(torch.nn):
-    "Weighted mse loss columwise"
+class WeightedMseLoss(nn.Module):
+    """
+    Weighted mse loss columwise
+    """
 
     def __init__(
         self,
-        weights=None,
+        weights: List[float] = None,
         reduction: str = "mean",
     ):
         """
@@ -24,7 +26,7 @@ class WeightedMseLoss(torch.nn):
         - reduction:  reduction method: sum or mean
 
         """
-        assert reduction in ["sum", "mean",], (
+        assert reduction in ["sum", "mean"], (
             f"Reduction method: {reduction} not implemented. "
             f"Available reduction methods: [sum,mean]"
         )
