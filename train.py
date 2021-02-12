@@ -251,6 +251,7 @@ def train(
             data_loader=data_loader_dev,
             device=device,
             fp16=fp16,
+            weights=variable_weights,
         )
 
         del data_loader_dev
@@ -274,6 +275,7 @@ def train(
             data_loader=data_loader_test,
             device=device,
             fp16=fp16,
+            weights=variable_weights,
         )
 
         del data_loader_test
