@@ -15,9 +15,7 @@ class WeightedMseLoss(nn.Module):
     """
 
     def __init__(
-        self,
-        weights: List[float] = None,
-        reduction: str = "mean",
+        self, weights: List[float] = None, reduction: str = "mean",
     ):
         """
         INIT
@@ -39,11 +37,7 @@ class WeightedMseLoss(nn.Module):
         self.reduction = reduction
         self.register_buffer("weights", torch.tensor(weights))
 
-    def forward(
-        self,
-        predicted: torch.tensor,
-        target: torch.tensor,
-    ) -> torch.tensor:
+    def forward(self, predicted: torch.tensor, target: torch.tensor,) -> torch.tensor:
 
         """
         Input:
@@ -273,11 +267,7 @@ class EncoderTransformer(nn.Module):
     """
 
     def __init__(
-        self,
-        embedded_size: int,
-        nhead: int,
-        num_layers: int,
-        dropout_out: float,
+        self, embedded_size: int, nhead: int, num_layers: int, dropout_out: float,
     ):
         super(EncoderTransformer, self).__init__()
 
@@ -373,16 +363,18 @@ class OutputLayer(nn.Module):
 
         self.linear = nn.Sequential(*linear_layers)
 
-        self.sigmoid: nn.Sigmoid = (
-            nn.Sigmoid()
-        )  # We want the output to be in range [-1,1], sigmoid will ensure it.
+        # self.sigmoid: nn.Sigmoid = (
+        #    nn.Sigmoid()
+        # )  # We want the output to be in range [-1,1], sigmoid will ensure it.
 
     def forward(self, inputs):
-        return -1.0 + 2.0 * self.sigmoid(self.linear(inputs))
+        # return -1.0 + 2.0 * self.sigmoid(self.linear(inputs))
+        return self.linear(inputs)
 
     def predict(self, inputs):
         with torch.no_grad():
-            return -1.0 + 2.0 * self.sigmoid(self.linear(inputs))
+            # return -1.0 + 2.0 * self.sigmoid(self.linear(inputs))
+            return self.linear(inputs)
 
 
 class TEDD1104LSTM(nn.Module):
@@ -687,8 +679,7 @@ class TEDD1104Transformer(nn.Module):
         )
 
         self.OutputLayer: OutputLayer = OutputLayer(
-            hidden_size=embedded_size * sequence_size,
-            layers=layers_out,
+            hidden_size=embedded_size * sequence_size, layers=layers_out,
         )
 
     def forward(self, x: torch.tensor) -> torch.tensor:
