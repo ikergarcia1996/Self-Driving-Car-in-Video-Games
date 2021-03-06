@@ -213,8 +213,8 @@ def run_ted1104(
         print(
             f"Recording at {screen_recorder.fps} FPS\n"
             f"Actions per second {None if time_it==0 else 1/time_it}\n"
-            f"Reaction time: {round(key_push_time-init_copy_time,3) if key_push_time>0 else 0} secs"
-            f"Key predicted by nn: {key_press(model_prediction[0])}\n"
+            f"Reaction time: {round(key_push_time-init_copy_time,3) if key_push_time>0 else 0} secs\n"
+            f"Key predicted by nn: {key_press(int(model_prediction[0]))}\n"
             f"Difference from img 1 to img 5 {None if not enable_evasion else score}\n"
             f"Push QE to exit\n"
             f"Push L to see the input images\n"
