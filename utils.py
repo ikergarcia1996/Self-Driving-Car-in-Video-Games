@@ -21,7 +21,7 @@ def evaluate(
     device: torch.device,
     fp16: bool,
     weights: List[float] = None,
-) -> float:
+) -> (float, torch.tensor):
     """
     Given a set of input examples and the golds for these examples evaluates the model mse
     Input:
@@ -62,7 +62,10 @@ def evaluate(
         loss += criterion.forward(predictions, y)
         total_examples += len(y)
 
-    return torch.mean(loss / total_examples).cpu().item()
+    return (
+        torch.mean(loss / total_examples).cpu().item(),
+        criterion.loss_log / total_examples,
+    )
 
 
 def print_message(message: str) -> None:

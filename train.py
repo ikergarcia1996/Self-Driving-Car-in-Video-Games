@@ -44,6 +44,7 @@ def train(
     initial_epoch: int,
     num_epoch: int,
     running_loss: float,
+    loss_per_joystick: torch.tensor,
     total_batches: int,
     total_training_examples: int,
     min_loss: float,
@@ -52,9 +53,11 @@ def train(
     variable_weights: List[float] = None,
     fp16: bool = True,
     save_checkpoints: bool = True,
-    save_every: int = 20,
+    save_every: int = 1000,
     save_best: bool = True,
     keyboard_input: bool = False,
+    log_interval: int = 50,
+    log_dir: str = None,
 ):
 
     """
@@ -64,15 +67,22 @@ def train(
     - model: TEDD1104 model to train
     - optimizer_name: Name of the optimizer to use [SGD, Adam]
     - optimizer: Optimizer (torch.optim)
+    - scheduler: Scheduler (torch.optim.lr_scheduler)
+    - scaler: Scaler (torch.cuda.amp.GradScaler)
     - train_dir: Directory where the train files are stored
     - dev_dir: Directory where the development files are stored
     - test_dir: Directory where the test files are stored
     - output_dir: Directory where the model and the checkpoints are going to be saved
-    - batch_size: Batch size (Around 10 for 8GB GPU)
+    - batch_size: Batch size (Around 32-64 for 24GB GPU)
+    - accumulation_steps: Number of accumulation steps (training batch size = accumulation_steps * batch_size)
     - initial_epoch: Number of previous epochs used to train the model (0 unless the model has been
       restored from checkpoint)
     - num_epochs: Number of epochs to do
-    - min_loss_dev: Loss in the development set (0 unless the model has been
+    - running_loss: Float running loss of the model
+    - loss_per_joystick: Running loss per joystick/trigger of the model (torch.tensor[3])
+    - total_batches: Total batches used for training
+    - total_training_examples: Training examples used for training
+    - min_loss: Loss in the development set (0 unless the model has been
       restored from checkpoint)
     - hide_map_prob: Probability for removing the minimap (put a black square)
        from a training example (0<=hide_map_prob<=1)
@@ -82,10 +92,12 @@ def train(
       for the weighted mean squared error
     - fp16: Use FP16 for training
     - save_checkpoints: save a checkpoint each epoch (Each checkpoint will rewrite the previous one)
+    - save_every: Save a checkpoint every save_every iterations
     - save_best: save the model that achieves the lowest loss in the development set
-    -keyboard_input: Set this flag if dataset uses keyboard input (V2 dataset), the keys will be converted to
+    - keyboard_input: Set this flag if dataset uses keyboard input (V2 dataset), the keys will be converted to
      controller input
-
+    - log_interval: Save running loss in tensorboard every log_interval iterations
+    - log_dir: Tensorboard logging directory
     Output:
      - float: Loss in the development test of the best model
     """
@@ -94,7 +106,7 @@ def train(
         print(f"{output_dir} does not exits. We will create it.")
         os.makedirs(output_dir)
 
-    writer: SummaryWriter = SummaryWriter()
+    writer: SummaryWriter = SummaryWriter(log_dir=log_dir)
 
     criterion: WeightedMseLoss = WeightedMseLoss(
         weights=variable_weights, reduction="mean"
@@ -152,6 +164,8 @@ def train(
                 )
 
             running_loss += loss.item()
+            loss_per_joystick += criterion.loss_log
+
             scaler.scale(loss).backward()
 
             if ((step_no + 1) % accumulation_steps == 0) or (
@@ -170,25 +184,46 @@ def train(
                 num_batches += 1
                 scheduler.step(running_loss / total_batches)
 
-                batch_time = round(time.time() - start_time, 2)
-                est: float = batch_time * (
-                    math.ceil(len(data_loader_train) / accumulation_steps) - num_batches
-                )
-                print_message(
-                    f"EPOCH: {initial_epoch + epoch}. "
-                    f"{num_batches} of {math.ceil(len(data_loader_train)/accumulation_steps)} batches. "
-                    f"Total examples used for training {total_training_examples}. "
-                    f"Iteration time: {batch_time} secs. "
-                    f"Data Loading bottleneck: {round(dataloader_delay, 2)} secs. "
-                    f"Epoch estimated time: "
-                    f"{str(datetime.timedelta(seconds=est)).split('.')[0]}\n"
-                    f"Running_loss Loss: {running_loss / total_batches}. "
-                    f"Learning rate {optimizer.state_dict()['param_groups'][0]['lr']}"
-                )
+                if (total_batches + 1) % log_interval == 0:
+                    batch_time = round(time.time() - start_time, 2)
+                    est: float = batch_time * (
+                        math.ceil(len(data_loader_train) / accumulation_steps)
+                        - num_batches
+                    )
+                    print_message(
+                        f"EPOCH: {initial_epoch + epoch}. "
+                        f"{num_batches} of {math.ceil(len(data_loader_train) / accumulation_steps)} batches. "
+                        f"Total examples used for training {total_training_examples}. "
+                        f"Iteration time: {batch_time} secs. "
+                        f"Data Loading bottleneck: {round(dataloader_delay, 2)} secs. "
+                        f"Epoch estimated time: "
+                        f"{str(datetime.timedelta(seconds=est)).split('.')[0]}\n"
+                        f"Running_loss Loss: {running_loss / total_batches}. "
+                        f"Running_loss_joystick (LX, LT, RT): {loss_per_joystick / total_batches}. "
+                        f"Learning rate {optimizer.state_dict()['param_groups'][0]['lr']}"
+                    )
 
-                writer.add_scalar(
-                    "Loss/train", running_loss / total_batches, total_batches
-                )
+                    writer.add_scalar(
+                        "Loss/train", running_loss / total_batches, total_batches
+                    )
+
+                    writer.add_scalar(
+                        "LX_loss/train",
+                        loss_per_joystick[0] / total_batches,
+                        total_batches,
+                    )
+
+                    writer.add_scalar(
+                        "LT_loss/train",
+                        loss_per_joystick[1] / total_batches,
+                        total_batches,
+                    )
+
+                    writer.add_scalar(
+                        "RT_loss/train",
+                        loss_per_joystick[2] / total_batches,
+                        total_batches,
+                    )
 
                 if save_checkpoints and (total_batches + 1) % save_every == 0:
                     print_message("Saving checkpoint...")
@@ -198,6 +233,7 @@ def train(
                         optimizer=optimizer,
                         scheduler=scheduler,
                         running_loss=running_loss,
+                        loss_per_joystick=loss_per_joystick,
                         total_batches=total_batches,
                         total_training_examples=total_training_examples,
                         min_loss_dev=min_loss,
@@ -205,8 +241,7 @@ def train(
                         scaler=scaler,
                     )
 
-                batch_loss = 0
-                dataloader_delay: float = 0
+                dataloader_delay: float = 0.0
                 start_time: float = time.time()
 
             step_no += 1
@@ -222,6 +257,7 @@ def train(
                 optimizer=optimizer,
                 scheduler=scheduler,
                 running_loss=running_loss,
+                loss_per_joystick=loss_per_joystick,
                 total_batches=total_batches,
                 total_training_examples=total_training_examples,
                 min_loss_dev=min_loss,
@@ -246,7 +282,7 @@ def train(
             pin_memory=True,
         )
 
-        dev_loss: float = evaluate(
+        dev_loss, dev_loss_per_joystick = evaluate(
             model=model,
             data_loader=data_loader_dev,
             device=device,
@@ -270,7 +306,7 @@ def train(
             pin_memory=True,
         )
 
-        test_loss: float = evaluate(
+        test_loss, test_loss_per_joystick = evaluate(
             model=model,
             data_loader=data_loader_test,
             device=device,
@@ -281,8 +317,10 @@ def train(
         del data_loader_test
 
         print_message(
-            f"Loss dev set: {dev_loss}. "
-            f"Loss test set: {test_loss}.  "
+            f"Loss dev set: {dev_loss}.\n"
+            f"Loss test set: {test_loss}.\n"
+            f"Loss per joystick dev (LX, LT, RT): {dev_loss_per_joystick / total_batches}.\n"
+            f"Loss per joystick test (LX, LT, RT): {test_loss_per_joystick / total_batches}.\n"
             f"Eval time: {round(time.time() - start_time_eval,2)} secs."
         )
 
@@ -299,6 +337,7 @@ def train(
                     optimizer=optimizer,
                     scheduler=scheduler,
                     running_loss=running_loss,
+                    loss_per_joystick=loss_per_joystick,
                     total_batches=total_batches,
                     total_training_examples=total_training_examples,
                     min_loss_dev=min_loss,
@@ -307,7 +346,37 @@ def train(
                 )
 
         writer.add_scalar("Loss/dev", dev_loss, epoch)
+        writer.add_scalar(
+            "LX_loss/dev",
+            dev_loss_per_joystick[0],
+            epoch,
+        )
+        writer.add_scalar(
+            "LT_loss/dev",
+            dev_loss_per_joystick[1],
+            epoch,
+        )
+        writer.add_scalar(
+            "RT_loss/dev",
+            dev_loss_per_joystick[2],
+            epoch,
+        )
         writer.add_scalar("Loss/test", test_loss, epoch)
+        writer.add_scalar(
+            "LX_loss/test",
+            test_loss_per_joystick[0],
+            epoch,
+        )
+        writer.add_scalar(
+            "LT_loss/test",
+            test_loss_per_joystick[1],
+            epoch,
+        )
+        writer.add_scalar(
+            "RT_loss/test",
+            test_loss_per_joystick[2],
+            epoch,
+        )
 
     return min_loss
 
@@ -342,9 +411,11 @@ def train_new_model(
     dropout_images_prob: List[float] = None,
     fp16: bool = True,
     save_checkpoints: bool = True,
-    save_every: int = 20,
+    save_every: int = 1000,
     save_best=True,
     keyboard_input: bool = False,
+    log_interval: int = 50,
+    log_dir: str = None,
 ):
 
     """
@@ -377,13 +448,14 @@ def train_new_model(
     - hide_map_prob: Probability for removing the minimap (put a black square)
       from a training example (0<=hide_map_prob<=1)
     - dropout_images_prob List of 5 floats or None, probability for removing each input image during training
-     (black image) from a training example (0<=dropout_images_prob<=1)
+      (black image) from a training example (0<=dropout_images_prob<=1)
     - fp16: Use FP16 for training
     - save_checkpoints: save a checkpoint each epoch (Each checkpoint will rewrite the previous one)
     - save_best: save the model that achieves the lowest loss in the development set
-    -keyboard_input: Set this flag if dataset uses keyboard input (V2 dataset), the keys will be converted to
+    - keyboard_input: Set this flag if dataset uses keyboard input (V2 dataset), the keys will be converted to
      controller input
-
+    - log_interval: Save running loss in tensorboard every log_interval iterations
+    - log_dir: Tensorboard logging directory
     Output:
 
     """
@@ -453,17 +525,20 @@ def train_new_model(
         initial_epoch=0,
         num_epoch=num_epoch,
         running_loss=0.0,
+        loss_per_joystick=torch.tensor([0.0, 0.0, 0.0], requires_grad=False),
         total_batches=0,
         total_training_examples=0,
         min_loss=float("inf"),
         hide_map_prob=hide_map_prob,
         dropout_images_prob=dropout_images_prob,
         fp16=fp16,
-        scaler=GradScaler() if fp16 else None,
+        scaler=GradScaler(),
         save_checkpoints=save_checkpoints,
         save_every=save_every,
         save_best=save_best,
         keyboard_input=keyboard_input,
+        log_interval=log_interval,
+        log_dir=log_dir,
     )
 
     print(f"Training finished, lowest loss in the development set {min_loss}")
@@ -481,10 +556,12 @@ def continue_training(
     hide_map_prob: float = 0.0,
     dropout_images_prob: List[float] = None,
     save_checkpoints=True,
-    save_every: int = 100,
+    save_every: int = 1000,
     save_best=True,
     keyboard_input: bool = False,
     fp16: bool = True,
+    log_interval: int = 50,
+    log_dir: str = None,
 ):
 
     """
@@ -504,12 +581,14 @@ def continue_training(
     - optimizer_name: Name of the optimizer to use [SGD, Adam]
     - hide_map_prob: Probability for removing the minimap (put a black square)
       from a training example (0<=hide_map_prob<=1)
-    -Probability for removing each input image during training (black image)
-     from a training example (0<=dropout_images_prob<=1)
+    - Probability for removing each input image during training (black image)
+      from a training example (0<=dropout_images_prob<=1)
     - save_checkpoints: save a checkpoint each epoch (Each checkpoint will rewrite the previous one)
     - save_best: save the model that achieves the lowest loss in the development set
-    -keyboard_input: Set this flag if dataset uses keyboard input (V2 dataset), the keys will be converted to
-     controller input
+    - keyboard_input: Set this flag if dataset uses keyboard input (V2 dataset), the keys will be converted to
+      controller input
+    - log_interval: Save running loss in tensorboard every log_interval iterations
+    - log_dir: Tensorboard logging directory
     Output:
 
     """
@@ -520,6 +599,7 @@ def continue_training(
         optimizer,
         scheduler,
         running_loss,
+        loss_per_joystick,
         total_batches,
         total_training_examples,
         min_loss_dev,
@@ -542,6 +622,7 @@ def continue_training(
         initial_epoch=epoch,
         num_epoch=num_epoch,
         running_loss=running_loss,
+        loss_per_joystick=loss_per_joystick,
         total_batches=total_batches,
         total_training_examples=total_training_examples,
         min_loss=min_loss_dev,
@@ -553,6 +634,8 @@ def continue_training(
         save_every=save_every,
         save_best=save_best,
         keyboard_input=keyboard_input,
+        log_interval=log_interval,
+        log_dir=log_dir,
     )
 
     print(f"Training finished, min loss in the development set {min_loss}")
@@ -816,6 +899,20 @@ if __name__ == "__main__":
         "the keys will be converted to controller input",
     )
 
+    parser.add_argument(
+        "--log_interval",
+        type=int,
+        default=50,
+        help="Save running loss in tensorboard every log_interval iterations",
+    )
+
+    parser.add_argument(
+        "--log_dir",
+        type=str,
+        default=None,
+        help="Tensorboard logging directory",
+    )
+
     args = parser.parse_args()
 
     if args.train_new:
@@ -851,6 +948,8 @@ if __name__ == "__main__":
             save_every=args.save_every,
             save_best=args.not_save_best,
             keyboard_input=args.keyboard_input,
+            log_interval=args.log_interval,
+            log_dir=args.log_dir,
         )
 
     else:
@@ -869,4 +968,6 @@ if __name__ == "__main__":
             save_best=args.not_save_best,
             keyboard_input=args.keyboard_input,
             fp16=args.fp16,
+            log_interval=args.log_interval,
+            log_dir=args.log_dir,
         )

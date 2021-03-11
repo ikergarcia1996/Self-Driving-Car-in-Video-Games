@@ -14,8 +14,12 @@ class WeightedMseLoss(nn.Module):
     Weighted mse loss columwise
     """
 
+    _loss_log: torch.tensor
+
     def __init__(
-        self, weights: List[float] = None, reduction: str = "mean",
+        self,
+        weights: List[float] = None,
+        reduction: str = "mean",
     ):
         """
         INIT
@@ -37,7 +41,13 @@ class WeightedMseLoss(nn.Module):
         self.reduction = reduction
         self.register_buffer("weights", torch.tensor(weights))
 
-    def forward(self, predicted: torch.tensor, target: torch.tensor,) -> torch.tensor:
+        self._loss_log = torch.tensor([0.0, 0.0, 0.0], requires_grad=False)
+
+    def forward(
+        self,
+        predicted: torch.tensor,
+        target: torch.tensor,
+    ) -> torch.tensor:
 
         """
         Input:
@@ -61,11 +71,21 @@ class WeightedMseLoss(nn.Module):
             )
         """
         if self.reduction == "mean":
-            return torch.mean(
-                self.weights * torch.mean((predicted - target) ** 2, dim=0)
+            loss_per_joystick: torch.tensor = torch.mean(
+                (predicted - target) ** 2, dim=0
             )
+            self._loss_log = loss_per_joystick.detach()
+            return torch.mean(self.weights * loss_per_joystick)
         else:
-            return self.weights * torch.sum((predicted - target) ** 2, dim=0)
+            loss_per_joystick: torch.tensor = torch.sum(
+                (predicted - target) ** 2, dim=0
+            )
+            self._loss_log += loss_per_joystick.detach()
+            return self.weights * loss_per_joystick
+
+    @property
+    def loss_log(self):
+        return self._loss_log.cpu()
 
 
 def get_resnet(model: int, pretrained: bool) -> torchvision.models.resnet.ResNet:
@@ -267,7 +287,11 @@ class EncoderTransformer(nn.Module):
     """
 
     def __init__(
-        self, embedded_size: int, nhead: int, num_layers: int, dropout_out: float,
+        self,
+        embedded_size: int,
+        nhead: int,
+        num_layers: int,
+        dropout_out: float,
     ):
         super(EncoderTransformer, self).__init__()
 
@@ -533,6 +557,7 @@ class TEDD1104LSTM(nn.Module):
         optimizer: torch.optim,
         scheduler: torch.optim.lr_scheduler,
         running_loss: float,
+        loss_per_joystick: torch.tensor,
         total_batches: int,
         total_training_examples: int,
         min_loss_dev: float,
@@ -545,10 +570,14 @@ class TEDD1104LSTM(nn.Module):
 
         Input:
          - path: path where the model is going to be saved
-         - model: TEDD1104 model to save
          - optimizer_name: Name of the optimizer used for training: SGD or Adam
          - optimizer: Optimizer used for training
-         - acc_dev: Accuracy of the model in the development set
+         - scheduler: Scheduler used for training
+         - running_loss: Current running loss in the training set
+         - loss_per_joystick: Current running loss per input joystick/trigger in the training set
+         - total_batches: Total batches used for training the model
+         - total_training_examples: Total training examples used for training the model
+         - min_loss_dev: Min loss in the development set
          - epoch: Num of epoch used to train the model
          - scaler: The scaler used for FP16 training
 
@@ -577,6 +606,7 @@ class TEDD1104LSTM(nn.Module):
             "optimizer": optimizer.state_dict(),
             "scheduler": scheduler.state_dict(),
             "running_loss": running_loss,
+            "loss_per_joystick": loss_per_joystick,
             "total_batches": total_batches,
             "total_training_examples": total_training_examples,
             "min_loss_dev": min_loss_dev,
@@ -679,7 +709,8 @@ class TEDD1104Transformer(nn.Module):
         )
 
         self.OutputLayer: OutputLayer = OutputLayer(
-            hidden_size=embedded_size * sequence_size, layers=layers_out,
+            hidden_size=embedded_size * sequence_size,
+            layers=layers_out,
         )
 
     def forward(self, x: torch.tensor) -> torch.tensor:
@@ -742,6 +773,7 @@ class TEDD1104Transformer(nn.Module):
         optimizer: torch.optim,
         scheduler: torch.optim.lr_scheduler,
         running_loss: float,
+        loss_per_joystick: torch.tensor,
         total_batches: int,
         total_training_examples: int,
         min_loss_dev: float,
@@ -754,12 +786,17 @@ class TEDD1104Transformer(nn.Module):
 
         Input:
          - path: path where the model is going to be saved
-         - model: TEDD1104 model to save
          - optimizer_name: Name of the optimizer used for training: SGD or Adam
          - optimizer: Optimizer used for training
-         - acc_dev: Accuracy of the model in the development set
+         - scheduler: Scheduler used for training
+         - running_loss: Current running loss in the training set
+         - loss_per_joystick: Current running loss per input joystick/trigger in the training set
+         - total_batches: Total batches used for training the model
+         - total_training_examples: Total training examples used for training the model
+         - min_loss_dev: Min loss in the development set
          - epoch: Num of epoch used to train the model
          - scaler: The scaler used for FP16 training
+
 
         Output:
         """
@@ -785,6 +822,7 @@ class TEDD1104Transformer(nn.Module):
             "optimizer": optimizer.state_dict(),
             "scheduler": scheduler.state_dict(),
             "running_loss": running_loss,
+            "loss_per_joystick": loss_per_joystick,
             "total_batches": total_batches,
             "total_training_examples": total_training_examples,
             "min_loss_dev": min_loss_dev,
@@ -865,6 +903,7 @@ def load_checkpoint(
     torch.optim,
     torch.optim.lr_scheduler,
     float,
+    torch.tensor,
     int,
     int,
     float,
@@ -882,7 +921,8 @@ def load_checkpoint(
      - model: restored TEDD1104 model
      - optimizer_name: Name of the optimizer used for training: SGD or Adam
      - scheduler: Scheduler used for training
-     - running_loss:Running loss  of the model
+     - running_loss: Running loss of the model
+     - loss_per_joystick: Running loss per joystick/trigger of the model
      - total_batches: Total batches used for training
      - total_training_examples: Training examples used for training
      - min_loss_dev: Min loss in development set
@@ -965,12 +1005,21 @@ def load_checkpoint(
     else:
         scaler = None
 
+    try:
+        loss_per_joystick = checkpoint["loss_per_joystick"]
+    except KeyError:
+        print(
+            f"{path} is a legacy checkpoint, we will initialize loss_per_joystick as tensor of zeros."
+        )
+        loss_per_joystick = torch.tensor([0.0, 0.0, 0.0], requires_grad=False)
+
     return (
         model,
         optimizer_name,
         optimizer,
         scheduler,
         running_loss,
+        loss_per_joystick,
         total_batches,
         total_training_examples,
         min_loss_dev,
