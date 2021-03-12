@@ -317,10 +317,11 @@ def train(
         del data_loader_test
 
         print_message(
+            f"Eval results: \n"
             f"Loss dev set: {dev_loss}.\n"
             f"Loss test set: {test_loss}.\n"
-            f"Loss per joystick dev (LX, LT, RT): {dev_loss_per_joystick / total_batches}.\n"
-            f"Loss per joystick test (LX, LT, RT): {test_loss_per_joystick / total_batches}.\n"
+            f"Loss per joystick dev (LX, LT, RT): {dev_loss_per_joystick}.\n"
+            f"Loss per joystick test (LX, LT, RT): {test_loss_per_joystick}.\n"
             f"Eval time: {round(time.time() - start_time_eval,2)} secs."
         )
 
