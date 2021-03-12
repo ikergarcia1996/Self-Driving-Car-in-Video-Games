@@ -80,7 +80,7 @@ class WeightedMseLoss(nn.Module):
             loss_per_joystick: torch.tensor = torch.sum(
                 (predicted - target) ** 2, dim=0
             )
-            self._loss_log += loss_per_joystick.detach()
+            self._loss_log += loss_per_joystick.detach().to(self._loss_log.device)
             return self.weights * loss_per_joystick
 
     @property
