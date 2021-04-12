@@ -6,7 +6,6 @@ import numpy as np
 from torch.utils.data import Dataset
 from torchvision import transforms
 import glob
-import random
 from typing import List
 
 
@@ -31,11 +30,12 @@ class RemoveMinimap(object):
 
         width: int = int(image.shape[1] / 5)
 
-        if random.random() <= self.hide_map_prob:
-            for j in range(0, 5):
-                image[215:, j * width : (j * width) + 80] = np.zeros(
-                    (55, 80, 3), dtype=image.dtype
-                )
+        if self.hide_map_prob > 0:
+            if torch.rand(1)[0] <= self.hide_map_prob:
+                for j in range(0, 5):
+                    image[215:, j * width : (j * width) + 80] = np.zeros(
+                        (55, 80, 3), dtype=image.dtype
+                    )
 
         return {
             "image": image,
@@ -64,10 +64,11 @@ class RemoveImage(object):
         width: int = int(image.shape[1] / 5)
 
         for j in range(0, 5):
-            if random.random() <= self.dropout_images_prob[j]:
-                image[:, j * width : (j + 1) * width] = np.zeros(
-                    (image.shape[0], width, image.shape[2]), dtype=image.dtype
-                )
+            if self.dropout_images_prob[j] > 0:
+                if torch.rand(1)[0] <= self.dropout_images_prob[j]:
+                    image[:, j * width : (j + 1) * width] = np.zeros(
+                        (image.shape[0], width, image.shape[2]), dtype=image.dtype
+                    )
 
         return {
             "image": image,
@@ -249,7 +250,9 @@ class Tedd1104Dataset(Dataset):
                     f"Exception: {error_message}\n"
                     f"We will load a random image instead."
                 )
-                img_name = random.choice(self.dataset_files)
+                img_name = self.dataset_files[
+                    int(len(self.dataset_files) * torch.rand(1))
+                ]
 
         if not self.keyboard_dataset:
             y = np.asarray(
