@@ -7,6 +7,4 @@ __pycache__/
 
 debug/
 
-runs/
-
-runs_old/
+runs*/
