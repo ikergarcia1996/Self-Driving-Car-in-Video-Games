@@ -28,6 +28,7 @@ def checkpoint2model(checkpoint_path: str, model_dir: str):
         _,
         _,
         running_loss,
+        loss_per_joystick,
         total_batches,
         total_training_examples,
         loss_dev,
@@ -37,7 +38,8 @@ def checkpoint2model(checkpoint_path: str, model_dir: str):
 
     print(
         f">>>>>> Checkpoint info <<<<<<\n"
-        f"Running loss: {running_loss/total_batches}\n"
+        f"Running loss: {running_loss/total_batches}.\n"
+        f"Running_loss_joystick (LX, LT, RT): {loss_per_joystick / total_batches}.\n"
         f"Num epochs: {epoch+1}\n"
         f"Total training examples: {total_training_examples}\n"
         f"Loss dev set: {loss_dev}\n"
