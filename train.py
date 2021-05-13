@@ -150,9 +150,9 @@ def train(
                 ),
                 start_dim=0,
                 end_dim=1,
-            ).to(device)
+            ).to(device=device, dtype=torch.float)
 
-            y = batch["y"].to(device)
+            y = batch["y"].to(device=device, dtype=torch.float)
             dataloader_delay += time.time() - step_start_time
 
             total_training_examples += len(y)
@@ -328,9 +328,7 @@ def train(
         if dev_loss < min_loss and save_best:
             min_loss = dev_loss
             print_message(f"New min loss in dev set {min_loss}. Saving model...")
-            model.save_model(
-                save_dir=output_dir,
-            )
+            model.save_model(save_dir=output_dir,)
             if save_checkpoints:
                 model.save_checkpoint(
                     path=os.path.join(output_dir, "checkpoint.pt"),
@@ -348,35 +346,23 @@ def train(
 
         writer.add_scalar("Loss/dev", dev_loss, epoch)
         writer.add_scalar(
-            "LX_loss/dev",
-            dev_loss_per_joystick[0],
-            epoch,
+            "LX_loss/dev", dev_loss_per_joystick[0], epoch,
         )
         writer.add_scalar(
-            "LT_loss/dev",
-            dev_loss_per_joystick[1],
-            epoch,
+            "LT_loss/dev", dev_loss_per_joystick[1], epoch,
         )
         writer.add_scalar(
-            "RT_loss/dev",
-            dev_loss_per_joystick[2],
-            epoch,
+            "RT_loss/dev", dev_loss_per_joystick[2], epoch,
         )
         writer.add_scalar("Loss/test", test_loss, epoch)
         writer.add_scalar(
-            "LX_loss/test",
-            test_loss_per_joystick[0],
-            epoch,
+            "LX_loss/test", test_loss_per_joystick[0], epoch,
         )
         writer.add_scalar(
-            "LT_loss/test",
-            test_loss_per_joystick[1],
-            epoch,
+            "LT_loss/test", test_loss_per_joystick[1], epoch,
         )
         writer.add_scalar(
-            "RT_loss/test",
-            test_loss_per_joystick[2],
-            epoch,
+            "RT_loss/test", test_loss_per_joystick[2], epoch,
         )
 
     return min_loss
@@ -647,9 +633,7 @@ if __name__ == "__main__":
 
     group = parser.add_mutually_exclusive_group(required=True)
     group.add_argument(
-        "--train_new",
-        action="store_true",
-        help="Train a new model",
+        "--train_new", action="store_true", help="Train a new model",
     )
 
     group.add_argument(
@@ -709,10 +693,7 @@ if __name__ == "__main__":
     )
 
     parser.add_argument(
-        "--num_epochs",
-        type=int,
-        required=True,
-        help="Number of epochs to perform",
+        "--num_epochs", type=int, required=True, help="Number of epochs to perform",
     )
 
     parser.add_argument(
@@ -908,10 +889,7 @@ if __name__ == "__main__":
     )
 
     parser.add_argument(
-        "--log_dir",
-        type=str,
-        default=None,
-        help="Tensorboard logging directory",
+        "--log_dir", type=str, default=None, help="Tensorboard logging directory",
     )
 
     args = parser.parse_args()

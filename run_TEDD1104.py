@@ -144,7 +144,7 @@ def run_ted1104(
                         transform(img_seq[4] / 255.0),
                     ),
                     dim=0,
-                ).to(device)
+                ).to(device=device, dtype=torch.float)
 
                 with autocast(enabled=fp16):
                     model_prediction: torch.tensor = model.predict(

@@ -52,9 +52,9 @@ def evaluate(
             ),
             start_dim=0,
             end_dim=1,
-        ).to(device)
+        ).to(device=device, dtype=torch.float)
 
-        y = batch["y"].to(device)
+        y = batch["y"].to(device=device, dtype=torch.float)
 
         with autocast(enabled=fp16):
             predictions: np.ndarray = model.predict(x)
