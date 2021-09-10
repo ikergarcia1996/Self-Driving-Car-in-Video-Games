@@ -1,63 +1,27 @@
-from torch.utils.data import DataLoader
-from utils import evaluate, print_message
-from model import (
-    TEDD1104,
-    TEDD1104LSTM,
-    TEDD1104Transformer,
-    load_checkpoint,
-    WeightedMseLoss,
-)
-import torch
-import torch.optim as optim
+from model import Tedd1104ModelPL
 from typing import List
-import time
 import argparse
-from torch.utils.tensorboard import SummaryWriter
-from dataset import Tedd1104Dataset
-from torch.cuda.amp import GradScaler, autocast
-import datetime
+from dataset import Tedd1104ataModule
 import os
-import logging
-import math
-
-if torch.cuda.is_available():
-    device: torch.device = torch.device("cuda:0")
-else:
-    device: torch.device = torch.device("cpu")
-    logging.warning(
-        "GPU not found, using CPU, training will be very slow. CPU NOT COMPATIBLE WITH FP16"
-    )
+from pytorch_lightning import loggers as pl_loggers
+import pytorch_lightning as pl
 
 
 def train(
-    model: TEDD1104,
-    optimizer_name: str,
-    optimizer: torch.optim,
-    scheduler: torch.optim.lr_scheduler,
-    scaler: GradScaler,
+    model: Tedd1104ModelPL,
     train_dir: str,
-    dev_dir: str,
+    val_dir: str,
     test_dir: str,
     output_dir: str,
     batch_size: int,
     accumulation_steps: int,
-    initial_epoch: int,
-    num_epoch: int,
-    running_loss: float,
-    loss_per_joystick: torch.tensor,
-    total_batches: int,
-    total_training_examples: int,
-    min_loss: float,
+    max_epochs: int,
     hide_map_prob: float,
     dropout_images_prob: List[float],
-    variable_weights: List[float] = None,
-    fp16: bool = True,
-    save_checkpoints: bool = True,
-    save_every: int = 1000,
-    save_best: bool = True,
-    keyboard_input: bool = False,
-    log_interval: int = 50,
-    log_dir: str = None,
+    dataset_type: str = "keyboard",
+    control_mode: str = "keyboard",
+    val_check_interval: float = 0.25,
+    dataloader_num_workers=os.cpu_count(),
 ):
 
     """
@@ -65,25 +29,13 @@ def train(
 
     Input:
     - model: TEDD1104 model to train
-    - optimizer_name: Name of the optimizer to use [SGD, Adam]
-    - optimizer: Optimizer (torch.optim)
-    - scheduler: Scheduler (torch.optim.lr_scheduler)
-    - scaler: Scaler (torch.cuda.amp.GradScaler)
     - train_dir: Directory where the train files are stored
     - dev_dir: Directory where the development files are stored
     - test_dir: Directory where the test files are stored
     - output_dir: Directory where the model and the checkpoints are going to be saved
     - batch_size: Batch size (Around 32-64 for 24GB GPU)
     - accumulation_steps: Number of accumulation steps (training batch size = accumulation_steps * batch_size)
-    - initial_epoch: Number of previous epochs used to train the model (0 unless the model has been
-      restored from checkpoint)
-    - num_epochs: Number of epochs to do
-    - running_loss: Float running loss of the model
-    - loss_per_joystick: Running loss per joystick/trigger of the model (torch.tensor[3])
-    - total_batches: Total batches used for training
-    - total_training_examples: Training examples used for training
-    - min_loss: Loss in the development set (0 unless the model has been
-      restored from checkpoint)
+    - max_epochs: Number of epochs to do
     - hide_map_prob: Probability for removing the minimap (put a black square)
        from a training example (0<=hide_map_prob<=1)
     - dropout_images_prob List of 5 floats or None, probability for removing each input image during training
@@ -91,318 +43,80 @@ def train(
     - variable_weights: List of 3 floats, weights for each output variable [LX, LT, RT]
       for the weighted mean squared error
     - fp16: Use FP16 for training
-    - save_checkpoints: save a checkpoint each epoch (Each checkpoint will rewrite the previous one)
-    - save_every: Save a checkpoint every save_every iterations
-    - save_best: save the model that achieves the lowest loss in the development set
-    - keyboard_input: Set this flag if dataset uses keyboard input (V2 dataset), the keys will be converted to
-     controller input
-    - log_interval: Save running loss in tensorboard every log_interval iterations
-    - log_dir: Tensorboard logging directory
-    Output:
-     - float: Loss in the development test of the best model
+    - dataset_type: Set if the dataset uses keyboard input (V2 dataset) or controller input.
+    - control_mode: Set if the dataset true values will be keyboard inputs (9 classes)
+      or Controller Inputs (2 continuous values)
+    -val_check_interval: Validate model every val_check_interval of epoch 0<val_check_interval<=1
+
     """
 
     if not os.path.exists(output_dir):
         print(f"{output_dir} does not exits. We will create it.")
         os.makedirs(output_dir)
 
-    writer: SummaryWriter = SummaryWriter(log_dir=log_dir)
+    data = Tedd1104ataModule(
+        train_dir=train_dir,
+        val_dir=val_dir,
+        test_dir=test_dir,
+        batch_size=batch_size,
+        hide_map_prob=hide_map_prob,
+        dropout_images_prob=dropout_images_prob,
+        dataset_type=dataset_type,
+        control_mode=control_mode,
+        num_workers=dataloader_num_workers,
+    )
 
-    criterion: WeightedMseLoss = WeightedMseLoss(
-        weights=variable_weights, reduction="mean"
-    ).to(device=device)
-    model.zero_grad()
+    tb_logger = pl_loggers.TensorBoardLogger(output_dir)
+    lr_monitor = pl.callbacks.LearningRateMonitor(logging_interval="step")
+    checkpoint_callback = pl.callbacks.ModelCheckpoint(monitor="Val/loss", mode="min")
 
-    print_message("Training...")
-    for epoch in range(num_epoch):
-        num_batches: int = 0
-        step_no: int = 0
+    trainer = pl.Trainer(
+        precision=16,
+        gpus=-1,
+        val_check_interval=val_check_interval,
+        accumulate_grad_batches=accumulation_steps,
+        max_epochs=max_epochs,
+        logger=tb_logger,
+        callbacks=[checkpoint_callback, lr_monitor],
+        accelerator="ddp",
+        default_root_dir=output_dir,
+    )
 
-        data_loader_train = DataLoader(
-            Tedd1104Dataset(
-                dataset_dir=train_dir,
-                hide_map_prob=hide_map_prob,
-                dropout_images_prob=dropout_images_prob,
-                keyboard_dataset=keyboard_input,
-            ),
-            batch_size=batch_size,
-            shuffle=True,
-            num_workers=os.cpu_count() // 2,
-            pin_memory=True,
-        )
-        start_time: float = time.time()
-        step_start_time: float = time.time()
-        dataloader_delay: float = 0
-        model.train()
-
-        for batch in data_loader_train:
-
-            x = torch.flatten(
-                torch.stack(
-                    (
-                        batch["image1"],
-                        batch["image2"],
-                        batch["image3"],
-                        batch["image4"],
-                        batch["image5"],
-                    ),
-                    dim=1,
-                ),
-                start_dim=0,
-                end_dim=1,
-            ).to(device=device, dtype=torch.float)
-
-            y = batch["y"].to(device=device, dtype=torch.float)
-            dataloader_delay += time.time() - step_start_time
-
-            total_training_examples += len(y)
-
-            with autocast(enabled=fp16):
-                outputs = model.forward(x)
-                loss = (
-                    criterion.forward(predicted=outputs, target=y) / accumulation_steps
-                )
-
-            running_loss += loss.item()
-            loss_per_joystick += criterion.loss_log
-
-            scaler.scale(loss).backward()
-
-            if ((step_no + 1) % accumulation_steps == 0) or (
-                step_no + 1 >= len(data_loader_train)
-            ):  # If we are in the last bach of the epoch we also want to perform gradient descent
-
-                # Gradient clipping
-                scaler.unscale_(optimizer)
-                torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
-
-                scaler.step(optimizer)
-                scaler.update()
-                optimizer.zero_grad()
-
-                total_batches += 1
-                num_batches += 1
-                scheduler.step(running_loss / total_batches)
-
-                if (total_batches + 1) % log_interval == 0:
-                    batch_time = round(time.time() - start_time, 2)
-                    est: float = batch_time * (
-                        math.ceil(len(data_loader_train) / accumulation_steps)
-                        - num_batches
-                    )
-                    print_message(
-                        f"EPOCH: {initial_epoch + epoch}. "
-                        f"{num_batches} of {math.ceil(len(data_loader_train) / accumulation_steps)} batches. "
-                        f"Total examples used for training {total_training_examples}. "
-                        f"Iteration time: {batch_time} secs. "
-                        f"Data Loading bottleneck: {round(dataloader_delay, 2)} secs. "
-                        f"Epoch estimated time: "
-                        f"{str(datetime.timedelta(seconds=est)).split('.')[0]}\n"
-                        f"Running_loss Loss: {running_loss / total_batches}. "
-                        f"Running_loss_joystick (LX, LT, RT): {loss_per_joystick / total_batches}. "
-                        f"Learning rate {optimizer.state_dict()['param_groups'][0]['lr']}"
-                    )
-
-                    writer.add_scalar(
-                        "Loss/train", running_loss / total_batches, total_batches
-                    )
-
-                    writer.add_scalar(
-                        "LX_loss/train",
-                        loss_per_joystick[0] / total_batches,
-                        total_batches,
-                    )
-
-                    writer.add_scalar(
-                        "LT_loss/train",
-                        loss_per_joystick[1] / total_batches,
-                        total_batches,
-                    )
-
-                    writer.add_scalar(
-                        "RT_loss/train",
-                        loss_per_joystick[2] / total_batches,
-                        total_batches,
-                    )
-
-                if save_checkpoints and (total_batches + 1) % save_every == 0:
-                    print_message("Saving checkpoint...")
-                    model.save_checkpoint(
-                        path=os.path.join(output_dir, "checkpoint.pt"),
-                        optimizer_name=optimizer_name,
-                        optimizer=optimizer,
-                        scheduler=scheduler,
-                        running_loss=running_loss,
-                        loss_per_joystick=loss_per_joystick,
-                        total_batches=total_batches,
-                        total_training_examples=total_training_examples,
-                        min_loss_dev=min_loss,
-                        epoch=initial_epoch + epoch,
-                        scaler=scaler,
-                    )
-
-                dataloader_delay: float = 0.0
-                start_time: float = time.time()
-
-            step_no += 1
-            step_start_time = time.time()
-
-        del data_loader_train
-
-        if save_checkpoints:
-            print_message(f"End of epoch {epoch}, saving checkpoint...")
-            model.save_checkpoint(
-                path=os.path.join(output_dir, "checkpoint.pt"),
-                optimizer_name=optimizer_name,
-                optimizer=optimizer,
-                scheduler=scheduler,
-                running_loss=running_loss,
-                loss_per_joystick=loss_per_joystick,
-                total_batches=total_batches,
-                total_training_examples=total_training_examples,
-                min_loss_dev=min_loss,
-                epoch=initial_epoch + epoch,
-                scaler=scaler,
-            )
-
-        print_message("Dev set evaluation...")
-
-        start_time_eval: float = time.time()
-
-        data_loader_dev = DataLoader(
-            Tedd1104Dataset(
-                dataset_dir=dev_dir,
-                hide_map_prob=0,
-                dropout_images_prob=[0, 0, 0, 0, 0],
-                keyboard_dataset=keyboard_input,
-            ),
-            batch_size=batch_size // 2,  # Use smaller batch size to prevent OOM issues
-            shuffle=False,
-            num_workers=os.cpu_count() // 2,  # Use less cores to save RAM
-            pin_memory=True,
-        )
-
-        dev_loss, dev_loss_per_joystick = evaluate(
-            model=model,
-            data_loader=data_loader_dev,
-            device=device,
-            fp16=fp16,
-            weights=variable_weights,
-        )
-
-        del data_loader_dev
-
-        print_message("Test set evaluation...")
-        data_loader_test = DataLoader(
-            Tedd1104Dataset(
-                dataset_dir=test_dir,
-                hide_map_prob=0,
-                dropout_images_prob=[0, 0, 0, 0, 0],
-                keyboard_dataset=keyboard_input,
-            ),
-            batch_size=batch_size // 2,  # Use smaller batch size to prevent OOM issues
-            shuffle=False,
-            num_workers=os.cpu_count() // 2,  # Use less cores to save RAM
-            pin_memory=True,
-        )
-
-        test_loss, test_loss_per_joystick = evaluate(
-            model=model,
-            data_loader=data_loader_test,
-            device=device,
-            fp16=fp16,
-            weights=variable_weights,
-        )
-
-        del data_loader_test
-
-        print_message(
-            f"Eval results: \n"
-            f"Loss dev set: {dev_loss}.\n"
-            f"Loss test set: {test_loss}.\n"
-            f"Loss per joystick dev (LX, LT, RT): {dev_loss_per_joystick}.\n"
-            f"Loss per joystick test (LX, LT, RT): {test_loss_per_joystick}.\n"
-            f"Eval time: {round(time.time() - start_time_eval,2)} secs."
-        )
-
-        if dev_loss < min_loss and save_best:
-            min_loss = dev_loss
-            print_message(f"New min loss in dev set {min_loss}. Saving model...")
-            model.save_model(save_dir=output_dir,)
-            if save_checkpoints:
-                model.save_checkpoint(
-                    path=os.path.join(output_dir, "checkpoint.pt"),
-                    optimizer_name=optimizer_name,
-                    optimizer=optimizer,
-                    scheduler=scheduler,
-                    running_loss=running_loss,
-                    loss_per_joystick=loss_per_joystick,
-                    total_batches=total_batches,
-                    total_training_examples=total_training_examples,
-                    min_loss_dev=min_loss,
-                    epoch=initial_epoch + epoch,
-                    scaler=scaler,
-                )
-
-        writer.add_scalar("Loss/dev", dev_loss, epoch)
-        writer.add_scalar(
-            "LX_loss/dev", dev_loss_per_joystick[0], epoch,
-        )
-        writer.add_scalar(
-            "LT_loss/dev", dev_loss_per_joystick[1], epoch,
-        )
-        writer.add_scalar(
-            "RT_loss/dev", dev_loss_per_joystick[2], epoch,
-        )
-        writer.add_scalar("Loss/test", test_loss, epoch)
-        writer.add_scalar(
-            "LX_loss/test", test_loss_per_joystick[0], epoch,
-        )
-        writer.add_scalar(
-            "LT_loss/test", test_loss_per_joystick[1], epoch,
-        )
-        writer.add_scalar(
-            "RT_loss/test", test_loss_per_joystick[2], epoch,
-        )
-
-    return min_loss
+    trainer.fit(model, datamodule=data)
+    trainer.test(datamodule=data, ckpt_path="best")
 
 
 def train_new_model(
-    train_dir="Data\\GTAV-AI\\data-v2\\train\\",
-    dev_dir="Data\\GTAV-AI\\data-v2\\dev\\",
-    test_dir="Data\\GTAV-AI\\data-v2\\test\\",
-    output_dir="Data\\models\\",
-    model_type: str = "transformer",
-    batch_size=10,
+    train_dir: str,
+    val_dir: str,
+    test_dir: str,
+    output_dir: str,
+    batch_size: int,
+    max_epochs: int,
+    resnet: int,
     accumulation_steps: int = 1,
-    num_epoch=20,
-    optimizer_name="SGD",
-    learning_rate: float = 0.01,
-    scheduler_patience: int = 50000,
-    resnet: int = 18,
-    pretrained_resnet: bool = True,
-    sequence_size: int = 5,
-    embedded_size: int = 256,
-    hidden_size: int = 128,
-    nhead: int = 8,
-    num_layers: int = 6,
-    bidirectional_lstm: bool = False,
-    layers_out: List[int] = None,
-    dropout_cnn: float = 0.1,
-    dropout_cnn_out: float = 0.1,
-    positional_embeddings_dropout: float = 0.0,
-    dropout_lstm: float = 0.1,
-    dropout_encoder_out: float = 0.1,
     hide_map_prob: float = 0.0,
-    dropout_images_prob: List[float] = None,
-    fp16: bool = True,
-    save_checkpoints: bool = True,
-    save_every: int = 1000,
-    save_best=True,
-    keyboard_input: bool = False,
-    log_interval: int = 50,
-    log_dir: str = None,
+    dropout_images_prob=None,
+    variable_weights: List[float] = None,
+    dataset_type: str = "keyboard",
+    control_mode: str = "keyboard",
+    val_check_interval: float = 0.25,
+    dataloader_num_workers=os.cpu_count(),
+    pretrained_resnet: bool = True,
+    embedded_size: int = 512,
+    nhead: int = 8,
+    num_layers_encoder: int = 1,
+    lstm_hidden_size: int = 512,
+    dropout_cnn: float = 0.0,
+    dropout_cnn_out: float = 0.1,
+    positional_embeddings_dropout: float = 0.1,
+    dropout_encoder: float = 0.1,
+    mask_prob: float = 0.0,
+    sequence_size: int = 5,
+    encoder_type: str = "transformer",
+    bidirectional_lstm=True,
+    learning_rate: float = 1e-5,
+    weight_decay: float = 1e-3,
 ):
 
     """
@@ -410,7 +124,7 @@ def train_new_model(
 
     Input LSTM:
     - train_dir: Directory where the train files are stored
-    - dev_dir: Directory where the development files are stored
+    - val_dir: Directory where the development files are stored
     - test_dir: Directory where the test files are stored
     - output_dir: Directory where the model and the checkpoints are going to be saved
     - model_type: Use a transformer or a lstm encoder
@@ -447,108 +161,59 @@ def train_new_model(
 
     """
 
-    if model_type == "lstm":
-        print("Loading new TEDD1104LSTM model")
-        model: TEDD1104LSTM = TEDD1104LSTM(
-            resnet=resnet,
-            pretrained_resnet=pretrained_resnet,
-            sequence_size=sequence_size,
-            embedded_size=embedded_size,
-            hidden_size=hidden_size,
-            num_layers_lstm=num_layers,
-            bidirectional_lstm=bidirectional_lstm,
-            layers_out=layers_out,
-            dropout_cnn=dropout_cnn,
-            dropout_cnn_out=dropout_cnn_out,
-            dropout_lstm=dropout_lstm,
-            dropout_lstm_out=dropout_encoder_out,
-        ).to(device)
+    if dropout_images_prob is None:
+        dropout_images_prob = [0.0, 0.0, 0.0, 0.0, 0.0]
 
-    elif model_type == "transformer":
-        model: TEDD1104Transformer = TEDD1104Transformer(
-            resnet=resnet,
-            pretrained_resnet=pretrained_resnet,
-            sequence_size=sequence_size,
-            embedded_size=embedded_size,
-            nhead=nhead,
-            num_layers_transformer=num_layers,
-            layers_out=layers_out,
-            dropout_cnn=dropout_cnn,
-            dropout_cnn_out=dropout_cnn_out,
-            positional_embeddings_dropout=positional_embeddings_dropout,
-            dropout_transformer_out=dropout_encoder_out,
-        ).to(device)
-    else:
-        raise ValueError(
-            f"Model type {model_type} not implemented yet. Available model types [lstm, transformer]"
-        )
-
-    if optimizer_name == "SGD":
-        optimizer = optim.SGD(
-            model.parameters(), lr=learning_rate, momentum=0.9, nesterov=True
-        )
-    elif optimizer_name == "Adam":
-        optimizer = optim.AdamW(model.parameters(), lr=learning_rate, eps=1e-04)
-    else:
-        raise ValueError(
-            f"Optimizer {optimizer_name} not implemented. Available optimizers: SGD, Adam"
-        )
-
-    scheduler = optim.lr_scheduler.ReduceLROnPlateau(
-        optimizer, verbose=True, patience=scheduler_patience, factor=0.5
+    model: Tedd1104ModelPL = Tedd1104ModelPL(
+        resnet=resnet,
+        pretrained_resnet=pretrained_resnet,
+        embedded_size=embedded_size,
+        nhead=nhead,
+        num_layers_encoder=num_layers_encoder,
+        lstm_hidden_size=lstm_hidden_size,
+        dropout_cnn=dropout_cnn,
+        dropout_cnn_out=dropout_cnn_out,
+        positional_embeddings_dropout=positional_embeddings_dropout,
+        dropout_encoder=dropout_encoder,
+        mask_prob=mask_prob,
+        control_mode=control_mode,
+        sequence_size=sequence_size,
+        encoder_type=encoder_type,
+        bidirectional_lstm=bidirectional_lstm,
+        learning_rate=learning_rate,
+        weight_decay=weight_decay,
+        weights=variable_weights,
     )
 
-    min_loss = train(
+    train(
         model=model,
-        optimizer_name=optimizer_name,
-        optimizer=optimizer,
-        scheduler=scheduler,
         train_dir=train_dir,
-        dev_dir=dev_dir,
+        val_dir=val_dir,
         test_dir=test_dir,
         output_dir=output_dir,
         batch_size=batch_size,
         accumulation_steps=accumulation_steps,
-        initial_epoch=0,
-        num_epoch=num_epoch,
-        running_loss=0.0,
-        loss_per_joystick=torch.tensor([0.0, 0.0, 0.0], requires_grad=False),
-        total_batches=0,
-        total_training_examples=0,
-        min_loss=float("inf"),
+        max_epochs=max_epochs,
         hide_map_prob=hide_map_prob,
         dropout_images_prob=dropout_images_prob,
-        fp16=fp16,
-        scaler=GradScaler(),
-        save_checkpoints=save_checkpoints,
-        save_every=save_every,
-        save_best=save_best,
-        keyboard_input=keyboard_input,
-        log_interval=log_interval,
-        log_dir=log_dir,
+        dataset_type=dataset_type,
+        control_mode=control_mode,
+        val_check_interval=val_check_interval,
+        dataloader_num_workers=dataloader_num_workers,
     )
-
-    print(f"Training finished, lowest loss in the development set {min_loss}")
 
 
 def continue_training(
     checkpoint_path: str,
-    train_dir: str = "Data\\GTAV-AI\\data-v2\\train\\",
-    dev_dir: str = "Data\\GTAV-AI\\data-v2\\dev\\",
-    test_dir: str = "Data\\GTAV-AI\\data-v2\\test\\",
-    output_dir: str = "Data\\models\\",
-    batch_size: int = 10,
-    accumulation_steps: int = 1,
-    num_epoch: int = 20,
+    train_dir: str,
+    val_dir: str,
+    test_dir: str,
+    batch_size: int,
     hide_map_prob: float = 0.0,
-    dropout_images_prob: List[float] = None,
-    save_checkpoints=True,
-    save_every: int = 1000,
-    save_best=True,
-    keyboard_input: bool = False,
-    fp16: bool = True,
-    log_interval: int = 50,
-    log_dir: str = None,
+    dropout_images_prob=None,
+    dataset_type: str = "keyboard",
+    control_mode: str = "keyboard",
+    dataloader_num_workers=os.cpu_count(),
 ):
 
     """
@@ -580,52 +245,26 @@ def continue_training(
 
     """
 
-    (
-        model,
-        optimizer_name,
-        optimizer,
-        scheduler,
-        running_loss,
-        loss_per_joystick,
-        total_batches,
-        total_training_examples,
-        min_loss_dev,
-        epoch,
-        scaler,
-    ) = load_checkpoint(checkpoint_path, device)
-    model = model.to(device)
+    if dropout_images_prob is None:
+        dropout_images_prob = [0.0, 0.0, 0.0, 0.0, 0.0]
 
-    min_loss = train(
-        model=model,
-        optimizer_name=optimizer_name,
-        optimizer=optimizer,
-        scheduler=scheduler,
+    data = Tedd1104ataModule(
         train_dir=train_dir,
-        dev_dir=dev_dir,
+        val_dir=val_dir,
         test_dir=test_dir,
-        output_dir=output_dir,
         batch_size=batch_size,
-        accumulation_steps=accumulation_steps,
-        initial_epoch=epoch,
-        num_epoch=num_epoch,
-        running_loss=running_loss,
-        loss_per_joystick=loss_per_joystick,
-        total_batches=total_batches,
-        total_training_examples=total_training_examples,
-        min_loss=min_loss_dev,
         hide_map_prob=hide_map_prob,
         dropout_images_prob=dropout_images_prob,
-        fp16=fp16,
-        scaler=scaler,
-        save_checkpoints=save_checkpoints,
-        save_every=save_every,
-        save_best=save_best,
-        keyboard_input=keyboard_input,
-        log_interval=log_interval,
-        log_dir=log_dir,
+        dataset_type=dataset_type,
+        control_mode=control_mode,
+        num_workers=dataloader_num_workers,
     )
 
-    print(f"Training finished, min loss in the development set {min_loss}")
+    model = Tedd1104ModelPL.load_from_checkpoint(checkpoint_path)
+    trainer = pl.Trainer(resume_from_checkpoint=checkpoint_path)
+
+    trainer.fit(model, datamodule=data)
+    trainer.test(datamodule=data, ckpt_path="best")
 
 
 if __name__ == "__main__":
@@ -633,7 +272,9 @@ if __name__ == "__main__":
 
     group = parser.add_mutually_exclusive_group(required=True)
     group.add_argument(
-        "--train_new", action="store_true", help="Train a new model",
+        "--train_new",
+        action="store_true",
+        help="Train a new model",
     )
 
     group.add_argument(
@@ -650,7 +291,7 @@ if __name__ == "__main__":
     )
 
     parser.add_argument(
-        "--dev_dir",
+        "--val_dir",
         type=str,
         required=True,
         help="Directory containing the development files",
@@ -686,14 +327,24 @@ if __name__ == "__main__":
     )
 
     parser.add_argument(
-        "--gradient_accumulation_steps",
+        "--accumulation_steps",
         type=int,
         default=1,
         help="Number of gradient steps to accumulate. True batch size =  --batch_size * --accumulation_steps",
     )
 
     parser.add_argument(
-        "--num_epochs", type=int, required=True, help="Number of epochs to perform",
+        "--max_epochs",
+        type=int,
+        required=True,
+        help="Number of epochs to perform",
+    )
+
+    parser.add_argument(
+        "--dataloader_num_workers",
+        type=int,
+        default=os.cpu_count(),
+        help="Number of CPU workers for the Data Loaders",
     )
 
     parser.add_argument(
@@ -715,64 +366,36 @@ if __name__ == "__main__":
     parser.add_argument(
         "--variable_weights",
         type=float,
-        nargs=3,
-        default=[1.0, 0.5, 0.5],
+        nargs="+",
+        default=None,
         help="List of 3 floats, weights for each output variable [LX, LT, RT]",
     )
 
     parser.add_argument(
-        "--not_save_checkpoints",
-        action="store_false",
-        help="Do NOT save a checkpoint each epoch (Each checkpoint will rewrite the previous one)",
-    )
-
-    parser.add_argument(
-        "--save_every",
-        type=int,
-        default=1000,
-        help="Save the model every --save_every batches",
-    )
-
-    parser.add_argument(
-        "--not_save_best",
-        action="store_false",
-        help="Dot NOT save the best model in the development set",
-    )
-
-    parser.add_argument(
-        "--fp16",
-        action="store_true",
-        help="[new_model] Use FP16 floating point precision: "
-        "Requires a modern FP16 capable Nvidia GPU (Volta, Turing, Ampere and future architectures)."
-        "If you restore a checkpoint the original FP configuration of the model will be restored.",
-    )
-
-    parser.add_argument(
-        "--optimizer_name",
-        type=str,
-        default="SGD",
-        choices=["SGD", "Adam"],
-        help="[new_model] Optimizer to use for training a new model: SGD or Adam",
+        "--val_check_interval",
+        type=float,
+        default=0.25,
+        help="Evaluate model every val_check_interval of epoch",
     )
 
     parser.add_argument(
         "--learning_rate",
         type=float,
-        default=0.01,
+        default=1e-5,
         help="[new_model] Optimizer learning rate",
     )
 
     parser.add_argument(
-        "--scheduler_patience",
-        type=int,
-        default=50000,
-        help="[new_model] Number of steps where the loss does not decrease until decrease the learning rate",
+        "--weight_decay",
+        type=float,
+        default=1e-3,
+        help="[new_model] AdamW Weight Decay",
     )
 
     parser.add_argument(
         "--resnet",
         type=int,
-        default=18,
+        default=50,
         choices=[18, 34, 50, 101, 152],
         help="[new_model] Which of the resnet model availabel in torchvision.models use. Availabel model:"
         "18, 34, 50, 101 and 152.",
@@ -785,21 +408,17 @@ if __name__ == "__main__":
     )
 
     parser.add_argument(
-        "--sequence_size",
-        type=int,
-        default=5,
-        help="[new_model] Number of images to use to decide witch key press. Note: Only 5 supported right now",
-    )
-
-    parser.add_argument(
         "--embedded_size",
         type=int,
-        default=256,
+        default=512,
         help="[new_model] Size of the feature vectors (CNN encoder output size)",
     )
 
     parser.add_argument(
-        "--hidden_size", type=int, default=128, help="[new_model LSTM] LSTM hidden size"
+        "--lstm_hidden_size",
+        type=int,
+        default=512,
+        help="[new_model LSTM] LSTM hidden size",
     )
 
     parser.add_argument(
@@ -812,7 +431,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--num_layers",
         type=int,
-        default=6,
+        default=1,
         help="[new_model] number of layers in the LSTM or the Transformer",
     )
 
@@ -823,20 +442,9 @@ if __name__ == "__main__":
     )
 
     parser.add_argument(
-        "--layers_out",
-        nargs="+",
-        type=int,
-        required=False,
-        help="[new_model] list of integer, for each integer i a linear layer with i neurons will be added to the "
-        " output, if none layers are provided the output layer will be just a linear layer with input size hidden_size "
-        "and output size 9. Note: The input size of the first layer and last layer will automatically be added "
-        "regardless of the user input, so you don't need to care about the size of these layers. ",
-    )
-
-    parser.add_argument(
         "--dropout_cnn",
         type=float,
-        default=0.1,
+        default=0.0,
         help="[new_model] Dropout of the CNN layers between 0.0 and 1.0",
     )
 
@@ -850,7 +458,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--positional_embeddings_dropout",
         type=float,
-        default=0.0,
+        default=0.1,
         help="[new_model transformer] dropout probability for the transformer input embeddings between 0.0 and 1.0",
     )
 
@@ -862,34 +470,24 @@ if __name__ == "__main__":
     )
 
     parser.add_argument(
-        "--dropout_encoder_out",
-        type=float,
-        default=0.1,
-        help="[new_model] Dropout of the LSTM or the Transformer representations (output layer) between 0.0 and 1.0",
-    )
-
-    parser.add_argument(
         "--checkpoint_path",
         type=str,
         help="[continue_training] Path of the checkpoint to load for continue training it",
     )
 
     parser.add_argument(
-        "--keyboard_input",
-        action="store_true",
-        help="Set this flag if dataset uses keyboard input (V2 dataset), "
-        "the keys will be converted to controller input",
+        "--dataset_type",
+        type=str,
+        choices=["keyboard", "controller"],
+        help="Set if the dataset uses keyboard input or controller input.",
     )
 
     parser.add_argument(
-        "--log_interval",
-        type=int,
-        default=50,
-        help="Save running loss in tensorboard every log_interval iterations",
-    )
-
-    parser.add_argument(
-        "--log_dir", type=str, default=None, help="Tensorboard logging directory",
+        "--control_mode",
+        type=str,
+        choices=["keyboard", "controller"],
+        help="Set if the dataset true values will be keyboard inputs (9 classes) "
+        "or Controller Inputs (2 continuous values)",
     )
 
     args = parser.parse_args()
@@ -897,56 +495,47 @@ if __name__ == "__main__":
     if args.train_new:
         train_new_model(
             train_dir=args.train_dir,
-            dev_dir=args.dev_dir,
+            val_dir=args.val_dir,
             test_dir=args.test_dir,
             output_dir=args.output_dir,
-            model_type=args.model_type,
             batch_size=args.batch_size,
-            accumulation_steps=args.gradient_accumulation_steps,
-            num_epoch=args.num_epochs,
+            max_epochs=args.max_epochs,
+            resnet=args.resnet,
+            accumulation_steps=args.accumulation_steps,
             hide_map_prob=args.hide_map_prob,
             dropout_images_prob=args.dropout_images_prob,
-            optimizer_name=args.optimizer_name,
-            learning_rate=args.learning_rate,
-            scheduler_patience=args.scheduler_patience,
-            resnet=args.resnet,
-            pretrained_resnet=args.do_not_load_pretrained_resnet,
-            sequence_size=args.sequence_size,
+            variable_weights=args.variable_weights,
+            dataset_type=args.dataset_type,
+            control_mode=args.control_mode,
+            val_check_interval=args.val_check_interval,
+            dataloader_num_workers=args.dataloader_num_workers,
+            pretrained_resnet=not args.do_not_load_pretrained_resnet,
             embedded_size=args.embedded_size,
-            hidden_size=args.hidden_size,
             nhead=args.nhead,
-            num_layers=args.num_layers,
-            bidirectional_lstm=args.bidirectional_lstm,
-            layers_out=args.layers_out,
+            num_layers_encoder=args.num_layers_encoder,
+            lstm_hidden_size=args.lstm_hidden_size,
             dropout_cnn=args.dropout_cnn,
             dropout_cnn_out=args.dropout_cnn_out,
-            dropout_lstm=args.dropout_lstm,
-            dropout_encoder_out=args.dropout_encoder_out,
-            fp16=args.fp16,
-            save_checkpoints=args.not_save_checkpoints,
-            save_every=args.save_every,
-            save_best=args.not_save_best,
-            keyboard_input=args.keyboard_input,
-            log_interval=args.log_interval,
-            log_dir=args.log_dir,
+            positional_embeddings_dropout=args.positional_embeddings_dropout,
+            dropout_encoder=args.dropout_encoder,
+            mask_prob=args.mask_prob,
+            sequence_size=args.sequence_size,
+            encoder_type=args.encoder_type,
+            bidirectional_lstm=args.bidirectional_lstm,
+            learning_rate=args.learning_rate,
+            weight_decay=args.weight_decay,
         )
 
     else:
         continue_training(
             checkpoint_path=args.checkpoint_path,
             train_dir=args.train_dir,
-            dev_dir=args.dev_dir,
+            val_dir=args.val_dir,
             test_dir=args.test_dir,
-            output_dir=args.output_dir,
             batch_size=args.batch_size,
-            accumulation_steps=args.gradient_accumulation_steps,
             hide_map_prob=args.hide_map_prob,
             dropout_images_prob=args.dropout_images_prob,
-            save_checkpoints=args.not_save_checkpoints,
-            save_every=args.save_every,
-            save_best=args.not_save_best,
-            keyboard_input=args.keyboard_input,
-            fp16=args.fp16,
-            log_interval=args.log_interval,
-            log_dir=args.log_dir,
+            dataset_type=args.dataset_type,
+            control_mode=args.control_mode,
+            dataloader_num_workers=args.dataloader_num_workers,
         )

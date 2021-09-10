@@ -3,10 +3,12 @@ import os
 import torch
 from skimage import io
 import numpy as np
-from torch.utils.data import Dataset
+from torch.utils.data import Dataset, DataLoader
 from torchvision import transforms
 import glob
-from typing import List
+from typing import List, Optional
+from utils import IOHandler
+import pytorch_lightning as pl
 
 
 class RemoveMinimap(object):
@@ -149,33 +151,6 @@ class Normalize(object):
         }
 
 
-def keys2controller(keys: int) -> np.ndarray:
-    """
-    Translate a keyboard input into a controller input
-    Input:
-        keys: integer representing keys pressed
-    Output:
-        np.ndarray [3] translated controller input
-    """
-    if keys == 1:
-        return np.asarray([-1.0, -1.0, -1.0], dtype=np.float32)
-    if keys == 2:
-        return np.asarray([1.0, -1.0, -1.0], dtype=np.float32)
-    if keys == 3:
-        return np.asarray([0.0, -1.0, 1.0], dtype=np.float32)
-    if keys == 4:
-        return np.asarray([0.0, 1.0, -1.0], dtype=np.float32)
-    if keys == 5:
-        return np.asarray([-1.0, -1.0, 1.0], dtype=np.float32)
-    if keys == 6:
-        return np.asarray([-1.0, 1.0, -1.0], dtype=np.float32)
-    if keys == 7:
-        return np.asarray([1.0, -1.0, 1.0], dtype=np.float32)
-    if keys == 8:
-        return np.asarray([1.0, 1.0, -1.0], dtype=np.float32)
-    return np.asarray([0.0, -1.0, -1.0], dtype=np.float32)
-
-
 class Tedd1104Dataset(Dataset):
     """TEDD1104 dataset."""
 
@@ -184,7 +159,8 @@ class Tedd1104Dataset(Dataset):
         dataset_dir: str,
         hide_map_prob: float,
         dropout_images_prob: List[float],
-        keyboard_dataset: bool = False,
+        dataset_type: str = "keyboard",
+        control_mode: str = "keyboard",
     ):
         """
         Init
@@ -195,9 +171,26 @@ class Tedd1104Dataset(Dataset):
           from the sequence of images (0<=hide_map_prob<=1)
         - dropout_images_prob List of 5 floats or None, probability for removing each input image during training
          (black image) from a training example (0<=dropout_images_prob<=1)
-        -keyboard_dataset: Set this flag if dataset uses keyboard input (V2 dataset), the keys will be converted to
-         controller input
+        - dataset_type: Set if the dataset uses keyboard input or controller input.
+        - control_mode: Set if the dataset true values will be keyboard inputs (9 classes)
+          or Controller Inputs (2 continuous values)
         """
+
+        self.dataset_dir = dataset_dir
+        self.hide_map_prob = hide_map_prob
+        self.dropout_images_prob = dropout_images_prob
+        self.dataset_type = dataset_type.lower()
+        self.control_mode = control_mode.lower()
+
+        assert self.dataset_type in [
+            "keyboard",
+            "controller",
+        ], f"{self.dataset_type} dataset type not supported. Supported dataset types: [keyboard, controller].  "
+
+        assert self.control_mode in [
+            "keyboard",
+            "controller",
+        ], f"{self.control_mode} control mode not supported. Supported dataset types: [keyboard, controller].  "
 
         assert 0 <= hide_map_prob <= 1.0, (
             f"hide_map_prob not in 0 <= hide_map_prob <= 1.0 range. "
@@ -215,10 +208,6 @@ class Tedd1104Dataset(Dataset):
                 f"dropout_images_prob: {dropout_images_prob}"
             )
 
-        self.dataset_dir = dataset_dir
-        self.hide_map_prob = hide_map_prob
-        self.dropout_images_prob = dropout_images_prob
-        self.keyboard_dataset = keyboard_dataset
         self.transform = transforms.Compose(
             [
                 RemoveMinimap(hide_map_prob=hide_map_prob),
@@ -229,6 +218,8 @@ class Tedd1104Dataset(Dataset):
             ]
         )
         self.dataset_files = glob.glob(os.path.join(dataset_dir, "*.jpeg"))
+
+        self.IOHandler = IOHandler()
 
     def __len__(self):
         return len(self.dataset_files)
@@ -254,18 +245,99 @@ class Tedd1104Dataset(Dataset):
                     int(len(self.dataset_files) * torch.rand(1))
                 ]
 
-        if not self.keyboard_dataset:
-            y = np.asarray(
-                [
-                    float(x)
-                    for x in os.path.basename(img_name)[:-5].split("_")[-1].split(",")
-                ],
-                dtype=np.float32,
-            )
-        else:
-            keys: int = int(os.path.basename(img_name)[-6])
-            y = keys2controller(keys)
+        y = self.IOHandler.input_conversion(
+            image_name=img_name,
+            input_type=self.dataset_type,
+            output_type=self.control_mode,
+        )
 
         sample = {"image": image, "y": y}
 
         return self.transform(sample)
+
+
+class Tedd1104ataModule(pl.LightningDataModule):
+    def __init__(
+        self,
+        train_dir: str,
+        val_dir: str,
+        test_dir: str,
+        batch_size: int,
+        hide_map_prob: float,
+        dropout_images_prob: List[float],
+        dataset_type: str = "keyboard",
+        control_mode: str = "keyboard",
+        num_workers: int = os.cpu_count(),
+    ):
+        super().__init__()
+        self.train_dir = train_dir
+        self.val_dir = val_dir
+        self.test_dir = test_dir
+        self.batch_size = batch_size
+
+        self.hide_map_prob = hide_map_prob
+        self.dropout_images_prob = dropout_images_prob
+        self.dataset_type = dataset_type
+        self.control_mode = control_mode
+
+        self.num_workers = num_workers
+
+    def setup(self, stage: Optional[str] = None) -> None:
+        if stage in (None, "fit"):
+            self.train_dataset = Tedd1104Dataset(
+                dataset_dir=self.train_dir,
+                hide_map_prob=self.hide_map_prob,
+                dropout_images_prob=self.dropout_images_prob,
+                dataset_type=self.dataset_type,
+                control_mode=self.control_mode,
+            )
+
+            print(f"Total training samples: {len(self.train_dataset)}.")
+
+            self.val_dataset = Tedd1104Dataset(
+                dataset_dir=self.val_dir,
+                hide_map_prob=0.0,
+                dropout_images_prob=[0.0, 0.0, 0.0, 0.0, 0.0],
+                dataset_type=self.dataset_type,
+                control_mode=self.control_mode,
+            )
+
+            print(f"Total validation samples: {len(self.train_dataset)}.")
+
+        if stage in (None, "test"):
+            self.test_dataset = Tedd1104Dataset(
+                dataset_dir=self.test_dir,
+                hide_map_prob=0.0,
+                dropout_images_prob=[0.0, 0.0, 0.0, 0.0, 0.0],
+                dataset_type=self.dataset_type,
+                control_mode=self.control_mode,
+            )
+
+            print(f"Total test samples: {len(self.train_dataset)}.")
+
+    def train_dataloader(self):
+        return DataLoader(
+            self.train_dataset,
+            batch_size=self.batch_size,
+            num_workers=self.num_workers,
+            pin_memory=True,
+            shuffle=True,
+        )
+
+    def val_dataloader(self):
+        return DataLoader(
+            self.val_dataset,
+            batch_size=self.batch_size,
+            num_workers=self.num_workers,
+            pin_memory=True,
+            shuffle=False,
+        )
+
+    def test_dataloader(self):
+        return DataLoader(
+            self.test_dataset,
+            batch_size=self.batch_size,
+            num_workers=self.num_workers,
+            pin_memory=True,
+            shuffle=False,
+        )

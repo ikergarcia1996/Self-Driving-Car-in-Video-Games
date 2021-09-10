@@ -6,7 +6,8 @@ import torch
 import torch.nn as nn
 import torchvision.models as models
 import torchvision.models.resnet
-from torch.cuda.amp import GradScaler
+import pytorch_lightning as pl
+import torchmetrics
 
 
 class WeightedMseLoss(nn.Module):
@@ -35,13 +36,13 @@ class WeightedMseLoss(nn.Module):
 
         super(WeightedMseLoss, self).__init__()
 
-        if weights is None:
-            weights = [1.0, 1.0, 1.0]
-
         self.reduction = reduction
-        self.register_buffer("weights", torch.tensor(weights))
+        if not weights:
+            weights = [1.0, 1.0, 1.0]
+        weights = torch.tensor(weights)
+        weights.requires_grad = False
 
-        self._loss_log = torch.tensor([0.0, 0.0, 0.0], requires_grad=False)
+        self.register_buffer("weights", weights)
 
     def forward(
         self,
@@ -74,18 +75,70 @@ class WeightedMseLoss(nn.Module):
             loss_per_joystick: torch.tensor = torch.mean(
                 (predicted - target) ** 2, dim=0
             )
-            self._loss_log = loss_per_joystick.detach()
             return torch.mean(self.weights * loss_per_joystick)
         else:
             loss_per_joystick: torch.tensor = torch.sum(
                 (predicted - target) ** 2, dim=0
             )
-            self._loss_log += loss_per_joystick.detach().to(self._loss_log.device)
             return self.weights * loss_per_joystick
 
-    @property
-    def loss_log(self):
-        return self._loss_log.cpu()
+
+class CrossEntropyLoss(torch.nn.Module):
+    """
+    Weighted CrossEntropyLoss
+    """
+
+    def __init__(
+        self,
+        weights: List[float] = None,
+        reduction: str = "mean",
+    ):
+        """
+        INIT
+        Input:
+        - weights:  torch.tensor [9] Weights for each variable
+        - reduction:  reduction method: sum or mean
+
+        """
+
+        assert reduction in ["sum", "mean"], (
+            f"Reduction method: {reduction} not implemented. "
+            f"Available reduction methods: [sum,mean]"
+        )
+
+        super(CrossEntropyLoss, self).__init__()
+
+        self.reduction = reduction
+        if not weights:
+            weights = [1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0]
+
+        weights = torch.tensor(weights)
+        weights.requires_grad = False
+
+        self.register_buffer("weights", weights)
+
+        self.CrossEntropyLoss = torch.nn.CrossEntropyLoss(
+            reduction=reduction, weight=weights
+        )
+
+    def forward(
+        self,
+        predicted: torch.tensor,
+        target: torch.tensor,
+    ) -> torch.tensor:
+
+        """
+        Input:
+        - predicted: torch.tensor [batch_size, 9] Output from the model
+        - predicted: torch.tensor [batch_size] Gold values
+
+
+        Output:
+        -Weighted CrossEntropyLoss: torch.tensor  [1] if reduction == "mean"
+                                                    [9] if reduction == "sum"
+        """
+
+        return self.CrossEntropyLoss(predicted, target)
 
 
 def get_resnet(model: int, pretrained: bool) -> torchvision.models.resnet.ResNet:
@@ -164,14 +217,6 @@ class EncoderCNN(nn.Module):
         features = self.bn(features)
         return features
 
-    def predict(self, images: torch.tensor) -> torch.tensor:
-        with torch.no_grad():
-            features = self.resnet(images)
-            features = features.reshape(features.size(0), -1)
-            features = self.dropout(self.fc(features))
-            features = self.bn(features)
-            return features
-
 
 class PackFeatureVectors(nn.Module):
     """
@@ -195,14 +240,6 @@ class PackFeatureVectors(nn.Module):
         return images.view(
             int(images.size(0) / self.sequence_size), self.sequence_size, images.size(1)
         )
-
-    def predict(self, images: torch.tensor) -> torch.tensor:
-        with torch.no_grad():
-            return images.view(
-                int(images.size(0) / self.sequence_size),
-                self.sequence_size,
-                images.size(1),
-            )
 
 
 class EncoderRNN(nn.Module):
@@ -233,7 +270,6 @@ class EncoderRNN(nn.Module):
         num_layers: int,
         bidirectional_lstm: bool,
         dropout_lstm: float,
-        dropout_lstm_out: float,
     ):
         super(EncoderRNN, self).__init__()
 
@@ -248,74 +284,16 @@ class EncoderRNN(nn.Module):
 
         self.bidirectional_lstm = bidirectional_lstm
 
-        self.dropout: nn.Dropout = nn.Dropout(p=dropout_lstm_out)
-
     def forward(self, features: torch.tensor) -> torch.tensor:
         output, (h_n, c_n) = self.lstm(features)
         if self.bidirectional_lstm:
             x = torch.cat((h_n[-2], h_n[-1]), 1)
         else:
             x = h_n[-1]
-        return self.dropout(x)
-
-    def predict(self, features: torch.tensor) -> torch.tensor:
-        with torch.no_grad():
-            output, (h_n, c_n) = self.lstm(features)
-            if self.bidirectional_lstm:
-                x = torch.cat((h_n[-2], h_n[-1]), 1)
-            else:
-                x = h_n[-1]
-            return x
+        return x
 
 
-class EncoderTransformer(nn.Module):
-    """
-    Extract feature vectors from input images (Transformer Encoder)
-
-    Input:
-     torch.tensor [batch_size, sequence_size, embedded_size]
-
-    Output:
-     torch.tensor [batch_size, hidden_size]
-
-     Hyperparameters:
-    - embedded_size: Size of the input feature vectors
-    - nhead: LSTM hidden size
-    - num_layers_transformer: number of transformer layers in the encoder
-    - dropout_transformer_out: dropout probability for the transformer features (output layer)
-
-    """
-
-    def __init__(
-        self,
-        embedded_size: int,
-        nhead: int,
-        num_layers: int,
-        dropout_out: float,
-    ):
-        super(EncoderTransformer, self).__init__()
-
-        self.encoder_layer = nn.TransformerEncoderLayer(
-            d_model=embedded_size, nhead=nhead
-        )
-        self.transformer_encoder = nn.TransformerEncoder(
-            self.encoder_layer, num_layers=num_layers
-        )
-
-        self.dropout: nn.Dropout = nn.Dropout(p=dropout_out)
-
-    def forward(self, features: torch.tensor):
-        x = self.transformer_encoder(features)
-        x = torch.flatten(x, start_dim=1)
-        return self.dropout(x)
-
-    def predict(self, features):
-        with torch.no_grad():
-            x = self.transformer_encoder(features)
-            return torch.flatten(x, start_dim=1)
-
-
-class PositionalEncoding(nn.Module):
+class PositionalEmbedding(nn.Module):
     """
     Add positional encodings to the transformer input features
 
@@ -331,27 +309,118 @@ class PositionalEncoding(nn.Module):
 
     """
 
-    def __init__(self, d_model, dropout=0.0):
-        super(PositionalEncoding, self).__init__()
+    def __init__(self, d_model: int, sequence_length: int = 5, dropout: float = 0.1):
+        super(PositionalEmbedding, self).__init__()
         self.dropout = nn.Dropout(p=dropout)
 
-        positional_encoding = torch.zeros(5, d_model)
-        position = torch.arange(0, 5, dtype=torch.float).unsqueeze(1)
-        div_term = torch.exp(
-            torch.arange(0, d_model, 2).float() * (-math.log(10000.0) / d_model)
-        )
-        positional_encoding[:, 0::2] = torch.sin(position * div_term)
-        positional_encoding[:, 1::2] = torch.cos(position * div_term)
-        positional_encoding = positional_encoding.unsqueeze(0)
-        self.register_buffer("positional_encoding", positional_encoding)
+        pe = torch.zeros(sequence_length, d_model).float()
+        pe.requires_grad = True
+        pe = pe.unsqueeze(0)
+        self.pe = torch.nn.Parameter(pe)
+        torch.nn.init.normal_(self.pe, std=0.02)
+        self.dp = torch.nn.Dropout(p=dropout)
 
     def forward(self, x: torch.tensor) -> torch.tensor:
-        x = x + self.positional_encoding[: x.size(0), :]
-        return self.dropout(x)
+        pe = self.pe[:, : x.size(1)]
+        x = pe + x
+        x = self.dp(x)
+        return x
 
-    def predict(self, x: torch.tensor) -> torch.tensor:
-        with torch.no_grad():
-            return x + self.positional_encoding[: x.size(0), :]
+
+class EncoderTransformer(nn.Module):
+    """
+    Extract feature vectors from input images (Transformer Encoder)
+
+    Input:
+     torch.tensor [batch_size, sequence_size, embedded_size]
+
+    Output:
+     torch.tensor [batch_size, hidden_size]
+
+     Hyperparameters:
+    - d_model: Size of the input feature vectors
+    - nhead: LSTM hidden size
+    - num_layers_transformer: number of transformer layers in the encoder
+    - dropout: dropout probability of transformer layers in the encoder
+    - mask_prob: probability of masking each input vector
+    """
+
+    def __init__(
+        self,
+        d_model: int = 512,
+        nhead: int = 8,
+        num_layers: int = 1,
+        mask_prob: float = 0.2,
+        dropout: float = 0.1,
+        sequence_length: int = 5,
+    ):
+        super(EncoderTransformer, self).__init__()
+        self.d_model = d_model
+        self.nhead = nhead
+        self.num_layers = num_layers
+        self.mask_prob = mask_prob
+        self.sequence_length = sequence_length
+
+        cls_token = torch.zeros(1, 1, self.d_model).float()
+        cls_token.require_grad = True
+        self.clsToken = torch.nn.Parameter(cls_token)
+        torch.nn.init.normal_(cls_token, std=0.02)
+
+        self.pe = PositionalEmbedding(
+            sequence_length=self.sequence_length + 1, d_model=self.d_model
+        )
+
+        encoder_layer = torch.nn.TransformerEncoderLayer(
+            d_model=self.d_model,
+            nhead=self.nhead,
+            dim_feedforward=self.d_model * 4,
+            dropout=dropout,
+        )
+
+        self.transformer_encoder = torch.nn.TransformerEncoder(
+            encoder_layer, num_layers=self.num_layers
+        )
+
+        for parameter in self.transformer_encoder.parameters():
+            parameter.requires_grad = True
+
+    def forward(self, features: torch.tensor):
+        if self.training:
+            bernolli_matrix = (
+                torch.cat(
+                    (
+                        torch.tensor([1]).float(),
+                        (torch.tensor([self.mask_prob]).float()).repeat(
+                            self.sequence_length
+                        ),
+                    ),
+                    0,
+                )
+                .unsqueeze(0)
+                .repeat([features.size(0) * self.nhead, 1])
+            )
+            bernolli_distributor = torch.distributions.Bernoulli(bernolli_matrix)
+            sample = bernolli_distributor.sample()
+            mask = (sample > 0).unsqueeze(1).repeat(1, sample.size(1), 1)
+        else:
+
+            mask = torch.ones(
+                features.size(0) * self.nhead,
+                self.sequence_length + 1,
+                self.sequence_length + 1,
+            )
+
+        mask = mask.type_as(features)
+        features = torch.cat(
+            (self.clsToken.repeat(features.size(0), 1, 1), features), dim=1
+        )
+        features = self.pe(features)
+        # print(f"x.size(): {x.size()}. mask.size(): {mask.size()}")
+        features = self.transformer_encoder(
+            features.transpose(0, 1), mask=mask
+        ).transpose(0, 1)
+
+        return features
 
 
 class OutputLayer(nn.Module):
@@ -362,55 +431,37 @@ class OutputLayer(nn.Module):
      torch.tensor [batch_size, hidden_size]
 
     Output:
-     Forward: torch.tensor [batch_size, 12] (output values without softmax)
-     Predict: torch.tensor [batch_size, 1] (index of the max value after softmax)
+     Forward: torch.tensor [batch_size, num_classes] (output values without softmax)
+
 
     Hyperparameters:
-    - hidden_size: Size of the input feature vectors
-    - layers: list of integer, for each integer i a linear layer with i neurons will be added.
+    - d_model: Size of the feature vectors
+    - num_classes: Number of classes, 9 for keyboard 3 for controller
     """
 
-    def __init__(self, hidden_size: int, layers: List[int] = None):
+    def __init__(self, d_model: int, num_classes: int):
         super(OutputLayer, self).__init__()
 
-        linear_layers: List[Union[nn.Linear, nn.LeakyReLU]] = []
-        if layers:
-            linear_layers.append(nn.Linear(hidden_size, layers[0]))
-            linear_layers.append(nn.LeakyReLU())
-            for i in range(1, len(layers)):
-                linear_layers.append(nn.Linear(layers[i - 1], layers[i]))
-                linear_layers.append(nn.LeakyReLU())
-            linear_layers.append(nn.Linear(layers[-1], 3))
+        self.d_model = d_model
+        self.num_classes = num_classes
 
-        else:
-            linear_layers.append(nn.Linear(hidden_size, 3))
+        self.dp = torch.nn.Dropout(p=0.8)
 
-        self.linear = nn.Sequential(*linear_layers)
+        self.fc_action = torch.nn.Linear(self.d_model, self.num_classes)
 
-        # self.sigmoid: nn.Sigmoid = (
-        #    nn.Sigmoid()
-        # )  # We want the output to be in range [-1,1], sigmoid will ensure it.
+        self.fc_action.requires_grad = True
 
-    def forward(self, inputs):
-        # return -1.0 + 2.0 * self.sigmoid(self.linear(inputs))
-        return self.linear(inputs)
+        torch.nn.init.xavier_uniform_(self.fc_action.weight)
+        self.fc_action.bias.data.zero_()
 
-    def predict(self, inputs):
-        with torch.no_grad():
-            # return -1.0 + 2.0 * self.sigmoid(self.linear(inputs))
-            return self.linear(inputs)
+    def forward(self, x):
+        self.dp(x)
+        return self.fc_action(x)
 
 
 class TEDD1104LSTM(nn.Module):
     """
-    T.E.D.D. 1104 (https://nazizombiesplus.fandom.com/wiki/T.E.D.D.) is the neural network that learns
-    how to drive in videogames. It has been develop with Grand Theft Auto V (GTAV) in mind. However
-    it can learn how to drive in any videogame and if the model and controls are modified accordingly
-    it can play any game. The model receive as input 5 consecutive images that have been captured
-    with a fixed time interval between then (by default 1/10 seconds) and learns the correct
-    controller input.
-
-    T.E.D.D 1104 consists of 3 modules:
+    T.E.D.D 1104 LSTM consists of 3 modules:
         [*] A CNN (Resnet) that extract features from the images
         [*] A RNN (LSTM) that generates a representation of the sequence of features from the CNN
         [*] A linear output layer that predicts the controller input.
@@ -422,8 +473,7 @@ class TEDD1104LSTM(nn.Module):
      RNN.
 
     Output:
-     Forward: torch.tensor [batch_size, 12] (output values without softmax)
-     Predict: torch.tensor [batch_size, 1] (index of the max value after softmax)
+     Forward: torch.tensor [batch_size, 9 for keyboard 3 for controller] (output values without softmax)
 
     Hyperparameters:
     - resnet: resnet module to use [18,34,50,101,152]
@@ -437,7 +487,7 @@ class TEDD1104LSTM(nn.Module):
     - dropout_cnn: dropout probability for the CNN layers
     - dropout_cnn_out: dropout probability for the cnn features (output layer)
     - dropout_lstm: dropout probability for the LSTM
-    - dropout_lstm_out: dropout probability for the LSTM features (output layer)
+    - control_mode: Keyboard: Classification model with 9 classes. Controller: Regression model with 3 variables
 
     """
 
@@ -445,7 +495,6 @@ class TEDD1104LSTM(nn.Module):
         self,
         resnet: int,
         pretrained_resnet: bool,
-        sequence_size: int,
         embedded_size: int,
         hidden_size: int,
         num_layers_lstm: int,
@@ -454,8 +503,10 @@ class TEDD1104LSTM(nn.Module):
         dropout_cnn: float,
         dropout_cnn_out: float,
         dropout_lstm: float,
-        dropout_lstm_out: float,
+        control_mode: str = "keyboard",
+        sequence_size: int = 5,
     ):
+
         super(TEDD1104LSTM, self).__init__()
 
         # Remember hyperparameters.
@@ -470,7 +521,7 @@ class TEDD1104LSTM(nn.Module):
         self.dropout_cnn: float = dropout_cnn
         self.dropout_cnn_out: float = dropout_cnn_out
         self.dropout_lstm: float = dropout_lstm
-        self.dropout_lstm_out: float = dropout_lstm_out
+        self.control_mode = control_mode
 
         self.EncoderCNN: EncoderCNN = EncoderCNN(
             embedded_size=embedded_size,
@@ -490,12 +541,11 @@ class TEDD1104LSTM(nn.Module):
             num_layers=num_layers_lstm,
             bidirectional_lstm=bidirectional_lstm,
             dropout_lstm=dropout_lstm,
-            dropout_lstm_out=dropout_lstm_out,
         )
 
         self.OutputLayer: OutputLayer = OutputLayer(
-            hidden_size=int(hidden_size * 2) if bidirectional_lstm else hidden_size,
-            layers=layers_out,
+            d_model=embedded_size if not self.bidirectional_lstm else embedded_size * 2,
+            num_classes=9 if self.control_mode == "keyboard" else 3,
         )
 
     def forward(self, x: torch.tensor) -> torch.tensor:
@@ -504,129 +554,10 @@ class TEDD1104LSTM(nn.Module):
         x = self.EncoderRNN(x)
         return self.OutputLayer(x)
 
-    def predict(self, x: torch.tensor) -> torch.tensor:
-        with torch.no_grad():
-            x = self.EncoderCNN.predict(x)
-            x = self.PackFeatureVectors.predict(x)
-            x = self.EncoderRNN.predict(x)
-            return self.OutputLayer.predict(x)
-
-    def save_model(self, save_dir: str) -> None:
-        """
-        Save model to a directory. This function stores two files, the hyperparameters and the weights.
-
-        Input:
-         - model: TEDD1104 model to save
-         - save_dir: directory where the model will be saved, if it doesn't exists we create it
-
-        Output:
-
-        """
-
-        if not os.path.exists(save_dir):
-            os.makedirs(save_dir)
-
-        dict_hyperparams: dict = {
-            "resnet": self.resnet,
-            "pretrained_resnet": self.pretrained_resnet,
-            "sequence_size": self.sequence_size,
-            "embedded_size": self.embedded_size,
-            "hidden_size": self.hidden_size,
-            "num_layers_lstm": self.num_layers_lstm,
-            "bidirectional_lstm": self.bidirectional_lstm,
-            "layers_out": self.layers_out,
-            "dropout_cnn": self.dropout_cnn,
-            "dropout_cnn_out": self.dropout_cnn_out,
-            "dropout_lstm": self.dropout_lstm,
-            "dropout_lstm_out": self.dropout_lstm_out,
-        }
-
-        model_weights: dict = {
-            "model": self.state_dict(),
-        }
-
-        with open(os.path.join(save_dir, "model_hyperparameters.json"), "w+") as file:
-            json.dump(dict_hyperparams, file)
-
-        torch.save(obj=model_weights, f=os.path.join(save_dir, "model.bin"))
-
-    def save_checkpoint(
-        self,
-        path: str,
-        optimizer_name: str,
-        optimizer: torch.optim,
-        scheduler: torch.optim.lr_scheduler,
-        running_loss: float,
-        loss_per_joystick: torch.tensor,
-        total_batches: int,
-        total_training_examples: int,
-        min_loss_dev: float,
-        epoch: int,
-        scaler: Optional[GradScaler],
-    ) -> None:
-
-        """
-        Save a checkpoint that allows to continue training the model in the future
-
-        Input:
-         - path: path where the model is going to be saved
-         - optimizer_name: Name of the optimizer used for training: SGD or Adam
-         - optimizer: Optimizer used for training
-         - scheduler: Scheduler used for training
-         - running_loss: Current running loss in the training set
-         - loss_per_joystick: Current running loss per input joystick/trigger in the training set
-         - total_batches: Total batches used for training the model
-         - total_training_examples: Total training examples used for training the model
-         - min_loss_dev: Min loss in the development set
-         - epoch: Num of epoch used to train the model
-         - scaler: The scaler used for FP16 training
-
-        Output:
-        """
-
-        dict_hyperparams: dict = {
-            "sequence_size": self.sequence_size,
-            "resnet": self.resnet,
-            "pretrained_resnet": self.pretrained_resnet,
-            "embedded_size": self.embedded_size,
-            "hidden_size": self.hidden_size,
-            "num_layers_lstm": self.num_layers_lstm,
-            "bidirectional_lstm": self.bidirectional_lstm,
-            "layers_out": self.layers_out,
-            "dropout_cnn": self.dropout_cnn,
-            "dropout_cnn_out": self.dropout_cnn_out,
-            "dropout_lstm": self.dropout_lstm,
-            "dropout_lstm_out": self.dropout_lstm_out,
-        }
-
-        checkpoint = {
-            "hyper_params": dict_hyperparams,
-            "model": self.state_dict(),
-            "optimizer_name": optimizer_name,
-            "optimizer": optimizer.state_dict(),
-            "scheduler": scheduler.state_dict(),
-            "running_loss": running_loss,
-            "loss_per_joystick": loss_per_joystick,
-            "total_batches": total_batches,
-            "total_training_examples": total_training_examples,
-            "min_loss_dev": min_loss_dev,
-            "epoch": epoch,
-            "scaler": None if not scaler else scaler.state_dict(),
-        }
-
-        torch.save(checkpoint, path)
-
 
 class TEDD1104Transformer(nn.Module):
     """
-    T.E.D.D. 1104 (https://nazizombiesplus.fandom.com/wiki/T.E.D.D.) is the neural network that learns
-    how to drive in videogames. It has been develop with Grand Theft Auto V (GTAV) in mind. However
-    it can learn how to drive in any videogame and if the model and controls are modified accordingly
-    it can play any game. The model receive as input 5 consecutive images that have been captured
-    with a fixed time interval between then (by default 1/10 seconds) and learns the correct
-    controller input.
-
-    T.E.D.D 1104 consists of 3 modules:
+    T.E.D.D 1104 Transformer consists of 3 modules:
         [*] A CNN (Resnet) that extract features from the images
         [*] A Transformer that generates a representation of the sequence of features from the CNN
         [*] A linear output layer that predicts the controller input.
@@ -638,8 +569,8 @@ class TEDD1104Transformer(nn.Module):
      RNN.
 
     Output:
-     Forward: torch.tensor [batch_size, 12] (output values without softmax)
-     Predict: torch.tensor [batch_size, 1] (index of the max value after softmax)
+     Forward: torch.tensor [batch_size, 9 for keyboard 3 for controller] (output values without softmax)
+
 
     Hyperparameters:
     - resnet: resnet module to use [18,34,50,101,152]
@@ -653,6 +584,8 @@ class TEDD1104Transformer(nn.Module):
     - dropout_cnn_out: dropout probability for the cnn features (output layer)
     - positional_embeddings_dropout: dropout probability for the transformer input embeddings
     - dropout_transformer_out: dropout probability for the transformer features (output layer)
+    - mask_prob: probability of masking each input vector before the transformer
+    - control_mode: Keyboard: Classification model with 9 classes. Controller: Regression model with 3 variables
 
     """
 
@@ -660,7 +593,6 @@ class TEDD1104Transformer(nn.Module):
         self,
         resnet: int,
         pretrained_resnet: bool,
-        sequence_size: int,
         embedded_size: int,
         nhead: int,
         num_layers_transformer: int,
@@ -668,7 +600,10 @@ class TEDD1104Transformer(nn.Module):
         dropout_cnn: float,
         dropout_cnn_out: float,
         positional_embeddings_dropout: float,
-        dropout_transformer_out: float,
+        dropout_transformer: float,
+        mask_prob: float,
+        control_mode: str = "keyboard",
+        sequence_size: int = 5,
     ):
         super(TEDD1104Transformer, self).__init__()
 
@@ -683,7 +618,9 @@ class TEDD1104Transformer(nn.Module):
         self.dropout_cnn: float = dropout_cnn
         self.dropout_cnn_out: float = dropout_cnn_out
         self.positional_embeddings_dropout: float = positional_embeddings_dropout
-        self.dropout_transformer_out: float = dropout_transformer_out
+        self.dropout_transformer: float = dropout_transformer
+        self.mask_prob = mask_prob
+        self.control_mode = control_mode
 
         self.EncoderCNN: EncoderCNN = EncoderCNN(
             embedded_size=embedded_size,
@@ -697,332 +634,264 @@ class TEDD1104Transformer(nn.Module):
             sequence_size=sequence_size
         )
 
-        self.PositionalEncoding = PositionalEncoding(
+        self.PositionalEncoding = PositionalEmbedding(
             d_model=embedded_size, dropout=self.positional_embeddings_dropout
         )
 
         self.EncoderTransformer: EncoderTransformer = EncoderTransformer(
-            embedded_size=embedded_size,
+            d_model=embedded_size,
             nhead=nhead,
             num_layers=num_layers_transformer,
-            dropout_out=dropout_transformer_out,
+            mask_prob=self.mask_prob,
+            dropout=self.dropout_transformer,
         )
 
         self.OutputLayer: OutputLayer = OutputLayer(
-            hidden_size=embedded_size * sequence_size,
-            layers=layers_out,
+            d_model=embedded_size,
+            num_classes=9 if self.control_mode == "keyboard" else 3,
         )
 
     def forward(self, x: torch.tensor) -> torch.tensor:
         x = self.EncoderCNN(x)
         x = self.PackFeatureVectors(x)
         x = self.PositionalEncoding(x)
-        x = self.EncoderTransformer(x)
+        x = self.EncoderTransformer(x)[:, 0, :]
         return self.OutputLayer(x)
 
-    def predict(self, x: torch.tensor) -> torch.tensor:
-        with torch.no_grad():
-            x = self.EncoderCNN.predict(x)
-            x = self.PackFeatureVectors.predict(x)
-            x = self.PositionalEncoding.predict(x)
-            x = self.EncoderTransformer.predict(x)
-            return self.OutputLayer.predict(x)
 
-    def save_model(self, save_dir: str) -> None:
-        """
-        Save model to a directory. This function stores two files, the hyperparameters and the weights.
+class Tedd1104ModelPL(pl.LightningModule):
+    """
+    T.E.D.D. 1104 (https://nazizombiesplus.fandom.com/wiki/T.E.D.D.) is the neural network that learns
+    how to drive in videogames. It has been develop with Grand Theft Auto V (GTAV) in mind. However
+    it can learn how to drive in any videogame and if the model and controls are modified accordingly
+    it can play any game. The model receive as input 5 consecutive images that have been captured
+    with a fixed time interval between then (by default 1/10 seconds) and learns the correct
+    controller input.
 
-        Input:
-         - model: TEDD1104 model to save
-         - save_dir: directory where the model will be saved, if it doesn't exists we create it
+    T.E.D.D 1104 consists of 3 modules:
+        [*] A CNN (Resnet) that extract features from the images
+        [*] A Transformer or LSTM that generates a representation of the sequence of features from the CNN
+        [*] A linear output layer that predicts the controller input.
 
-        Output:
+    Input:
+     torch.tensor [batch_size, num_channels, H, W]
+     For efficiency the input input is not packed as sequence of 5 images, all the images in the batch will be
+     encoded in the CNN and the features vectors will be packed as sequences of 5 vectors before feeding them to the
+     RNN.
 
-        """
+    Output:
+     Forward: torch.tensor [batch_size, 9 for keyboard 3 for controller] (output values without softmax)
 
-        if not os.path.exists(save_dir):
-            os.makedirs(save_dir)
 
-        dict_hyperparams: dict = {
-            "resnet": self.resnet,
-            "pretrained_resnet": self.pretrained_resnet,
-            "sequence_size": self.sequence_size,
-            "embedded_size": self.embedded_size,
-            "nhead": self.nhead,
-            "num_layers_transformer": self.num_layers_transformer,
-            "layers_out": self.layers_out,
-            "dropout_cnn": self.dropout_cnn,
-            "dropout_cnn_out": self.dropout_cnn_out,
-            "positional_embeddings_dropout": self.positional_embeddings_dropout,
-            "dropout_transformer_out": self.dropout_transformer_out,
-        }
+    Hyperparameters:
+    - resnet: resnet module to use [18,34,50,101,152]
+    - pretrained_resnet: Load pretrained resnet weights
+    - sequence_size: Length of each series of features
+    - embedded_size: Size of the feature vectors
+    - nhead: number of heads for the transformer layer
+    - num_layers_transformer: number of transformer layers in the encoder
+    - layers_out: list of integer, for each integer i a linear layer with i neurons will be added.
+    - dropout_cnn: dropout probability for the CNN layers
+    - dropout_cnn_out: dropout probability for the cnn features (output layer)
+    - positional_embeddings_dropout: dropout probability for the transformer input embeddings
+    - dropout_transformer_out: dropout probability for the transformer features (output layer)
+    - mask_prob: probability of masking each input vector before the transformer
+    - control_mode: Keyboard: Classification model with 9 classes. Controller: Regression model with 3 variables
+    - Encoder type: Use LSTM or Transformer as feature encoder [lstm, transformer]
+    """
 
-        model_weights: dict = {
-            "model": self.state_dict(),
-        }
-
-        with open(os.path.join(save_dir, "model_hyperparameters.json"), "w+") as file:
-            json.dump(dict_hyperparams, file)
-
-        torch.save(obj=model_weights, f=os.path.join(save_dir, "model.bin"))
-
-    def save_checkpoint(
+    def __init__(
         self,
-        path: str,
-        optimizer_name: str,
-        optimizer: torch.optim,
-        scheduler: torch.optim.lr_scheduler,
-        running_loss: float,
-        loss_per_joystick: torch.tensor,
-        total_batches: int,
-        total_training_examples: int,
-        min_loss_dev: float,
-        epoch: int,
-        scaler: Optional[GradScaler],
-    ) -> None:
+        resnet: int,
+        pretrained_resnet: bool,
+        embedded_size: int,
+        nhead: int,
+        num_layers_encoder: int,
+        lstm_hidden_size: int,
+        dropout_cnn: float,
+        dropout_cnn_out: float,
+        positional_embeddings_dropout: float,
+        dropout_encoder: float,
+        mask_prob: float,
+        control_mode: str = "keyboard",
+        sequence_size: int = 5,
+        encoder_type: str = "transformer",
+        bidirectional_lstm=True,
+        weights: List[float] = None,
+        learning_rate: float = 1e-5,
+        weight_decay: float = 1e-3,
+    ):
 
-        """
-        Save a checkpoint that allows to continue training the model in the future
+        super(Tedd1104ModelPL, self).__init__()
 
-        Input:
-         - path: path where the model is going to be saved
-         - optimizer_name: Name of the optimizer used for training: SGD or Adam
-         - optimizer: Optimizer used for training
-         - scheduler: Scheduler used for training
-         - running_loss: Current running loss in the training set
-         - loss_per_joystick: Current running loss per input joystick/trigger in the training set
-         - total_batches: Total batches used for training the model
-         - total_training_examples: Total training examples used for training the model
-         - min_loss_dev: Min loss in the development set
-         - epoch: Num of epoch used to train the model
-         - scaler: The scaler used for FP16 training
+        self.encoder_type = encoder_type.lower()
+        assert self.encoder_type in [
+            "lstm",
+            "transformer",
+        ], f"Encoder type {self.encoder_type} not supported, supported feature encoders [lstm,transformer]."
 
+        self.control_mode = control_mode.lower()
+        assert self.control_mode in [
+            "keyboard",
+            "controller",
+        ], f"{self.control_mode} control mode not supported. Supported dataset types: [keyboard, controller].  "
 
-        Output:
-        """
+        self.resnet: int = resnet
+        self.pretrained_resnet: bool = pretrained_resnet
+        self.sequence_size: int = sequence_size
+        self.embedded_size: int = embedded_size
+        self.nhead: int = nhead
+        self.num_layers_encoder: int = num_layers_encoder
+        self.dropout_cnn: float = dropout_cnn
+        self.dropout_cnn_out: float = dropout_cnn_out
+        self.positional_embeddings_dropout: float = positional_embeddings_dropout
+        self.dropout_encoder: float = dropout_encoder
+        self.mask_prob = mask_prob
+        self.bidirectional_lstm = bidirectional_lstm
+        self.lstm_hidden_size = lstm_hidden_size
+        self.weights = weights
+        self.learning_rate = learning_rate
+        self.weight_decay = weight_decay
 
-        dict_hyperparams: dict = {
-            "resnet": self.resnet,
-            "pretrained_resnet": self.pretrained_resnet,
-            "sequence_size": self.sequence_size,
-            "embedded_size": self.embedded_size,
-            "nhead": self.nhead,
-            "num_layers_transformer": self.num_layers_transformer,
-            "layers_out": self.layers_out,
-            "dropout_cnn": self.dropout_cnn,
-            "dropout_cnn_out": self.dropout_cnn_out,
-            "positional_embeddings_dropout": self.positional_embeddings_dropout,
-            "dropout_transformer_out": self.dropout_transformer_out,
-        }
+        if self.encoder_type == "transformer":
+            self.model = TEDD1104Transformer(
+                resnet=self.resnet,
+                pretrained_resnet=self.pretrained_resnet,
+                embedded_size=self.embedded_size,
+                nhead=self.nhead,
+                num_layers_transformer=self.num_layers_encoder,
+                layers_out=self.layers_out,
+                dropout_cnn=self.dropout_cnn,
+                dropout_cnn_out=self.ropout_cnn_out,
+                positional_embeddings_dropout=self.positional_embeddings_dropout,
+                dropout_transformer=self.dropout_encoder,
+                mask_prob=self.mask_prob,
+                control_mode=self.control_mode,
+                sequence_size=self.sequence_size,
+            )
+        else:
+            self.model = TEDD1104LSTM(
+                resnet=self.resnet,
+                pretrained_resnet=self.pretrained_resnet,
+                embedded_size=self.embedded_size,
+                hidden_size=self.lstm_hidden_size,
+                num_layers_lstm=self.num_layers_encoder,
+                layers_out=self.layers_out,
+                dropout_cnn=self.dropout_cnn,
+                bidirectional_lstm=self.bidirectional_lstm,
+                dropout_cnn_out=self.dropout_cnn_out,
+                dropout_lstm=self.dropout_encoder,
+                control_mode=self.control_mode,
+                sequence_size=self.sequence_size,
+            )
 
-        checkpoint = {
-            "hyper_params": dict_hyperparams,
-            "model": self.state_dict(),
-            "optimizer_name": optimizer_name,
-            "optimizer": optimizer.state_dict(),
-            "scheduler": scheduler.state_dict(),
-            "running_loss": running_loss,
-            "loss_per_joystick": loss_per_joystick,
-            "total_batches": total_batches,
-            "total_training_examples": total_training_examples,
-            "min_loss_dev": min_loss_dev,
-            "epoch": epoch,
-            "scaler": None if not scaler else scaler.state_dict(),
-        }
+        self.total_batches = 0
+        self.running_loss = 0
 
-        torch.save(checkpoint, path)
+        if self.control_mode == "keyboard":
+            self.validation_accuracy_k1 = torchmetrics.Accuracy(num_classes=9, top_k=1)
+            self.validation_accuracy_k3 = torchmetrics.Accuracy(num_classes=9, top_k=3)
+            self.test_accuracy_k1 = torchmetrics.Accuracy(num_classes=9, top_k=1)
+            self.test_accuracy_k3 = torchmetrics.Accuracy(num_classes=9, top_k=3)
 
+            self.criterion = CrossEntropyLoss(weights=self.weights)
+        else:
+            self.validation_distance = torchmetrics.MeanSquaredError()
+            self.criterion = WeightedMseLoss(weights=self.weights)
 
-TEDD1104 = Union[TEDD1104LSTM, TEDD1104Transformer]
+    def forward(self, x):
+        x = self.model(x)
+        if self.control_mode == "keyboard":
+            return torch.argmax(torch.functional.F.softmax(x, dim=2), dim=2)
+        else:
+            return x
 
-
-def load_model(
-    save_dir: str, device: torch.device
-) -> Union[TEDD1104LSTM, TEDD1104Transformer]:
-    """
-    Load a model from directory. The directory should contain a json with the model hyperparameters and a bin file
-    with the model weights.
-
-    Input:
-     - save_dir: Directory where the model is stored
-
-    Output:
-    - TEDD1104 model
-
-    """
-
-    with open(os.path.join(save_dir, "model_hyperparameters.json"), "r") as file:
-        dict_hyperparams = json.load(file)
-
-    if "num_layers_lstm" in dict_hyperparams:
-        print(f"Loading TEDD1104LSTM model")
-        model: TEDD1104LSTM = TEDD1104LSTM(
-            resnet=dict_hyperparams["resnet"],
-            pretrained_resnet=dict_hyperparams["pretrained_resnet"],
-            sequence_size=dict_hyperparams["sequence_size"],
-            embedded_size=dict_hyperparams["embedded_size"],
-            hidden_size=dict_hyperparams["hidden_size"],
-            num_layers_lstm=dict_hyperparams["num_layers_lstm"],
-            bidirectional_lstm=dict_hyperparams["bidirectional_lstm"],
-            layers_out=dict_hyperparams["layers_out"],
-            dropout_cnn=dict_hyperparams["dropout_cnn"],
-            dropout_cnn_out=dict_hyperparams["dropout_cnn_out"],
-            dropout_lstm=dict_hyperparams["dropout_lstm"],
-            dropout_lstm_out=dict_hyperparams["dropout_lstm_out"],
-        ).to(device=device)
-
-    else:
-        print(f"Loading TEDD1104Transformer model")
-        model: TEDD1104Transformer = TEDD1104Transformer(
-            resnet=dict_hyperparams["resnet"],
-            pretrained_resnet=dict_hyperparams["pretrained_resnet"],
-            sequence_size=dict_hyperparams["sequence_size"],
-            embedded_size=dict_hyperparams["embedded_size"],
-            nhead=dict_hyperparams["nhead"],
-            num_layers_transformer=dict_hyperparams["num_layers_transformer"],
-            layers_out=dict_hyperparams["layers_out"],
-            dropout_cnn=dict_hyperparams["dropout_cnn"],
-            dropout_cnn_out=dict_hyperparams["dropout_cnn_out"],
-            positional_embeddings_dropout=dict_hyperparams[
-                "positional_embeddings_dropout"
-            ],
-            dropout_transformer_out=dict_hyperparams["dropout_transformer_out"],
-        ).to(device=device)
-
-    model_weights = torch.load(f=os.path.join(save_dir, "model.bin"))
-    model.load_state_dict(model_weights["model"])
-
-    return model
-
-
-def load_checkpoint(
-    path: str, device: torch.device
-) -> (
-    Union[TEDD1104LSTM, TEDD1104Transformer],
-    str,
-    torch.optim,
-    torch.optim.lr_scheduler,
-    float,
-    torch.tensor,
-    int,
-    int,
-    float,
-    int,
-    Union[GradScaler, None],
-):
-
-    """
-    Restore checkpoint
-
-    Input:
-    -path: path of the checkpoint to restore
-
-    Output:
-     - model: restored TEDD1104 model
-     - optimizer_name: Name of the optimizer used for training: SGD or Adam
-     - scheduler: Scheduler used for training
-     - running_loss: Running loss of the model
-     - loss_per_joystick: Running loss per joystick/trigger of the model
-     - total_batches: Total batches used for training
-     - total_training_examples: Training examples used for training
-     - min_loss_dev: Min loss in development set
-     - epoch: Num of epoch used to train the model
-     - scaler: If the model uses FP16, the scaler used for training
-    """
-
-    checkpoint = torch.load(path)
-    dict_hyperparams = checkpoint["hyper_params"]
-    model_weights = checkpoint["model"]
-    optimizer_name = checkpoint["optimizer_name"]
-    optimizer_state = checkpoint["optimizer"]
-    min_loss_dev = checkpoint["min_loss_dev"]
-    epoch = checkpoint["epoch"]
-    scaler_state = checkpoint["scaler"]
-
-    if "num_layers_lstm" in dict_hyperparams:
-        print(f"Loading TEDD1104LSTM model")
-        model: TEDD1104LSTM = TEDD1104LSTM(
-            resnet=dict_hyperparams["resnet"],
-            pretrained_resnet=dict_hyperparams["pretrained_resnet"],
-            sequence_size=dict_hyperparams["sequence_size"],
-            embedded_size=dict_hyperparams["embedded_size"],
-            hidden_size=dict_hyperparams["hidden_size"],
-            num_layers_lstm=dict_hyperparams["num_layers_lstm"],
-            bidirectional_lstm=dict_hyperparams["bidirectional_lstm"],
-            layers_out=dict_hyperparams["layers_out"],
-            dropout_cnn=dict_hyperparams["dropout_cnn"],
-            dropout_cnn_out=dict_hyperparams["dropout_cnn_out"],
-            dropout_lstm=dict_hyperparams["dropout_lstm"],
-            dropout_lstm_out=dict_hyperparams["dropout_lstm_out"],
-        ).to(device=device)
-
-    else:
-        print(f"Loading TEDD1104Transformer model")
-        model: TEDD1104Transformer = TEDD1104Transformer(
-            resnet=dict_hyperparams["resnet"],
-            pretrained_resnet=dict_hyperparams["pretrained_resnet"],
-            sequence_size=dict_hyperparams["sequence_size"],
-            embedded_size=dict_hyperparams["embedded_size"],
-            nhead=dict_hyperparams["nhead"],
-            num_layers_transformer=dict_hyperparams["num_layers_transformer"],
-            layers_out=dict_hyperparams["layers_out"],
-            dropout_cnn=dict_hyperparams["dropout_cnn"],
-            dropout_cnn_out=dict_hyperparams["dropout_cnn_out"],
-            positional_embeddings_dropout=dict_hyperparams[
-                "positional_embeddings_dropout"
-            ],
-            dropout_transformer_out=dict_hyperparams["dropout_transformer_out"],
-        ).to(device=device)
-
-    if optimizer_name == "SGD":
-        optimizer = torch.optim.SGD(model.parameters(), lr=0.01, momentum=0.9)
-    elif optimizer_name == "Adam":
-        optimizer = torch.optim.AdamW(model.parameters(), lr=0.001, eps=1e-04)
-    else:
-        raise ValueError(
-            f"The optimizer you are trying to load is unknown: "
-            f"Optimizer name {optimizer_name}. Available optimizers: SGD, Adam"
+    def training_step(self, batch, batch_idx):
+        x, y = batch
+        preds = self.model(x)
+        loss = self.criterion(preds, y)
+        self.total_batches += 1
+        self.running_loss += loss.item()
+        self.log("Train/loss", loss, sync_dist=True)
+        self.log(
+            "Train/running_loss", self.running_loss / self.total_batches, sync_dist=True
         )
+        return loss
 
-    scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, verbose=True)
+    def validation_step(self, batch, batch_idx):
+        x, y = batch
+        preds = self.model(x)
+        loss = self.criterion(preds, y)
+        self.log("Val/loss", loss, sync_dist=True)
+        if self.control_mode == "keyboard":
+            preds = torch.argmax(torch.functional.F.softmax(x, dim=2), dim=2)
 
-    model.load_state_dict(model_weights)
-    optimizer.load_state_dict(optimizer_state)
+        return {"loss": loss, "preds": preds, "y": y}
 
-    scheduler_state = checkpoint["scheduler"]
-    scheduler.load_state_dict(scheduler_state)
+    def validation_step_end(self, outputs):
+        if self.control_mode == "keyboard":
+            self.validation_accuracy_k1(outputs["preds"], outputs["y"])
+            self.validation_accuracy_k3(outputs["preds"], outputs["y"])
+            self.log(
+                "Val/acc_k@1",
+                self.validation_accuracy_k1,
+            )
 
-    running_loss = checkpoint["running_loss"]
+            self.log(
+                "Val/acc_k@3",
+                self.validation_accuracy_k3,
+            )
+        else:
+            self.validation_distance(outputs["preds"], outputs["y"])
+            self.log(
+                "Val/mse",
+                self.validation_distance,
+            )
 
-    total_training_examples = checkpoint["total_training_examples"]
+    def test_step(self, batch, batch_idx):
+        x, y = batch
+        preds = self.model(x)
+        loss = self.criterion(preds, y)
+        self.log("Val/loss", loss, sync_dist=True)
+        if self.control_mode == "keyboard":
+            preds = torch.argmax(torch.functional.F.softmax(x, dim=2), dim=2)
 
-    total_batches = checkpoint["total_batches"]
+        return {"loss": loss, "preds": preds, "y": y}
 
-    scaler: Optional[GradScaler]
-    if scaler_state:
-        scaler = GradScaler()
-        scaler.load_state_dict(scaler_state)
-    else:
-        scaler = None
+    def test_step_end(self, outputs):
+        if self.control_mode == "keyboard":
+            self.test_accuracy_k1(outputs["preds"], outputs["y"])
+            self.test_accuracy_k3(outputs["preds"], outputs["y"])
+            self.log(
+                "Val/acc_k@1",
+                self.test_accuracy_k1,
+            )
 
-    try:
-        loss_per_joystick = checkpoint["loss_per_joystick"]
-    except KeyError:
-        print(
-            f"{path} is a legacy checkpoint, we will initialize loss_per_joystick as tensor of zeros."
-        )
-        loss_per_joystick = torch.tensor([0.0, 0.0, 0.0], requires_grad=False)
+            self.log(
+                "Val/acc_k@3",
+                self.test_accuracy_k3,
+            )
+        else:
+            self.test_distance(outputs["preds"], outputs["y"])
+            self.log(
+                "Val/mse",
+                self.test_distance,
+            )
 
-    return (
-        model,
-        optimizer_name,
-        optimizer,
-        scheduler,
-        running_loss,
-        loss_per_joystick,
-        total_batches,
-        total_training_examples,
-        min_loss_dev,
-        epoch,
-        scaler,
+
+def configure_optimizers(self):
+    optimizer = torch.optim.AdamW(
+        self.parameters(), lr=self.learning_rate, weight_decay=self.weight_decay
     )
+
+    return {
+        "optimizer": optimizer,
+        "lr_scheduler": {
+            "scheduler": torch.optim.lr_scheduler.ReduceLROnPlateau(
+                optimizer, "min", patience=5, verbose=True
+            ),
+            "monitor": "Val/loss",
+        },
+    }
+
+
