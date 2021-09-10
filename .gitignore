@@ -133,3 +133,5 @@ runs*/
 */.ipynb_checkpoints/*
 
 debug/Test.ipynb
+
+.vs/

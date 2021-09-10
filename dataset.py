@@ -94,6 +94,25 @@ class SplitImages(object):
         }
 
 
+class MergeImages(object):
+    """Prepares the images for the model, unique dictionary instead of 5"""
+
+    def __call__(self, sample):
+        image1, image2, image3, image4, image5, y = (
+            sample["image1"],
+            sample["image2"],
+            sample["image3"],
+            sample["image4"],
+            sample["image5"],
+            sample["y"],
+        )
+
+        return {
+            "images": torch.stack([image1, image2, image3, image4, image5]),
+            "y": y,
+        }
+
+
 class ToTensor(object):
     """Convert ndarrays in sample to Tensors."""
 
@@ -215,6 +234,7 @@ class Tedd1104Dataset(Dataset):
                 SplitImages(),
                 ToTensor(),
                 Normalize(),
+                MergeImages(),
             ]
         )
         self.dataset_files = glob.glob(os.path.join(dataset_dir, "*.jpeg"))

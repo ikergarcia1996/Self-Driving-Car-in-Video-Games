@@ -1,7 +1,4 @@
-from typing import List, Union, Optional
-import os
-import json
-import math
+from typing import List
 import torch
 import torch.nn as nn
 import torchvision.models as models
@@ -137,8 +134,7 @@ class CrossEntropyLoss(torch.nn.Module):
         -Weighted CrossEntropyLoss: torch.tensor  [1] if reduction == "mean"
                                                     [9] if reduction == "sum"
         """
-
-        return self.CrossEntropyLoss(predicted, target)
+        return self.CrossEntropyLoss(predicted.view(-1, 9), target.view(-1).long())
 
 
 def get_resnet(model: int, pretrained: bool) -> torchvision.models.resnet.ResNet:
@@ -483,7 +479,6 @@ class TEDD1104LSTM(nn.Module):
     - hidden_size: LSTM hidden size
     - num_layers_lstm: number of layers in the LSTM
     - bidirectional_lstm: forward or bidirectional LSTM
-    - layers_out: list of integer, for each integer i a linear layer with i neurons will be added.
     - dropout_cnn: dropout probability for the CNN layers
     - dropout_cnn_out: dropout probability for the cnn features (output layer)
     - dropout_lstm: dropout probability for the LSTM
@@ -499,7 +494,6 @@ class TEDD1104LSTM(nn.Module):
         hidden_size: int,
         num_layers_lstm: int,
         bidirectional_lstm: bool,
-        layers_out: List[int],
         dropout_cnn: float,
         dropout_cnn_out: float,
         dropout_lstm: float,
@@ -517,7 +511,6 @@ class TEDD1104LSTM(nn.Module):
         self.hidden_size: int = hidden_size
         self.num_layers_lstm: int = num_layers_lstm
         self.bidirectional_lstm: bool = bidirectional_lstm
-        self.layers_out: List[int] = layers_out
         self.dropout_cnn: float = dropout_cnn
         self.dropout_cnn_out: float = dropout_cnn_out
         self.dropout_lstm: float = dropout_lstm
@@ -596,7 +589,6 @@ class TEDD1104Transformer(nn.Module):
         embedded_size: int,
         nhead: int,
         num_layers_transformer: int,
-        layers_out: List[int],
         dropout_cnn: float,
         dropout_cnn_out: float,
         positional_embeddings_dropout: float,
@@ -614,7 +606,6 @@ class TEDD1104Transformer(nn.Module):
         self.embedded_size: int = embedded_size
         self.nhead: int = nhead
         self.num_layers_transformer: int = num_layers_transformer
-        self.layers_out: List[int] = layers_out
         self.dropout_cnn: float = dropout_cnn
         self.dropout_cnn_out: float = dropout_cnn_out
         self.positional_embeddings_dropout: float = positional_embeddings_dropout
@@ -690,7 +681,6 @@ class Tedd1104ModelPL(pl.LightningModule):
     - embedded_size: Size of the feature vectors
     - nhead: number of heads for the transformer layer
     - num_layers_transformer: number of transformer layers in the encoder
-    - layers_out: list of integer, for each integer i a linear layer with i neurons will be added.
     - dropout_cnn: dropout probability for the CNN layers
     - dropout_cnn_out: dropout probability for the cnn features (output layer)
     - positional_embeddings_dropout: dropout probability for the transformer input embeddings
@@ -760,9 +750,8 @@ class Tedd1104ModelPL(pl.LightningModule):
                 embedded_size=self.embedded_size,
                 nhead=self.nhead,
                 num_layers_transformer=self.num_layers_encoder,
-                layers_out=self.layers_out,
                 dropout_cnn=self.dropout_cnn,
-                dropout_cnn_out=self.ropout_cnn_out,
+                dropout_cnn_out=self.dropout_cnn_out,
                 positional_embeddings_dropout=self.positional_embeddings_dropout,
                 dropout_transformer=self.dropout_encoder,
                 mask_prob=self.mask_prob,
@@ -776,7 +765,6 @@ class Tedd1104ModelPL(pl.LightningModule):
                 embedded_size=self.embedded_size,
                 hidden_size=self.lstm_hidden_size,
                 num_layers_lstm=self.num_layers_encoder,
-                layers_out=self.layers_out,
                 dropout_cnn=self.dropout_cnn,
                 bidirectional_lstm=self.bidirectional_lstm,
                 dropout_cnn_out=self.dropout_cnn_out,
@@ -807,7 +795,8 @@ class Tedd1104ModelPL(pl.LightningModule):
             return x
 
     def training_step(self, batch, batch_idx):
-        x, y = batch
+        x, y = batch["images"], batch["y"]
+        x = torch.flatten(x, start_dim=0, end_dim=1)
         preds = self.model(x)
         loss = self.criterion(preds, y)
         self.total_batches += 1
@@ -819,12 +808,14 @@ class Tedd1104ModelPL(pl.LightningModule):
         return loss
 
     def validation_step(self, batch, batch_idx):
-        x, y = batch
+        x, y = batch["images"], batch["y"]
+        x = torch.flatten(x, start_dim=0, end_dim=1)
         preds = self.model(x)
         loss = self.criterion(preds, y)
         self.log("Val/loss", loss, sync_dist=True)
+
         if self.control_mode == "keyboard":
-            preds = torch.argmax(torch.functional.F.softmax(x, dim=2), dim=2)
+            preds = torch.functional.F.softmax(preds, dim=1)
 
         return {"loss": loss, "preds": preds, "y": y}
 
@@ -849,12 +840,13 @@ class Tedd1104ModelPL(pl.LightningModule):
             )
 
     def test_step(self, batch, batch_idx):
-        x, y = batch
+        x, y = batch["images"], batch["y"]
+        x = torch.flatten(x, start_dim=0, end_dim=1)
         preds = self.model(x)
         loss = self.criterion(preds, y)
-        self.log("Val/loss", loss, sync_dist=True)
+        self.log("Test/loss", loss, sync_dist=True)
         if self.control_mode == "keyboard":
-            preds = torch.argmax(torch.functional.F.softmax(x, dim=2), dim=2)
+            preds = torch.functional.F.softmax(preds, dim=1)
 
         return {"loss": loss, "preds": preds, "y": y}
 
@@ -863,35 +855,32 @@ class Tedd1104ModelPL(pl.LightningModule):
             self.test_accuracy_k1(outputs["preds"], outputs["y"])
             self.test_accuracy_k3(outputs["preds"], outputs["y"])
             self.log(
-                "Val/acc_k@1",
+                "Test/acc_k@1",
                 self.test_accuracy_k1,
             )
 
             self.log(
-                "Val/acc_k@3",
+                "Test/acc_k@3",
                 self.test_accuracy_k3,
             )
         else:
             self.test_distance(outputs["preds"], outputs["y"])
             self.log(
-                "Val/mse",
+                "Test/mse",
                 self.test_distance,
             )
 
+    def configure_optimizers(self):
+        optimizer = torch.optim.AdamW(
+            self.parameters(), lr=self.learning_rate, weight_decay=self.weight_decay
+        )
 
-def configure_optimizers(self):
-    optimizer = torch.optim.AdamW(
-        self.parameters(), lr=self.learning_rate, weight_decay=self.weight_decay
-    )
-
-    return {
-        "optimizer": optimizer,
-        "lr_scheduler": {
-            "scheduler": torch.optim.lr_scheduler.ReduceLROnPlateau(
-                optimizer, "min", patience=5, verbose=True
-            ),
-            "monitor": "Val/loss",
-        },
-    }
-
-
+        return {
+            "optimizer": optimizer,
+            "lr_scheduler": {
+                "scheduler": torch.optim.lr_scheduler.ReduceLROnPlateau(
+                    optimizer, "min", patience=5, verbose=True
+                ),
+                "monitor": "Val/loss",
+            },
+        }

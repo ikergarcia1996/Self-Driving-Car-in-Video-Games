@@ -127,7 +127,7 @@ def train_new_model(
     - val_dir: Directory where the development files are stored
     - test_dir: Directory where the test files are stored
     - output_dir: Directory where the model and the checkpoints are going to be saved
-    - model_type: Use a transformer or a lstm encoder
+    - encoder_type: Use a transformer or a lstm encoder
     - batch_size: Batch size (Around 10 for RTX 2080 with 8GB , 32 for a RTX 3090 with 24GB)
     - num_epochs: Number of epochs to do
     - optimizer_name: Name of the optimizer to use [SGD, Adam]
@@ -312,7 +312,7 @@ if __name__ == "__main__":
     )
 
     parser.add_argument(
-        "--model_type",
+        "--encoder_type",
         type=str,
         choices=["lstm", "transformer"],
         default="transformer",
@@ -429,7 +429,7 @@ if __name__ == "__main__":
     )
 
     parser.add_argument(
-        "--num_layers",
+        "--num_layers_encoder",
         type=int,
         default=1,
         help="[new_model] number of layers in the LSTM or the Transformer",
@@ -463,10 +463,24 @@ if __name__ == "__main__":
     )
 
     parser.add_argument(
-        "--dropout_lstm",
+        "--dropout_encoder",
+        type=float,
+        default=0.1,
+        help="[new_model] Dropout of the encoder layer between 0.0 and 1.0",
+    )
+
+    parser.add_argument(
+        "--mask_prob",
         type=float,
         default=0.0,
-        help="[new_model] Dropout of the LSTM layer between 0.0 and 1.0",
+        help="[new_model] Probability of marking each feature of the transformer encoder",
+    )
+
+    parser.add_argument(
+        "--sequence_size",
+        type=int,
+        default=5,
+        help="[new_model] Place holder for future releases, sequence size is always 5 in the current model",
     )
 
     parser.add_argument(
