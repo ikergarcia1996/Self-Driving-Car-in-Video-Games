@@ -9,4 +9,7 @@ debug/
 
 runs*/
 
-*.ipynb
+.ipynb_checkpoints
+*/.ipynb_checkpoints/*
+
+Test.ipynb
