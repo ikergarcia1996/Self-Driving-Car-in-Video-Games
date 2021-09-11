@@ -80,6 +80,7 @@ def train(
         callbacks=[checkpoint_callback, lr_monitor],
         accelerator="ddp",
         default_root_dir=output_dir,
+        log_every_n_steps=10,
     )
 
     trainer.fit(model, datamodule=data)
@@ -403,7 +404,7 @@ if __name__ == "__main__":
 
     parser.add_argument(
         "--do_not_load_pretrained_resnet",
-        action="store_false",
+        action="store_true",
         help="[new_model] Do not load the pretrained weights for the resnet model",
     )
 
