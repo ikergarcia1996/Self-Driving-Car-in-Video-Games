@@ -322,7 +322,7 @@ class Tedd1104ataModule(pl.LightningDataModule):
                 control_mode=self.control_mode,
             )
 
-            print(f"Total validation samples: {len(self.train_dataset)}.")
+            print(f"Total validation samples: {len(self.val_dataset)}.")
 
         if stage in (None, "test"):
             self.test_dataset = Tedd1104Dataset(
@@ -333,7 +333,7 @@ class Tedd1104ataModule(pl.LightningDataModule):
                 control_mode=self.control_mode,
             )
 
-            print(f"Total test samples: {len(self.train_dataset)}.")
+            print(f"Total test samples: {len(self.test_dataset)}.")
 
     def train_dataloader(self):
         return DataLoader(
