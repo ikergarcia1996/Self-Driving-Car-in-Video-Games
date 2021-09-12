@@ -6,6 +6,7 @@ from screen.screen_recorder import ImageSequencer
 import cv2
 from PIL import Image
 from typing import Union
+from utils import IOHandler
 
 
 class BalancedDataset:
@@ -16,100 +17,48 @@ class BalancedDataset:
     """
 
     class_matrix: np.ndarray
-    lx_ranges: np.ndarray
-    lt_ranges: np.ndarray
-    rt_ranges: np.ndarray
+    io_handler: IOHandler
     total: int
 
-    def __init__(self, lx_classes: int = 6, lt_classes: int = 3, rt_classes: int = 3):
+    def __init__(self):
 
         """
         INIT
-        Input:
-         -lx_classes: integer, number of subranges into we will divide the lx range of values
-         -lr_classes: integer, number of subranges into we will divide the lt range of values
-         -rt_classes: integer, number of subranges into we will divide the rt range of values
-        Output:
         """
-        self.class_matrix = np.zeros(
-            (lx_classes, lt_classes, rt_classes), dtype=np.int32
-        )
+        self.class_matrix = np.zeros(9, dtype=np.int32)
 
-        self.lx_ranges = np.asarray(
-            [(i * (2 / lx_classes) - 1) for i in range(lx_classes + 1)],
-            dtype=np.float32,
-        )
-
-        self.lt_ranges = np.asarray(
-            [(i * (2 / lt_classes) - 1) for i in range(lt_classes + 1)],
-            dtype=np.float32,
-        )
-
-        self.rt_ranges = np.asarray(
-            [(i * (2 / rt_classes) - 1) for i in range(rt_classes + 1)],
-            dtype=np.float32,
-        )
+        self.io_handler = IOHandler()
 
         self.total = 0
 
-    def get_class(self, controller_input: np.ndarray) -> np.ndarray:
-        """
-        Given a controller inputs get its class
-        Input:
-         -controller input: np.ndarray [3]
-        Output:
-         -class of the input: np.ndarray [3]
-        """
-
-        lx_class: int = 0
-        lt_class: int = 0
-        rt_class: int = 0
-        for lx in range(len(self.lx_ranges) - 1):
-            if self.lx_ranges[lx] <= controller_input[0] <= self.lx_ranges[lx + 1]:
-                lx_class = lx
-                break
-
-        for lt in range(len(self.lt_ranges) - 1):
-            if self.lt_ranges[lt] <= controller_input[1] <= self.lt_ranges[lt + 1]:
-                lt_class = lt
-                break
-
-        for rt in range(len(self.rt_ranges) - 1):
-            if self.rt_ranges[rt] <= controller_input[2] <= self.rt_ranges[rt + 1]:
-                rt_class = rt
-                break
-
-        return np.asarray([lx_class, lt_class, rt_class], dtype=np.int32)
-
-    def balance_dataset(self, controller_input: np.ndarray) -> bool:
+    def balance_dataset(self, input_value: Union[np.ndarray, int]) -> bool:
         """
         Given a controller inputs decide if we will add this example to the dataset or no depending of how
         many example of the class of the input are already in the dataset. Fewer examples of the same class
         increases the probability of adding it to the dataset.
         Input:
-         -controller input: np.ndarray [3]
+         -controller input: np.ndarray [3] or int
         Output:
          -bool: True if we should add the example, False if there are already to many examples of this class
         """
-        example_class = self.get_class(controller_input=controller_input)
-        class_num_examples = self.class_matrix[
-            example_class[0], example_class[1], example_class[2]
-        ]
+        example_class = self.io_handler.input_conversion(
+            input_value=input_value, output_type="keyboard"
+        )
+
         if self.total != 0:
-            prop: float = ((self.total - class_num_examples) / self.total) ** 2
+            prop: float = (
+                (self.total - self.class_matrix[example_class]) / self.total
+            ) ** 2
             if prop <= 0.7:
                 prop = 0.1
 
             if np.random.rand() <= prop:
-                self.class_matrix[
-                    example_class[0], example_class[1], example_class[2]
-                ] += 1
+                self.class_matrix[example_class] += 1
                 self.total += 1
-                return True
             else:
                 return False
         else:
-            self.class_matrix[example_class[0], example_class[1], example_class[2]] += 1
+            self.class_matrix[example_class] += 1
             self.total += 1
             return True
 
@@ -119,7 +68,7 @@ class BalancedDataset:
         Return the matrix containing the number of examples per class in the dataset
         Input:
         Output:
-         -matrix: np.ndarray [lx_classes, lt_classes, rt_classes]
+         -matrix: np.ndarray [9]
         """
         return self.class_matrix
 
@@ -154,7 +103,7 @@ def get_last_file_num(dir_path: str) -> int:
      - dir_path path of the directory where the files are stored
     Output:
      - int max number in the directory. -1 if no file exits
-     """
+    """
 
     files = [
         int(f.split("%")[0])
@@ -223,7 +172,7 @@ def generate_dataset(
             img_seq, controller_input = img_sequencer.get_sequence()
 
             if not use_probability or data_balancer.balance_dataset(
-                controller_input=controller_input[-1]
+                input_value=controller_input[-1]
             ):
                 save_data(
                     dir_path=output_dir,

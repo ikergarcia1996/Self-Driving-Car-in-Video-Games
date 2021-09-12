@@ -18,7 +18,6 @@ def train(
     max_epochs: int,
     hide_map_prob: float,
     dropout_images_prob: List[float],
-    dataset_type: str = "keyboard",
     control_mode: str = "keyboard",
     val_check_interval: float = 0.25,
     dataloader_num_workers=os.cpu_count(),
@@ -43,7 +42,6 @@ def train(
     - variable_weights: List of 3 floats, weights for each output variable [LX, LT, RT]
       for the weighted mean squared error
     - fp16: Use FP16 for training
-    - dataset_type: Set if the dataset uses keyboard input (V2 dataset) or controller input.
     - control_mode: Set if the dataset true values will be keyboard inputs (9 classes)
       or Controller Inputs (2 continuous values)
     -val_check_interval: Validate model every val_check_interval of epoch 0<val_check_interval<=1
@@ -61,7 +59,6 @@ def train(
         batch_size=batch_size,
         hide_map_prob=hide_map_prob,
         dropout_images_prob=dropout_images_prob,
-        dataset_type=dataset_type,
         control_mode=control_mode,
         num_workers=dataloader_num_workers,
     )
@@ -99,7 +96,6 @@ def train_new_model(
     hide_map_prob: float = 0.0,
     dropout_images_prob=None,
     variable_weights: List[float] = None,
-    dataset_type: str = "keyboard",
     control_mode: str = "keyboard",
     val_check_interval: float = 0.25,
     dataloader_num_workers=os.cpu_count(),
@@ -197,7 +193,6 @@ def train_new_model(
         max_epochs=max_epochs,
         hide_map_prob=hide_map_prob,
         dropout_images_prob=dropout_images_prob,
-        dataset_type=dataset_type,
         control_mode=control_mode,
         val_check_interval=val_check_interval,
         dataloader_num_workers=dataloader_num_workers,
@@ -212,7 +207,6 @@ def continue_training(
     batch_size: int,
     hide_map_prob: float = 0.0,
     dropout_images_prob=None,
-    dataset_type: str = "keyboard",
     control_mode: str = "keyboard",
     dataloader_num_workers=os.cpu_count(),
 ):
@@ -256,7 +250,6 @@ def continue_training(
         batch_size=batch_size,
         hide_map_prob=hide_map_prob,
         dropout_images_prob=dropout_images_prob,
-        dataset_type=dataset_type,
         control_mode=control_mode,
         num_workers=dataloader_num_workers,
     )
@@ -490,12 +483,6 @@ if __name__ == "__main__":
         help="[continue_training] Path of the checkpoint to load for continue training it",
     )
 
-    parser.add_argument(
-        "--dataset_type",
-        type=str,
-        choices=["keyboard", "controller"],
-        help="Set if the dataset uses keyboard input or controller input.",
-    )
 
     parser.add_argument(
         "--control_mode",
@@ -520,7 +507,6 @@ if __name__ == "__main__":
             hide_map_prob=args.hide_map_prob,
             dropout_images_prob=args.dropout_images_prob,
             variable_weights=args.variable_weights,
-            dataset_type=args.dataset_type,
             control_mode=args.control_mode,
             val_check_interval=args.val_check_interval,
             dataloader_num_workers=args.dataloader_num_workers,
@@ -550,7 +536,6 @@ if __name__ == "__main__":
             batch_size=args.batch_size,
             hide_map_prob=args.hide_map_prob,
             dropout_images_prob=args.dropout_images_prob,
-            dataset_type=args.dataset_type,
             control_mode=args.control_mode,
             dataloader_num_workers=args.dataloader_num_workers,
         )

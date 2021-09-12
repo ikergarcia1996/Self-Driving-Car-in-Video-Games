@@ -178,7 +178,6 @@ class Tedd1104Dataset(Dataset):
         dataset_dir: str,
         hide_map_prob: float,
         dropout_images_prob: List[float],
-        dataset_type: str = "keyboard",
         control_mode: str = "keyboard",
     ):
         """
@@ -190,7 +189,6 @@ class Tedd1104Dataset(Dataset):
           from the sequence of images (0<=hide_map_prob<=1)
         - dropout_images_prob List of 5 floats or None, probability for removing each input image during training
          (black image) from a training example (0<=dropout_images_prob<=1)
-        - dataset_type: Set if the dataset uses keyboard input or controller input.
         - control_mode: Set if the dataset true values will be keyboard inputs (9 classes)
           or Controller Inputs (2 continuous values)
         """
@@ -198,13 +196,7 @@ class Tedd1104Dataset(Dataset):
         self.dataset_dir = dataset_dir
         self.hide_map_prob = hide_map_prob
         self.dropout_images_prob = dropout_images_prob
-        self.dataset_type = dataset_type.lower()
         self.control_mode = control_mode.lower()
-
-        assert self.dataset_type in [
-            "keyboard",
-            "controller",
-        ], f"{self.dataset_type} dataset type not supported. Supported dataset types: [keyboard, controller].  "
 
         assert self.control_mode in [
             "keyboard",
@@ -265,9 +257,8 @@ class Tedd1104Dataset(Dataset):
                     int(len(self.dataset_files) * torch.rand(1))
                 ]
 
-        y = self.IOHandler.input_conversion(
+        y = self.IOHandler.imagename_input_conversion(
             image_name=img_name,
-            input_type=self.dataset_type,
             output_type=self.control_mode,
         )
 
@@ -285,7 +276,6 @@ class Tedd1104ataModule(pl.LightningDataModule):
         batch_size: int,
         hide_map_prob: float,
         dropout_images_prob: List[float],
-        dataset_type: str = "keyboard",
         control_mode: str = "keyboard",
         num_workers: int = os.cpu_count(),
     ):
@@ -297,7 +287,6 @@ class Tedd1104ataModule(pl.LightningDataModule):
 
         self.hide_map_prob = hide_map_prob
         self.dropout_images_prob = dropout_images_prob
-        self.dataset_type = dataset_type
         self.control_mode = control_mode
 
         self.num_workers = num_workers
@@ -308,7 +297,6 @@ class Tedd1104ataModule(pl.LightningDataModule):
                 dataset_dir=self.train_dir,
                 hide_map_prob=self.hide_map_prob,
                 dropout_images_prob=self.dropout_images_prob,
-                dataset_type=self.dataset_type,
                 control_mode=self.control_mode,
             )
 
@@ -318,7 +306,6 @@ class Tedd1104ataModule(pl.LightningDataModule):
                 dataset_dir=self.val_dir,
                 hide_map_prob=0.0,
                 dropout_images_prob=[0.0, 0.0, 0.0, 0.0, 0.0],
-                dataset_type=self.dataset_type,
                 control_mode=self.control_mode,
             )
 
@@ -329,7 +316,6 @@ class Tedd1104ataModule(pl.LightningDataModule):
                 dataset_dir=self.test_dir,
                 hide_map_prob=0.0,
                 dropout_images_prob=[0.0, 0.0, 0.0, 0.0, 0.0],
-                dataset_type=self.dataset_type,
                 control_mode=self.control_mode,
             )
 

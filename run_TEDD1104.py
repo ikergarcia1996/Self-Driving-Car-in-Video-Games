@@ -1,4 +1,4 @@
-from model import load_model, TEDD1104
+from model import Tedd1104ModelPL
 from keyboard.getkeys import key_check
 import argparse
 from screen.screen_recorder import ImageSequencer
@@ -8,23 +8,22 @@ import time
 from tkinter import *
 import numpy as np
 import cv2
-from segmentation.segmentation_coco import ImageSegmentation
-from torch.cuda.amp import autocast
 from torchvision import transforms
 from utils import mse
 from controller.xbox_controller_emulator import XboxControllerEmulator
+from keyboard.inputsHandler import select_key
+from keyboard.getkeys import key_press
+from utils import IOHandler
 
 if torch.cuda.is_available():
     device = torch.device("cuda:0")
 else:
     device = torch.device("cpu")
-    logging.warning(
-        "GPU not found, using CPU, inference will be very slow. CPU NOT COMPATIBLE WITH FP16"
-    )
+    logging.warning("GPU not found, using CPU, inference will be very slow.")
 
 
 def run_ted1104(
-    model_dir,
+    model_path,
     enable_evasion: bool,
     show_current_control: bool,
     num_parallel_sequences: int = 2,
@@ -32,8 +31,7 @@ def run_ted1104(
     height: int = 900,
     full_screen: bool = False,
     evasion_score=1000,
-    enable_segmentation: bool = False,
-    fp16: bool = True,
+    control_mode: str = "keyboard",
 ) -> None:
     """
     Generate dataset exampled from a human playing a videogame
@@ -68,17 +66,24 @@ def run_ted1104(
 
     """
 
+    assert control_mode in [
+        "keyboard",
+        "controller",
+    ], f"{control_mode} control mode not supported. Supported dataset types: [keyboard, controller].  "
+
     show_what_ai_sees: bool = False
     fp16: bool
-    model: TEDD1104
-    model = load_model(save_dir=model_dir, device=device)
-    xbox_controller: XboxControllerEmulator = XboxControllerEmulator()
-    if enable_segmentation:
-        image_segmentation = ImageSegmentation(
-            model_name="fcn_resnet101", device=device, fp16=fp16
-        )
-    else:
-        image_segmentation = None
+    model: Tedd1104ModelPL = Tedd1104ModelPL.load_from_checkpoint(model_path)
+
+    model.eval()
+    model.to(device)
+
+    model_output_mode: str = model.control_mode
+
+    io_handler: IOHandler = IOHandler()
+
+    if control_mode == "controller":
+        xbox_controller: XboxControllerEmulator = XboxControllerEmulator()
 
     transform = transforms.Compose(
         [
@@ -86,8 +91,6 @@ def run_ted1104(
             transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
         ]
     )
-
-    model.eval()
 
     img_sequencer = ImageSequencer(
         width=width,
@@ -110,11 +113,11 @@ def run_ted1104(
         text_label = None
 
     last_time: float = time.time()
-    model_prediction: np.ndarray = np.asarray([0.0, 0.0, 0.0])
     score: np.float = np.float(0)
     last_num: int = 5  # The image sequence starts with images containing zeros, wait until it is filled
 
     close_app: bool = False
+    model_prediction = np.zeros(3 if model_output_mode == "controller" else 1)
 
     while not close_app:
         try:
@@ -125,12 +128,6 @@ def run_ted1104(
             img_seq, _ = img_sequencer.get_sequence()
 
             init_copy_time: float = time.time()
-            if enable_segmentation:
-                img_seq: np.ndarray = image_segmentation.add_segmentation(
-                    np.copy(img_seq)
-                )
-            else:
-                img_seq: np.ndarray = np.copy(img_seq)
 
             keys = key_check()
             if "J" not in keys:
@@ -146,30 +143,22 @@ def run_ted1104(
                     dim=0,
                 ).to(device=device, dtype=torch.float)
 
-                with autocast(enabled=fp16):
-                    model_prediction: torch.tensor = model.predict(
-                        x.half() if fp16 else x
-                    )[0].cpu().numpy()
+                with torch.no_grad():
+                    model_prediction: torch.tensor = model.predict(x)[0].cpu().numpy()
 
-                if model_prediction[0] > 1.0:
-                    model_prediction[0] = 1.0
-                if model_prediction[1] > 1.0:
-                    model_prediction[1] = 1.0
-                if model_prediction[2] > 1.0:
-                    model_prediction[2] = 1.0
-
-                if model_prediction[0] < -1.0:
-                    model_prediction[0] = -1.0
-                if model_prediction[1] < -1.0:
-                    model_prediction[1] = -1.0
-                if model_prediction[2] < -1.0:
-                    model_prediction[2] = -1.0
-
-                xbox_controller.set_controller_state(
-                    lx=model_prediction[0],
-                    lt=model_prediction[1],
-                    rt=model_prediction[2],
+                model_prediction = io_handler.input_conversion(
+                    input_value=model_prediction,
+                    output_type=control_mode,
                 )
+
+                if control_mode == "controller":
+                    xbox_controller.set_controller_state(
+                        lx=model_prediction[0],
+                        lt=model_prediction[1],
+                        rt=model_prediction[2],
+                    )
+                else:
+                    select_key(model_prediction)
 
                 key_push_time: float = time.time()
 
@@ -185,17 +174,27 @@ def run_ted1104(
                             var.set("Evasion maneuver")
                             text_label.config(fg="blue")
                             root.update()
-                        xbox_controller.set_controller_state(lx=0, lt=1.0, rt=-1.0)
-                        time.sleep(1)
-                        if np.random.rand() > 0.5:
-                            xbox_controller.set_controller_state(
-                                lx=1.0, lt=0.0, rt=-1.0
-                            )
+                        if control_mode == "controller":
+                            xbox_controller.set_controller_state(lx=0, lt=1.0, rt=-1.0)
+                            time.sleep(1)
+                            if np.random.rand() > 0.5:
+                                xbox_controller.set_controller_state(
+                                    lx=1.0, lt=0.0, rt=-1.0
+                                )
+                            else:
+                                xbox_controller.set_controller_state(
+                                    lx=-1.0, lt=0.0, rt=-1.0
+                                )
+                            time.sleep(0.2)
                         else:
-                            xbox_controller.set_controller_state(
-                                lx=-1.0, lt=0.0, rt=-1.0
-                            )
-                        time.sleep(0.2)
+                            select_key(4)
+                            time.sleep(1)
+                            if np.random.rand() > 0.5:
+                                select_key(6)
+                            else:
+                                select_key(8)
+                            time.sleep(0.2)
+
                         if show_current_control:
                             var.set("T.E.D.D. 1104 Driving")
                             text_label.config(fg="green")
@@ -232,13 +231,19 @@ def run_ted1104(
                     show_what_ai_sees = True
 
             time_it: float = time.time() - last_time
+
+            if control_mode == "controller":
+                info_message = f"LX: {int(model_prediction[0]*100)}%\n"
+                f"LT: {int(model_prediction[1]*100)}%\n"
+                f"RT: {int(model_prediction[2]*100)}%"
+            else:
+                info_message = f"Predicted Key: {key_press(model_prediction)}"
+
             print(
                 f"Recording at {img_sequencer.screen_recorder.fps} FPS\n"
                 f"Actions per second {None if time_it==0 else 1/time_it}\n"
                 f"Reaction time: {round(key_push_time-init_copy_time,3) if key_push_time>0 else 0} secs\n"
-                f"LX: {int(model_prediction[0]*100)}%\n"
-                f"LT: {int(model_prediction[1]*100)}%\n"
-                f"RT: {int(model_prediction[2]*100)}%\n"
+                f"{info_message}\n"
                 f"Difference from img 1 to img 5 {None if not enable_evasion else score}\n"
                 f"Push Ctrl + C to exit\n"
                 f"Push L to see the input images\n"
@@ -251,7 +256,8 @@ def run_ted1104(
         except KeyboardInterrupt:
             print()
             img_sequencer.stop()
-            xbox_controller.stop()
+            if control_mode == "keyboard":
+                xbox_controller.stop()
             close_app = True
 
 
@@ -288,7 +294,7 @@ if __name__ == "__main__":
         help="num_parallel_sequences to record, is the number is larger the recorded sequence of images will be "
         "updated faster and the model  will use more recent images as well as being able to do more iterations "
         "per second. However if num_parallel_sequences is too high it wont be able to update the sequences with "
-        "1/10 secs between images (default capturate to generate training examples). ",
+        "1/10 secs between images (default capturete to generate training examples). ",
     )
 
     parser.add_argument(
@@ -299,11 +305,11 @@ if __name__ == "__main__":
     )
 
     parser.add_argument(
-        "--enable_segmentation",
-        action="store_true",
-        help="Image segmentation will be performed using a pretrained model. "
-        "Cars, persons, bikes.. will be highlighted to help the model to identify them. "
-        "Note: Segmentation will very significantly increase compuation time",
+        "--control_mode",
+        type=str,
+        choices=["keyboard", "controller"],
+        help="Set if the dataset true values will be keyboard inputs (9 classes) "
+        "or Controller Inputs (2 continuous values)",
     )
 
     parser.add_argument(
@@ -312,16 +318,10 @@ if __name__ == "__main__":
         help="full_screen: If you are playing in full screen (no window border on top) set this flag",
     )
 
-    parser.add_argument(
-        "--fp16",
-        action="store_true",
-        help="Use FP16 for inference (100% recommended if you run the model on a modern GPU/CPU with FP16 support) ",
-    )
-
     args = parser.parse_args()
 
     run_ted1104(
-        model_dir=args.model_dir,
+        model_path=args.model_path,
         width=args.width,
         height=args.height,
         full_screen=args.full_screen,
@@ -329,6 +329,5 @@ if __name__ == "__main__":
         show_current_control=args.show_current_control,
         num_parallel_sequences=args.num_parallel_sequences,
         evasion_score=args.evasion_score,
-        enable_segmentation=args.enable_segmentation,
-        fp16=args.fp16,
+        control_mode=args.control_mode,
     )

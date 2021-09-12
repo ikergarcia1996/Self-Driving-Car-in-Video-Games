@@ -1,5 +1,5 @@
 import datetime
-from typing import Union
+from typing import Union, List
 import numpy as np
 import os
 
@@ -58,7 +58,7 @@ class IOHandler:
         # self.keys2controllerMatrix_norm = length_normalize(self.keys2controllerMatrix)
 
     def keys2controller(self, keys: int) -> np.ndarray:
-        return self.keys2controller[keys]
+        return self.keys2controllerMatrix[keys]
 
     def controller2keys(self, controller_vector: np.ndarray) -> int:
         """
@@ -85,15 +85,18 @@ class IOHandler:
             )
         )
 
-    def input_conversion(
-        self, image_name: str, input_type: str, output_type: str
+    def imagename_input_conversion(
+        self, image_name: str, output_type: str
     ) -> Union[int, np.ndarray]:
-        if input_type == "controller":
+
+        input_values_txt: List[str] = (
+            os.path.basename(image_name)[:-5].split("_")[-1].split(",")
+        )
+
+        if len(input_values_txt) > 1:
+
             input_value: np.ndarray = np.asarray(
-                [
-                    float(x)
-                    for x in os.path.basename(image_name)[:-5].split("_")[-1].split(",")
-                ],
+                [float(x) for x in input_values_txt],
                 dtype=np.float32,
             )
 
@@ -105,8 +108,8 @@ class IOHandler:
                 raise ValueError(
                     f"{output_type} output type not supported. Supported outputs: [keyboard,controller]"
                 )
-        elif input_type == "keyboard":
-            input_value: int = int(os.path.basename(image_name)[-6])
+        else:
+            input_value: int = int(input_values_txt[0])
 
             if output_type == "controller":
                 return self.keys2controller(input_value)
@@ -117,7 +120,25 @@ class IOHandler:
                     f"{output_type} output type not supported. Supported outputs: [keyboard,controller]"
                 )
 
+    def input_conversion(
+        self, input_value: Union[int, np.ndarray], output_type: str
+    ) -> Union[int, np.ndarray]:
+        if type(input_value) == int:
+            if output_type == "controller":
+                return self.keys2controller(input_value)
+            elif output_type == "keyboard":
+                return input_value
+            else:
+                raise ValueError(
+                    f"{output_type} output type not supported. Supported outputs: [keyboard,controller]"
+                )
         else:
-            raise ValueError(
-                f"{input_type} input type not supported. Supported inputs: [keyboard,controller]"
-            )
+
+            if output_type == "controller":
+                return input_value
+            elif output_type == "keyboard":
+                return self.controller2keys(controller_vector=input_value)
+            else:
+                raise ValueError(
+                    f"{output_type} output type not supported. Supported outputs: [keyboard,controller]"
+                )
