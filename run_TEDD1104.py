@@ -14,6 +14,7 @@ from controller.xbox_controller_emulator import XboxControllerEmulator
 from keyboard.inputsHandler import select_key
 from keyboard.getkeys import key_press
 from utils import IOHandler
+from pytorch_lightning.callbacks import ModelCheckpoint
 
 if torch.cuda.is_available():
     device = torch.device("cuda:0")
@@ -73,7 +74,20 @@ def run_ted1104(
 
     show_what_ai_sees: bool = False
     fp16: bool
-    model: Tedd1104ModelPL = Tedd1104ModelPL.load_from_checkpoint(model_path)
+    model: Tedd1104ModelPL = Tedd1104ModelPL.load_from_checkpoint(
+        resnet=152,
+        pretrained_resnet=True,
+        embedded_size=512,
+        nhead=8,
+        num_layers_encoder=1,
+        lstm_hidden_size=512,
+        dropout_cnn=0.1,
+        dropout_cnn_out=0.1,
+        positional_embeddings_dropout=0.1,
+        dropout_encoder=0.1,
+        mask_prob=0.0,
+        checkpoint_path=model_path,
+    )
 
     model.eval()
     model.to(device)
@@ -144,11 +158,10 @@ def run_ted1104(
                 ).to(device=device, dtype=torch.float)
 
                 with torch.no_grad():
-                    model_prediction: torch.tensor = model.predict(x)[0].cpu().numpy()
+                    model_prediction: torch.tensor = model(x)[0].cpu().numpy()
 
                 model_prediction = io_handler.input_conversion(
-                    input_value=model_prediction,
-                    output_type=control_mode,
+                    input_value=model_prediction, output_type=control_mode,
                 )
 
                 if control_mode == "controller":
@@ -206,7 +219,8 @@ def run_ted1104(
                     text_label.config(fg="red")
                     root.update()
 
-                xbox_controller.set_controller_state(lx=0.0, lt=-1, rt=-1.0)
+                if control_mode == "controller":
+                    xbox_controller.set_controller_state(lx=0.0, lt=-1, rt=-1.0)
 
                 key_push_time: float = 0.0
 
@@ -256,7 +270,7 @@ def run_ted1104(
         except KeyboardInterrupt:
             print()
             img_sequencer.stop()
-            if control_mode == "keyboard":
+            if control_mode == "controller":
                 xbox_controller.stop()
             close_app = True
 
@@ -266,7 +280,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
 
     parser.add_argument(
-        "--model_dir",
+        "--model_path",
         type=str,
         required=True,
         help="Directory where the model to use is stored",
@@ -308,6 +322,7 @@ if __name__ == "__main__":
         "--control_mode",
         type=str,
         choices=["keyboard", "controller"],
+        default="keyboard",
         help="Set if the dataset true values will be keyboard inputs (9 classes) "
         "or Controller Inputs (2 continuous values)",
     )

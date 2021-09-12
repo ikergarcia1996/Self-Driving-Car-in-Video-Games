@@ -29,9 +29,7 @@ def mse(image1: np.ndarray, image2: np.ndarray) -> np.float:
     return err
 
 
-def length_normalize(
-    matrix: np.ndarray,
-) -> np.ndarray:
+def length_normalize(matrix: np.ndarray,) -> np.ndarray:
 
     norms = np.sqrt(np.sum(matrix ** 2, axis=1))
     norms[norms == 0] = 1
@@ -96,8 +94,7 @@ class IOHandler:
         if len(input_values_txt) > 1:
 
             input_value: np.ndarray = np.asarray(
-                [float(x) for x in input_values_txt],
-                dtype=np.float32,
+                [float(x) for x in input_values_txt], dtype=np.float32,
             )
 
             if output_type == "controller":
@@ -123,17 +120,17 @@ class IOHandler:
     def input_conversion(
         self, input_value: Union[int, np.ndarray], output_type: str
     ) -> Union[int, np.ndarray]:
-        if type(input_value) == int:
+
+        if type(input_value) == int or input_value.size == 1:
             if output_type == "controller":
-                return self.keys2controller(input_value)
+                return self.keys2controller(int(input_value))
             elif output_type == "keyboard":
-                return input_value
+                return int(input_value)
             else:
                 raise ValueError(
                     f"{output_type} output type not supported. Supported outputs: [keyboard,controller]"
                 )
         else:
-
             if output_type == "controller":
                 return input_value
             elif output_type == "keyboard":
