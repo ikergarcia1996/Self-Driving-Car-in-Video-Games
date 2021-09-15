@@ -14,7 +14,8 @@ from controller.xbox_controller_emulator import XboxControllerEmulator
 from keyboard.inputsHandler import select_key
 from keyboard.getkeys import key_press
 from utils import IOHandler
-from pytorch_lightning.callbacks import ModelCheckpoint
+import os
+import glob
 
 if torch.cuda.is_available():
     device = torch.device("cuda:0")
@@ -24,7 +25,7 @@ else:
 
 
 def run_ted1104(
-    model_path,
+    model_dir,
     enable_evasion: bool,
     show_current_control: bool,
     num_parallel_sequences: int = 2,
@@ -74,19 +75,19 @@ def run_ted1104(
 
     show_what_ai_sees: bool = False
     fp16: bool
-    model: Tedd1104ModelPL = Tedd1104ModelPL.load_from_checkpoint(
-        resnet=152,
-        pretrained_resnet=True,
-        embedded_size=512,
-        nhead=8,
-        num_layers_encoder=1,
-        lstm_hidden_size=512,
-        dropout_cnn=0.1,
-        dropout_cnn_out=0.1,
-        positional_embeddings_dropout=0.1,
-        dropout_encoder=0.1,
-        mask_prob=0.0,
-        checkpoint_path=model_path,
+
+    model_path = glob.glob(os.path.join(model_dir, "checkpoints/*.ckpt"))
+    if len(model_path) > 1:
+        print(
+            f"WARNING!!! We found multiple checkpoints in the directory, we will load the last one: {model_path}"
+        )
+
+    model_path = model_path[0]
+
+    hparams_path = os.path.join(model_dir, "hparams.yaml")
+
+    model = Tedd1104ModelPL.load_from_checkpoint(
+        checkpoint_path=model_path, hparams_file=hparams_path
     )
 
     model.eval()
@@ -161,7 +162,8 @@ def run_ted1104(
                     model_prediction: torch.tensor = model(x)[0].cpu().numpy()
 
                 model_prediction = io_handler.input_conversion(
-                    input_value=model_prediction, output_type=control_mode,
+                    input_value=model_prediction,
+                    output_type=control_mode,
                 )
 
                 if control_mode == "controller":
@@ -280,7 +282,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
 
     parser.add_argument(
-        "--model_path",
+        "--model_dir",
         type=str,
         required=True,
         help="Directory where the model to use is stored",
@@ -336,7 +338,7 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     run_ted1104(
-        model_path=args.model_path,
+        model_dir=args.model_dir,
         width=args.width,
         height=args.height,
         full_screen=args.full_screen,
