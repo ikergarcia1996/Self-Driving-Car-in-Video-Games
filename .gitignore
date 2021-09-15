@@ -135,3 +135,7 @@ runs*/
 debug/Test.ipynb
 
 .vs/
+
+*.slurm
+
+lightning_logs/

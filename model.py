@@ -149,15 +149,15 @@ def get_resnet(model: int, pretrained: bool) -> torchvision.models.resnet.ResNet
     - pretrained: Load model pretrained weights
     """
     if model == 18:
-        return models.resnet18(pretrained=pretrained, model_dir="models_cache")
+        return models.resnet18(pretrained=pretrained)
     elif model == 34:
-        return models.resnet34(pretrained=pretrained, model_dir="models_cache")
+        return models.resnet34(pretrained=pretrained)
     elif model == 50:
-        return models.resnet50(pretrained=pretrained, model_dir="models_cache")
+        return models.resnet50(pretrained=pretrained)
     elif model == 101:
-        return models.resnet101(pretrained=pretrained, model_dir="models_cache")
+        return models.resnet101(pretrained=pretrained)
     elif model == 152:
-        return models.resnet152(pretrained=pretrained, model_dir="models_cache")
+        return models.resnet152(pretrained=pretrained)
 
     raise ValueError(f"Resnet_{model} not found in torchvision.models")
 
@@ -786,6 +786,8 @@ class Tedd1104ModelPL(pl.LightningModule):
         else:
             self.validation_distance = torchmetrics.MeanSquaredError()
             self.criterion = WeightedMseLoss(weights=self.weights)
+
+        self.save_hyperparameters()
 
     def forward(self, x):
         x = self.model(x)

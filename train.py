@@ -5,6 +5,8 @@ from dataset import Tedd1104ataModule
 import os
 from pytorch_lightning import loggers as pl_loggers
 import pytorch_lightning as pl
+import glob
+import yaml
 
 
 def train(
@@ -76,11 +78,14 @@ def train(
         logger=tb_logger,
         callbacks=[checkpoint_callback, lr_monitor],
         accelerator="ddp",
-        default_root_dir=output_dir,
+        default_root_dir=os.path.join(output_dir, "trainer_checkpoint"),
         log_every_n_steps=10,
     )
 
     trainer.fit(model, datamodule=data)
+
+    print(f"Best model path: {checkpoint_callback.best_model_path}")
+
     trainer.test(datamodule=data, ckpt_path="best")
 
 
@@ -200,15 +205,18 @@ def train_new_model(
 
 
 def continue_training(
-    checkpoint_path: str,
+    checkpoint_dir: str,
     train_dir: str,
     val_dir: str,
     test_dir: str,
     batch_size: int,
+    max_epochs: int,
+    output_dir,
+    accumulation_steps,
     hide_map_prob: float = 0.0,
     dropout_images_prob=None,
-    control_mode: str = "keyboard",
     dataloader_num_workers=os.cpu_count(),
+    val_check_interval: float = 0.25,
 ):
 
     """
@@ -243,6 +251,20 @@ def continue_training(
     if dropout_images_prob is None:
         dropout_images_prob = [0.0, 0.0, 0.0, 0.0, 0.0]
 
+    model_path = glob.glob(os.path.join(checkpoint_dir, "checkpoints/*.ckpt"))
+    if len(model_path) > 1:
+        print(
+            f"WARNING!!! We found multiple checkpoints in the directory, we will load the last one: {model_path}"
+        )
+
+    model_path = model_path[0]
+
+    hparams_path = os.path.join(checkpoint_dir, "hparams.yaml")
+
+    model = Tedd1104ModelPL.load_from_checkpoint(
+        checkpoint_path=model_path, hparams_file=hparams_path
+    )
+
     data = Tedd1104ataModule(
         train_dir=train_dir,
         val_dir=val_dir,
@@ -250,12 +272,29 @@ def continue_training(
         batch_size=batch_size,
         hide_map_prob=hide_map_prob,
         dropout_images_prob=dropout_images_prob,
-        control_mode=control_mode,
+        control_mode=model.control_mode,
         num_workers=dataloader_num_workers,
     )
 
-    model = Tedd1104ModelPL.load_from_checkpoint(checkpoint_path)
-    trainer = pl.Trainer(resume_from_checkpoint=checkpoint_path)
+    print(f"Restoring checkpoint: {model_path}. hparams: {hparams_path}")
+
+    tb_logger = pl_loggers.TensorBoardLogger(output_dir)
+    lr_monitor = pl.callbacks.LearningRateMonitor(logging_interval="step")
+    checkpoint_callback = pl.callbacks.ModelCheckpoint(monitor="Val/loss", mode="min")
+
+    trainer = pl.Trainer(
+        resume_from_checkpoint=model_path,
+        precision=16,
+        gpus=-1,
+        val_check_interval=val_check_interval,
+        accumulate_grad_batches=accumulation_steps,
+        max_epochs=max_epochs,
+        logger=tb_logger,
+        callbacks=[checkpoint_callback, lr_monitor],
+        accelerator="ddp",
+        default_root_dir=os.path.join(output_dir, "trainer_checkpoint"),
+        log_every_n_steps=10,
+    )
 
     trainer.fit(model, datamodule=data)
     trainer.test(datamodule=data, ckpt_path="best")
@@ -478,11 +517,10 @@ if __name__ == "__main__":
     )
 
     parser.add_argument(
-        "--checkpoint_path",
+        "--checkpoint_dir",
         type=str,
         help="[continue_training] Path of the checkpoint to load for continue training it",
     )
-
 
     parser.add_argument(
         "--control_mode",
@@ -529,13 +567,15 @@ if __name__ == "__main__":
 
     else:
         continue_training(
-            checkpoint_path=args.checkpoint_path,
+            checkpoint_dir=args.checkpoint_dir,
             train_dir=args.train_dir,
             val_dir=args.val_dir,
             test_dir=args.test_dir,
+            output_dir=args.output_dir,
             batch_size=args.batch_size,
+            accumulation_steps=args.accumulation_steps,
+            max_epochs=args.max_epochs,
             hide_map_prob=args.hide_map_prob,
             dropout_images_prob=args.dropout_images_prob,
-            control_mode=args.control_mode,
             dataloader_num_workers=args.dataloader_num_workers,
         )
