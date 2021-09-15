@@ -15,7 +15,9 @@ class WeightedMseLoss(nn.Module):
     _loss_log: torch.tensor
 
     def __init__(
-        self, weights: List[float] = None, reduction: str = "mean",
+        self,
+        weights: List[float] = None,
+        reduction: str = "mean",
     ):
         """
         INIT
@@ -39,7 +41,11 @@ class WeightedMseLoss(nn.Module):
 
         self.register_buffer("weights", weights)
 
-    def forward(self, predicted: torch.tensor, target: torch.tensor,) -> torch.tensor:
+    def forward(
+        self,
+        predicted: torch.tensor,
+        target: torch.tensor,
+    ) -> torch.tensor:
 
         """
         Input:
@@ -80,7 +86,9 @@ class CrossEntropyLoss(torch.nn.Module):
     """
 
     def __init__(
-        self, weights: List[float] = None, reduction: str = "mean",
+        self,
+        weights: List[float] = None,
+        reduction: str = "mean",
     ):
         """
         INIT
@@ -110,7 +118,11 @@ class CrossEntropyLoss(torch.nn.Module):
             reduction=reduction, weight=weights
         )
 
-    def forward(self, predicted: torch.tensor, target: torch.tensor,) -> torch.tensor:
+    def forward(
+        self,
+        predicted: torch.tensor,
+        target: torch.tensor,
+    ) -> torch.tensor:
 
         """
         Input:
@@ -137,15 +149,15 @@ def get_resnet(model: int, pretrained: bool) -> torchvision.models.resnet.ResNet
     - pretrained: Load model pretrained weights
     """
     if model == 18:
-        return models.resnet18(pretrained=pretrained)
+        return models.resnet18(pretrained=pretrained, model_dir="models_cache")
     elif model == 34:
-        return models.resnet34(pretrained=pretrained)
+        return models.resnet34(pretrained=pretrained, model_dir="models_cache")
     elif model == 50:
-        return models.resnet50(pretrained=pretrained)
+        return models.resnet50(pretrained=pretrained, model_dir="models_cache")
     elif model == 101:
-        return models.resnet101(pretrained=pretrained)
+        return models.resnet101(pretrained=pretrained, model_dir="models_cache")
     elif model == 152:
-        return models.resnet152(pretrained=pretrained)
+        return models.resnet152(pretrained=pretrained, model_dir="models_cache")
 
     raise ValueError(f"Resnet_{model} not found in torchvision.models")
 
@@ -812,16 +824,19 @@ class Tedd1104ModelPL(pl.LightningModule):
             self.validation_accuracy_k1(outputs["preds"], outputs["y"])
             self.validation_accuracy_k3(outputs["preds"], outputs["y"])
             self.log(
-                "Val/acc_k@1", self.validation_accuracy_k1,
+                "Val/acc_k@1",
+                self.validation_accuracy_k1,
             )
 
             self.log(
-                "Val/acc_k@3", self.validation_accuracy_k3,
+                "Val/acc_k@3",
+                self.validation_accuracy_k3,
             )
         else:
             self.validation_distance(outputs["preds"], outputs["y"])
             self.log(
-                "Val/mse", self.validation_distance,
+                "Val/mse",
+                self.validation_distance,
             )
 
     def test_step(self, batch, batch_idx):
@@ -840,16 +855,19 @@ class Tedd1104ModelPL(pl.LightningModule):
             self.test_accuracy_k1(outputs["preds"], outputs["y"])
             self.test_accuracy_k3(outputs["preds"], outputs["y"])
             self.log(
-                "Test/acc_k@1", self.test_accuracy_k1,
+                "Test/acc_k@1",
+                self.test_accuracy_k1,
             )
 
             self.log(
-                "Test/acc_k@3", self.test_accuracy_k3,
+                "Test/acc_k@3",
+                self.test_accuracy_k3,
             )
         else:
             self.test_distance(outputs["preds"], outputs["y"])
             self.log(
-                "Test/mse", self.test_distance,
+                "Test/mse",
+                self.test_distance,
             )
 
     def configure_optimizers(self):
