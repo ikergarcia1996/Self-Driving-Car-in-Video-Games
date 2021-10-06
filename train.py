@@ -116,6 +116,7 @@ def train_new_model(
     dropout_cnn_out: float = 0.1,
     positional_embeddings_dropout: float = 0.1,
     dropout_encoder: float = 0.1,
+    dropout_encoder_features: float = 0.8,
     mask_prob: float = 0.0,
     sequence_size: int = 5,
     encoder_type: str = "transformer",
@@ -180,6 +181,7 @@ def train_new_model(
         dropout_cnn_out=dropout_cnn_out,
         positional_embeddings_dropout=positional_embeddings_dropout,
         dropout_encoder=dropout_encoder,
+        dropout_encoder_features=dropout_encoder_features,
         mask_prob=mask_prob,
         control_mode=control_mode,
         sequence_size=sequence_size,
@@ -509,6 +511,13 @@ if __name__ == "__main__":
     )
 
     parser.add_argument(
+        "--dropout_encoder_features",
+        type=float,
+        default=0.8,
+        help="[new_model] Dropout of the encoder output between 0.0 and 1.0",
+    )
+
+    parser.add_argument(
         "--mask_prob",
         type=float,
         default=0.0,
@@ -561,6 +570,7 @@ if __name__ == "__main__":
             lstm_hidden_size=args.lstm_hidden_size,
             dropout_cnn=args.dropout_cnn,
             dropout_cnn_out=args.dropout_cnn_out,
+            dropout_encoder_features=args.dropout_encoder_features,
             positional_embeddings_dropout=args.positional_embeddings_dropout,
             dropout_encoder=args.dropout_encoder,
             mask_prob=args.mask_prob,

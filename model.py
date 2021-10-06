@@ -1,4 +1,4 @@
-from typing import List
+from typing import List, Union
 import torch
 import torch.nn as nn
 import torchvision.models as models
@@ -191,7 +191,7 @@ class EncoderCNN(nn.Module):
         super(EncoderCNN, self).__init__()
         resnet: models.resnet.ResNet = get_resnet(resnet, pretrained_resnet)
         original_modules: List[nn.Module] = list(resnet.children())[:-1]
-        modules: List[nn.Module, nn.Dropout] = []  # delete the last fc layer.
+        modules: List[Union[nn.Module, nn.Dropout]] = []  # delete the last fc layer.
 
         for layer_no, layer in enumerate(original_modules):
             modules.append(layer)
@@ -202,15 +202,14 @@ class EncoderCNN(nn.Module):
 
         # if resnet.fc.in_features != embedded_size:
         self.fc: nn.Linear = nn.Linear(resnet.fc.in_features, embedded_size)
+        # self.bn: nn.BatchNorm1d = nn.BatchNorm1d(embedded_size, momentum=0.01)
         self.dropout: nn.Dropout = nn.Dropout(p=dropout_cnn_out)
-
-        self.bn: nn.BatchNorm1d = nn.BatchNorm1d(embedded_size, momentum=0.01)
 
     def forward(self, images: torch.tensor) -> torch.tensor:
         features = self.resnet(images)
         features = features.reshape(features.size(0), -1)
+        # features = self.bn(features)
         features = self.dropout(self.fc(features))
-        features = self.bn(features)
         return features
 
 
@@ -435,13 +434,15 @@ class OutputLayer(nn.Module):
     - num_classes: Number of classes, 9 for keyboard 3 for controller
     """
 
-    def __init__(self, d_model: int, num_classes: int):
+    def __init__(
+        self, d_model: int, num_classes: int, dropout_encoder_features: float = 0.8
+    ):
         super(OutputLayer, self).__init__()
 
         self.d_model = d_model
         self.num_classes = num_classes
 
-        self.dp = torch.nn.Dropout(p=0.8)
+        self.dp = torch.nn.Dropout(p=dropout_encoder_features)
 
         self.fc_action = torch.nn.Linear(self.d_model, self.num_classes)
 
@@ -482,6 +483,7 @@ class TEDD1104LSTM(nn.Module):
     - dropout_cnn: dropout probability for the CNN layers
     - dropout_cnn_out: dropout probability for the cnn features (output layer)
     - dropout_lstm: dropout probability for the LSTM
+    - dropout_encoder_features: Dropout probability for the LSTM output
     - control_mode: Keyboard: Classification model with 9 classes. Controller: Regression model with 3 variables
 
     """
@@ -497,6 +499,7 @@ class TEDD1104LSTM(nn.Module):
         dropout_cnn: float,
         dropout_cnn_out: float,
         dropout_lstm: float,
+        dropout_encoder_features: float,
         control_mode: str = "keyboard",
         sequence_size: int = 5,
     ):
@@ -514,6 +517,7 @@ class TEDD1104LSTM(nn.Module):
         self.dropout_cnn: float = dropout_cnn
         self.dropout_cnn_out: float = dropout_cnn_out
         self.dropout_lstm: float = dropout_lstm
+        self.dropout_encoder_features = dropout_encoder_features
         self.control_mode = control_mode
 
         self.EncoderCNN: EncoderCNN = EncoderCNN(
@@ -539,6 +543,7 @@ class TEDD1104LSTM(nn.Module):
         self.OutputLayer: OutputLayer = OutputLayer(
             d_model=embedded_size if not self.bidirectional_lstm else embedded_size * 2,
             num_classes=9 if self.control_mode == "keyboard" else 3,
+            dropout_encoder_features=self.dropout_encoder_features,
         )
 
     def forward(self, x: torch.tensor) -> torch.tensor:
@@ -576,7 +581,8 @@ class TEDD1104Transformer(nn.Module):
     - dropout_cnn: dropout probability for the CNN layers
     - dropout_cnn_out: dropout probability for the cnn features (output layer)
     - positional_embeddings_dropout: dropout probability for the transformer input embeddings
-    - dropout_transformer_out: dropout probability for the transformer features (output layer)
+    - dropout_transformer: dropout probability for the transformer layers
+    - dropout_encoder_features: Dropout probability for the transformer output
     - mask_prob: probability of masking each input vector before the transformer
     - control_mode: Keyboard: Classification model with 9 classes. Controller: Regression model with 3 variables
 
@@ -593,6 +599,7 @@ class TEDD1104Transformer(nn.Module):
         dropout_cnn_out: float,
         positional_embeddings_dropout: float,
         dropout_transformer: float,
+        dropout_encoder_features: float,
         mask_prob: float,
         control_mode: str = "keyboard",
         sequence_size: int = 5,
@@ -612,6 +619,7 @@ class TEDD1104Transformer(nn.Module):
         self.dropout_transformer: float = dropout_transformer
         self.mask_prob = mask_prob
         self.control_mode = control_mode
+        self.dropout_encoder_features = dropout_encoder_features
 
         self.EncoderCNN: EncoderCNN = EncoderCNN(
             embedded_size=embedded_size,
@@ -640,6 +648,7 @@ class TEDD1104Transformer(nn.Module):
         self.OutputLayer: OutputLayer = OutputLayer(
             d_model=embedded_size,
             num_classes=9 if self.control_mode == "keyboard" else 3,
+            dropout_encoder_features=dropout_encoder_features,
         )
 
     def forward(self, x: torch.tensor) -> torch.tensor:
@@ -703,6 +712,7 @@ class Tedd1104ModelPL(pl.LightningModule):
         positional_embeddings_dropout: float,
         dropout_encoder: float,
         mask_prob: float,
+        dropout_encoder_features: float = 0.8,
         control_mode: str = "keyboard",
         sequence_size: int = 5,
         encoder_type: str = "transformer",
@@ -736,6 +746,7 @@ class Tedd1104ModelPL(pl.LightningModule):
         self.dropout_cnn_out: float = dropout_cnn_out
         self.positional_embeddings_dropout: float = positional_embeddings_dropout
         self.dropout_encoder: float = dropout_encoder
+        self.dropout_encoder_features = dropout_encoder_features
         self.mask_prob = mask_prob
         self.bidirectional_lstm = bidirectional_lstm
         self.lstm_hidden_size = lstm_hidden_size
@@ -757,6 +768,7 @@ class Tedd1104ModelPL(pl.LightningModule):
                 mask_prob=self.mask_prob,
                 control_mode=self.control_mode,
                 sequence_size=self.sequence_size,
+                dropout_encoder_features=self.dropout_encoder_features,
             )
         else:
             self.model = TEDD1104LSTM(
@@ -771,6 +783,7 @@ class Tedd1104ModelPL(pl.LightningModule):
                 dropout_lstm=self.dropout_encoder,
                 control_mode=self.control_mode,
                 sequence_size=self.sequence_size,
+                dropout_encoder_features=self.dropout_encoder_features,
             )
 
         self.total_batches = 0
