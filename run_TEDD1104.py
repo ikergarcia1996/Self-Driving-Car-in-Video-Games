@@ -10,12 +10,23 @@ import numpy as np
 import cv2
 from torchvision import transforms
 from utils import mse
-from controller.xbox_controller_emulator import XboxControllerEmulator
 from keyboard.inputsHandler import select_key
 from keyboard.getkeys import key_press
 from utils import IOHandler
 import os
-import glob
+from typing import Optional
+
+try:
+    from controller.xbox_controller_emulator import XboxControllerEmulator
+
+    _controller_available = True
+except ImportError:
+    _controller_available = False
+    print(
+        f"[WARNING!] Controller emulation unavailable, see controller/setup.md for more info. "
+        f"You can ignore this warning if you will use the keyboard as controller for TEDD1104."
+    )
+
 
 if torch.cuda.is_available():
     device = torch.device("cuda:0")
@@ -25,7 +36,7 @@ else:
 
 
 def run_ted1104(
-    model_dir,
+    checkpoint_path: str,
     enable_evasion: bool,
     show_current_control: bool,
     num_parallel_sequences: int = 2,
@@ -34,6 +45,7 @@ def run_ted1104(
     full_screen: bool = False,
     evasion_score=1000,
     control_mode: str = "keyboard",
+    hparams_path: str = None,
 ) -> None:
     """
     Generate dataset exampled from a human playing a videogame
@@ -73,32 +85,47 @@ def run_ted1104(
         "controller",
     ], f"{control_mode} control mode not supported. Supported dataset types: [keyboard, controller].  "
 
+    if control_mode == "controller" and not _controller_available:
+        raise ModuleNotFoundError(
+            f"Controller emulation not available see controller/setup.md for more info."
+        )
+
     show_what_ai_sees: bool = False
     fp16: bool
 
-    model_path = glob.glob(os.path.join(model_dir, "checkpoints/*.ckpt"))
-    if len(model_path) > 1:
-        print(
-            f"WARNING!!! We found multiple checkpoints in the directory, we will load the last one: {model_path}"
-        )
+    if hparams_path is None:
+        # Try to find hparams file
+        model_dir = os.path.dirname(checkpoint_path)
+        hparamsp = os.path.join(model_dir, "hparams.yaml")
 
-    model_path = model_path[0]
+        if os.path.exists(hparamsp):
+            hparams_path = hparamsp
 
-    hparams_path = os.path.join(model_dir, "hparams.yaml")
+        else:
+            model_dir = os.path.dirname(model_dir)
+            hparamsp = os.path.join(model_dir, "hparams.yaml")
+            if os.path.exists(hparamsp):
+                hparams_path = hparamsp
+            else:
+                raise FileNotFoundError(
+                    f"Unable to find an hparams.yaml file, "
+                    f"please set the path for your hyperparameter file using the flag --hparams_path."
+                )
 
     model = Tedd1104ModelPL.load_from_checkpoint(
-        checkpoint_path=model_path, hparams_file=hparams_path
+        checkpoint_path=checkpoint_path, hparams_file=hparams_path
     )
 
     model.eval()
     model.to(device)
 
     model_output_mode: str = model.control_mode
-
     io_handler: IOHandler = IOHandler()
 
     if control_mode == "controller":
-        xbox_controller: XboxControllerEmulator = XboxControllerEmulator()
+        xbox_controller: Optional[XboxControllerEmulator] = XboxControllerEmulator()
+    else:
+        xbox_controller = None
 
     transform = transforms.Compose(
         [
@@ -162,8 +189,7 @@ def run_ted1104(
                     model_prediction: torch.tensor = model(x)[0].cpu().numpy()
 
                 model_prediction = io_handler.input_conversion(
-                    input_value=model_prediction,
-                    output_type=control_mode,
+                    input_value=model_prediction, output_type=control_mode,
                 )
 
                 if control_mode == "controller":
@@ -282,10 +308,17 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
 
     parser.add_argument(
-        "--model_dir",
+        "--checkpoint_path",
         type=str,
         required=True,
-        help="Directory where the model to use is stored",
+        help="Path to the model checkpoint",
+    )
+
+    parser.add_argument(
+        "--hparams_path",
+        type=str,
+        default=None,
+        help="Path to the hparams.yalm file, if None we will attempt to automatically discover it",
     )
 
     parser.add_argument("--width", type=int, default=1600, help="Game window width")
@@ -338,7 +371,7 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     run_ted1104(
-        model_dir=args.model_dir,
+        checkpoint_path=args.checkpoint_path,
         width=args.width,
         height=args.height,
         full_screen=args.full_screen,
@@ -347,4 +380,5 @@ if __name__ == "__main__":
         num_parallel_sequences=args.num_parallel_sequences,
         evasion_score=args.evasion_score,
         control_mode=args.control_mode,
+        hparams_path=args.hparams_path,
     )
