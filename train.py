@@ -6,7 +6,6 @@ import os
 from pytorch_lightning import loggers as pl_loggers
 import pytorch_lightning as pl
 import glob
-import yaml
 
 
 def train(
@@ -68,19 +67,19 @@ def train(
     tb_logger = pl_loggers.TensorBoardLogger(output_dir)
     lr_monitor = pl.callbacks.LearningRateMonitor(logging_interval="step")
     checkpoint_callback = pl.callbacks.ModelCheckpoint(
-        monitor="Val/loss", mode="min", save_last=True
+        monitor="Val/acc_k@1", mode="max", save_last=True
     )
     checkpoint_callback.CHECKPOINT_NAME_LAST = "{epoch}-last"
 
     trainer = pl.Trainer(
         precision=16,
-        gpus=-1,
+        gpus=1,
         val_check_interval=val_check_interval,
         accumulate_grad_batches=accumulation_steps,
         max_epochs=max_epochs,
         logger=tb_logger,
         callbacks=[checkpoint_callback, lr_monitor],
-        accelerator="ddp",
+        # accelerator="ddp",
         default_root_dir=os.path.join(output_dir, "trainer_checkpoint"),
         log_every_n_steps=10,
     )
@@ -256,13 +255,11 @@ def continue_training(
     if dropout_images_prob is None:
         dropout_images_prob = [0.0, 0.0, 0.0, 0.0, 0.0]
 
-    model_path = glob.glob(os.path.join(checkpoint_dir, "checkpoints/*.ckpt"))
+    model_path = os.path.join(checkpoint_dir, "checkpoints/epoch=0-last.ckpt")
     if len(model_path) > 1:
         print(
             f"WARNING!!! We found multiple checkpoints in the directory, we will load the last one: {model_path}"
         )
-
-    model_path = model_path[0]
 
     hparams_path = os.path.join(checkpoint_dir, "hparams.yaml")
 
@@ -286,7 +283,7 @@ def continue_training(
     tb_logger = pl_loggers.TensorBoardLogger(output_dir)
     lr_monitor = pl.callbacks.LearningRateMonitor(logging_interval="step")
     checkpoint_callback = pl.callbacks.ModelCheckpoint(
-        monitor="Val/loss", mode="min", save_last=True
+        monitor="Val/acc_k@1", mode="max", save_last=True
     )
     checkpoint_callback.CHECKPOINT_NAME_LAST = "{epoch}-last"
 

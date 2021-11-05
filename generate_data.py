@@ -73,7 +73,13 @@ class BalancedDataset:
         return self.class_matrix
 
 
-def save_data(dir_path: str, images: np.ndarray, y: np.ndarray, number: int):
+def save_data(
+    dir_path: str,
+    images: np.ndarray,
+    y: np.ndarray,
+    number: int,
+    control_mode: str = "keyboard",
+):
     """
     Save a training example
     Input:
@@ -83,9 +89,16 @@ def save_data(dir_path: str, images: np.ndarray, y: np.ndarray, number: int):
     Output:
 
     """
+    assert control_mode in [
+        "keyboard",
+        "controller",
+    ], f"Control mode: {control_mode} not supported. Available modes: [keyboard,controller]"
 
     filename = (
-        str(number)
+        "K"
+        if control_mode == "keyboard"
+        else "C"
+        + str(number)
         + "%"
         + "_".join([",".join([str(e) for e in elem]) for elem in y])
         + ".jpeg"
@@ -121,6 +134,7 @@ def generate_dataset(
     full_screen: bool = False,
     max_examples_per_second: int = 4,
     use_probability: bool = True,
+    control_mode: str = "keyboard",
 ) -> None:
     """
     Generate dataset exampled from a human playing a videogame
@@ -143,12 +157,21 @@ def generate_dataset(
 
     """
 
+    assert control_mode in [
+        "keyboard",
+        "controller",
+    ], f"Control mode: {control_mode} not supported. Available modes: [keyboard,controller]"
+
     if not os.path.exists(output_dir):
         print(f"{output_dir} does not exits. We will create it.")
         os.makedirs(output_dir)
 
     img_sequencer = ImageSequencer(
-        width=width, height=height, get_controller_input=True, full_screen=full_screen
+        width=width,
+        height=height,
+        get_controller_input=True,
+        control_mode=control_mode,
+        full_screen=full_screen,
     )
 
     data_balancer: Union[BalancedDataset, None]
@@ -179,6 +202,7 @@ def generate_dataset(
                     images=img_seq,
                     y=controller_input,
                     number=number_of_files,
+                    control_mode=control_mode,
                 )
 
                 number_of_files += 1

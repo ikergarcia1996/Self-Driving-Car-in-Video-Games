@@ -35,7 +35,7 @@ class WeightedMseLoss(nn.Module):
 
         self.reduction = reduction
         if not weights:
-            weights = [1.0, 1.0, 1.0]
+            weights = [1.0, 1.0]
         weights = torch.tensor(weights)
         weights.requires_grad = False
 
@@ -55,7 +55,7 @@ class WeightedMseLoss(nn.Module):
 
         Output:
         -weighted_mse_loss columwise: torch.tensor  [1] if reduction == "mean"
-                                                    [3] if reduction == "sum"
+                                                    [2] if reduction == "sum"
         """
 
         """
@@ -456,6 +456,58 @@ class OutputLayer(nn.Module):
         return self.fc_action(x)
 
 
+class Controller2Keyboard(nn.Module):
+    def __init__(self):
+        super(Controller2Keyboard, self).__init__()
+        keys2vector_matrix = torch.tensor(
+            [
+                [0.0, 0.0],
+                [-1.0, 0.0],
+                [1.0, 0.0],
+                [0.0, 1.0],
+                [0.0, -1.0],
+                [-1.0, 1.0],
+                [-1.0, -1.0],
+                [1.0, 1.0],
+                [1.0, -1.0],
+            ],
+            requires_grad=False,
+        )
+
+        self.register_buffer("keys2vector_matrix", keys2vector_matrix)
+
+    def forward(self, x: torch.tensor):
+        return 1.0 / (torch.cdist(x, self.keys2vector_matrix) + 1.0)
+
+
+class Keyboard2Controller(nn.Module):
+    def __init__(self):
+        super(Keyboard2Controller, self).__init__()
+        keys2vector_matrix = torch.tensor(
+            [
+                [0.0, 0.0],
+                [-1.0, 0.0],
+                [1.0, 0.0],
+                [0.0, 1.0],
+                [0.0, -1.0],
+                [-1.0, 1.0],
+                [-1.0, -1.0],
+                [1.0, 1.0],
+                [1.0, -1.0],
+            ],
+            requires_grad=False,
+        )
+
+        self.register_buffer("keys2vector_matrix", keys2vector_matrix)
+
+    def forward(self, x: torch.tensor):
+        controller_inputs = self.keys2vector_matrix.repeat(len(x), 1, 1)
+        return (
+            torch.sum(controller_inputs * x.view(len(x), 9, 1), dim=1)
+            / torch.sum(x, dim=-1)[:, None]
+        )
+
+
 class TEDD1104LSTM(nn.Module):
     """
     T.E.D.D 1104 LSTM consists of 3 modules:
@@ -542,7 +594,7 @@ class TEDD1104LSTM(nn.Module):
 
         self.OutputLayer: OutputLayer = OutputLayer(
             d_model=embedded_size if not self.bidirectional_lstm else embedded_size * 2,
-            num_classes=9 if self.control_mode == "keyboard" else 3,
+            num_classes=9 if self.control_mode == "keyboard" else 2,
             dropout_encoder_features=self.dropout_encoder_features,
         )
 
@@ -647,7 +699,7 @@ class TEDD1104Transformer(nn.Module):
 
         self.OutputLayer: OutputLayer = OutputLayer(
             d_model=embedded_size,
-            num_classes=9 if self.control_mode == "keyboard" else 3,
+            num_classes=9 if self.control_mode == "keyboard" else 2,
             dropout_encoder_features=dropout_encoder_features,
         )
 
@@ -789,25 +841,54 @@ class Tedd1104ModelPL(pl.LightningModule):
         self.total_batches = 0
         self.running_loss = 0
 
-        if self.control_mode == "keyboard":
-            self.validation_accuracy_k1 = torchmetrics.Accuracy(num_classes=9, top_k=1)
-            self.validation_accuracy_k3 = torchmetrics.Accuracy(num_classes=9, top_k=3)
-            self.test_accuracy_k1 = torchmetrics.Accuracy(num_classes=9, top_k=1)
-            self.test_accuracy_k3 = torchmetrics.Accuracy(num_classes=9, top_k=3)
+        self.validation_accuracy_k1 = torchmetrics.Accuracy(num_classes=9, top_k=1)
+        self.validation_accuracy_k3 = torchmetrics.Accuracy(num_classes=9, top_k=3)
+        self.test_accuracy_k1 = torchmetrics.Accuracy(num_classes=9, top_k=1)
+        self.test_accuracy_k3 = torchmetrics.Accuracy(num_classes=9, top_k=3)
 
+        if self.control_mode == "keyboard":
             self.criterion = CrossEntropyLoss(weights=self.weights)
+            self.Keyboard2Controller = Keyboard2Controller()
         else:
             self.validation_distance = torchmetrics.MeanSquaredError()
             self.criterion = WeightedMseLoss(weights=self.weights)
-
+            self.Controller2Keyboard = Controller2Keyboard()
         self.save_hyperparameters()
 
-    def forward(self, x):
+    def forward(self, x, output_mode: str = "keyboard", return_best: bool = True):
         x = self.model(x)
         if self.control_mode == "keyboard":
-            return torch.argmax(torch.functional.F.softmax(x, dim=1), dim=1)
+            x = torch.functional.F.softmax(x, dim=1)
+            if output_mode == "keyboard":
+                if return_best:
+                    return torch.argmax(x, dim=1)
+                else:
+                    return x
+
+            elif output_mode == "controller":
+                return self.Keyboard2Controller(x)
+            else:
+                raise ValueError(
+                    f"Output mode: {output_mode} not supported. Supported modes: [keyboard,controller]"
+                )
+
+        elif self.control_mode == "controller":
+            if output_mode == "controller":
+                return x
+            elif output_mode == "keyboard":
+                if return_best:
+                    return self.argmax(self.Controller2Keyboard(x), dim=-1)
+                else:
+                    return self.Controller2Keyboard(x)
+            else:
+                raise ValueError(
+                    f"Output mode: {output_mode} not supported. Supported modes: [keyboard,controller]"
+                )
+
         else:
-            return x.cpu()
+            raise ValueError(
+                f"Control mode: {self.control_mode} not supported. Supported modes: [keyboard,controller]"
+            )
 
     def training_step(self, batch, batch_idx):
         x, y = batch["images"], batch["y"]
@@ -825,16 +906,29 @@ class Tedd1104ModelPL(pl.LightningModule):
     def validation_step(self, batch, batch_idx):
         x, y = batch["images"], batch["y"]
         x = torch.flatten(x, start_dim=0, end_dim=1)
-        preds = self.model(x)
-        loss = self.criterion(preds, y)
-        self.log("Val/loss", loss, sync_dist=True)
+        preds = self.forward(x, output_mode="keyboard", return_best=False)
+        # loss = self.criterion(preds, y)
+        # self.log("Val/loss", loss, sync_dist=True)
 
-        if self.control_mode == "keyboard":
-            preds = torch.functional.F.softmax(preds, dim=1)
+        # if self.control_mode == "keyboard":
+        #    preds = torch.functional.F.softmax(preds, dim=1)
 
-        return {"loss": loss, "preds": preds, "y": y}
+        return {"preds": preds, "y": y}  # "loss":loss}
 
     def validation_step_end(self, outputs):
+        self.validation_accuracy_k1(outputs["preds"], outputs["y"])
+        self.validation_accuracy_k3(outputs["preds"], outputs["y"])
+        self.log(
+            "Val/acc_k@1",
+            self.validation_accuracy_k1,
+        )
+
+        self.log(
+            "Val/acc_k@3",
+            self.validation_accuracy_k3,
+        )
+
+        """
         if self.control_mode == "keyboard":
             self.validation_accuracy_k1(outputs["preds"], outputs["y"])
             self.validation_accuracy_k3(outputs["preds"], outputs["y"])
@@ -853,19 +947,33 @@ class Tedd1104ModelPL(pl.LightningModule):
                 "Val/mse",
                 self.validation_distance,
             )
+        """
 
     def test_step(self, batch, batch_idx):
         x, y = batch["images"], batch["y"]
         x = torch.flatten(x, start_dim=0, end_dim=1)
-        preds = self.model(x)
-        loss = self.criterion(preds, y)
-        self.log("Test/loss", loss, sync_dist=True)
-        if self.control_mode == "keyboard":
-            preds = torch.functional.F.softmax(preds, dim=1)
+        preds = self.forward(x, output_mode="keyboard", return_best=False)
+        # loss = self.criterion(preds, y)
+        # self.log("Val/loss", loss, sync_dist=True)
 
-        return {"loss": loss, "preds": preds, "y": y}
+        # if self.control_mode == "keyboard":
+        #    preds = torch.functional.F.softmax(preds, dim=1)
+
+        return {"preds": preds, "y": y}  # "loss":loss}
 
     def test_step_end(self, outputs):
+        self.test_accuracy_k1(outputs["preds"], outputs["y"])
+        self.test_accuracy_k3(outputs["preds"], outputs["y"])
+        self.log(
+            "Test/acc_k@1",
+            self.test_accuracy_k1,
+        )
+        self.log(
+            "Test/acc_k@3",
+            self.test_accuracy_k3,
+        )
+
+        """
         if self.control_mode == "keyboard":
             self.test_accuracy_k1(outputs["preds"], outputs["y"])
             self.test_accuracy_k3(outputs["preds"], outputs["y"])
@@ -884,6 +992,7 @@ class Tedd1104ModelPL(pl.LightningModule):
                 "Test/mse",
                 self.test_distance,
             )
+        """
 
     def configure_optimizers(self):
         optimizer = torch.optim.AdamW(
@@ -896,6 +1005,6 @@ class Tedd1104ModelPL(pl.LightningModule):
                 "scheduler": torch.optim.lr_scheduler.ReduceLROnPlateau(
                     optimizer, "min", patience=5, verbose=True
                 ),
-                "monitor": "Val/loss",
+                "monitor": "Val/acc_k@1",
             },
         }

@@ -306,7 +306,7 @@ class Tedd1104ataModule(pl.LightningDataModule):
                 dataset_dir=self.val_dir,
                 hide_map_prob=0.0,
                 dropout_images_prob=[0.0, 0.0, 0.0, 0.0, 0.0],
-                control_mode=self.control_mode,
+                control_mode="keyboard",
             )
 
             print(f"Total validation samples: {len(self.val_dataset)}.")
@@ -316,7 +316,7 @@ class Tedd1104ataModule(pl.LightningDataModule):
                 dataset_dir=self.test_dir,
                 hide_map_prob=0.0,
                 dropout_images_prob=[0.0, 0.0, 0.0, 0.0, 0.0],
-                control_mode=self.control_mode,
+                control_mode="keyboard",
             )
 
             print(f"Total test samples: {len(self.test_dataset)}.")

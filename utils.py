@@ -3,6 +3,8 @@ from typing import Union, List
 import numpy as np
 import os
 
+import torch
+
 
 def print_message(message: str) -> None:
     """
@@ -29,7 +31,9 @@ def mse(image1: np.ndarray, image2: np.ndarray) -> np.float:
     return err
 
 
-def length_normalize(matrix: np.ndarray,) -> np.ndarray:
+def length_normalize(
+    matrix: np.ndarray,
+) -> np.ndarray:
 
     norms = np.sqrt(np.sum(matrix ** 2, axis=1))
     norms[norms == 0] = 1
@@ -41,15 +45,15 @@ class IOHandler:
 
         self.keys2controllerMatrix = np.array(
             [
-                [0.0, -1.0, -1.0],
-                [-1.0, -1.0, -1.0],
-                [1.0, -1.0, -1.0],
-                [0.0, -1.0, 1.0],
-                [0.0, 1.0, -1.0],
-                [-1.0, -1.0, 1.0],
-                [-1.0, 1.0, -1.0],
-                [1.0, -1.0, 1.0],
-                [1.0, 1.0, -1.0],
+                [0.0, 0.0],
+                [-1.0, 0.0],
+                [1.0, 0.0],
+                [0.0, 1.0],
+                [0.0, -1.0],
+                [-1.0, 1.0],
+                [-1.0, -1.0],
+                [1.0, 1.0],
+                [1.0, -1.0],
             ]
         )
 
@@ -94,7 +98,12 @@ class IOHandler:
         if len(input_values_txt) > 1:
 
             input_value: np.ndarray = np.asarray(
-                [float(x) for x in input_values_txt], dtype=np.float32,
+                [float(x) for x in input_values_txt],
+                dtype=np.float32,
+            )
+
+            input_value = np.asarray(
+                [input_value[0], (input_value[2] - input_value[1]) / 2]
             )
 
             if output_type == "controller":

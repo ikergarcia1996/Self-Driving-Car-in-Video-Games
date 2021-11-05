@@ -16,6 +16,28 @@ def key_check():
     return keys
 
 
+def keys_to_id(keys: str) -> int:
+
+    if  keys=="A":
+        return 1
+    if keys =="D":
+        return 2
+    if keys =="W":
+        return 3
+    if keys =="S":
+        return 4
+    if keys=="AW"
+        return 5
+    if keys == "AS":
+        return 6
+    if keys =="DW":
+        return 7
+    if keys=="DS":
+        return 8
+
+    return 0
+
+
 def key_press(key):
     if key == 1:
         return "A"

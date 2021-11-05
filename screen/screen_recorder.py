@@ -7,6 +7,7 @@ import threading
 import logging
 import math
 from typing import Union
+from keyboard.getkeys import key_check, keys_to_id
 
 
 def preprocess_image(image):
@@ -18,7 +19,10 @@ def preprocess_image(image):
     - numpy ndarray: [480,270,3]
     """
     processed_image = cv2.resize(image, (480, 270))
-    return np.asarray(processed_image, dtype=np.uint8,)
+    return np.asarray(
+        processed_image,
+        dtype=np.uint8,
+    )
 
 
 class ScreenRecorder:
@@ -43,6 +47,7 @@ class ScreenRecorder:
         height: int = 900,
         full_screen: bool = False,
         get_controller_input: bool = False,
+        control_mode: str = "keyboard",
         total_wait_secs: int = 5,
     ):
         """
@@ -57,6 +62,13 @@ class ScreenRecorder:
 
         """
         print(f"We will capture a window of W:{width} x H:{height} size")
+
+        assert control_mode in [
+            "keyboard",
+            "controller",
+        ], f"Control mode: {control_mode} not supported. Available modes: [keyboard,controller]"
+
+        self.control_mode = control_mode
         self.width = width
         self.height = height
         self.get_controller_input = get_controller_input
@@ -70,7 +82,10 @@ class ScreenRecorder:
         self.back_buffer = np.zeros((width, height, 3), dtype=np.int8)
 
         if get_controller_input:
-            self.controller_input = np.zeros(3, dtype=np.float32)
+            if control_mode == "keyboard":
+                self.controller_input = np.zeros(1, dtype=np.int)
+            else:
+                self.controller_input = np.zeros(3, dtype=np.float32)
 
         self.stop_recording: threading.Event = threading.Event()
         self.img_thread: threading.Thread = threading.Thread(
@@ -92,7 +107,7 @@ class ScreenRecorder:
         Input:
          - stop_event: threading.Event that will stop the infinite loop when set
         """
-        if self.get_controller_input:
+        if self.get_controller_input and self.control_mode == "controller":
             self.controller_reader = XboxControllerReader(total_wait_secs=2)
 
         while not stop_event.is_set():
@@ -105,6 +120,8 @@ class ScreenRecorder:
                 self.front_buffer,
                 None
                 if not self.get_controller_input
+                else keys_to_id(key_check())
+                if self.control_mode == "keyboard"
                 else self.controller_reader.read(),
             )
 
@@ -156,6 +173,7 @@ class ImageSequencer:
         capturerate: float = 10.0,
         num_sequences: int = 2,
         total_wait_secs: int = 10,
+        control_mode: str = "keyboard",
     ):
         """
         INIT
@@ -177,10 +195,16 @@ class ImageSequencer:
          - total_wait_secs: Total secs to wait to prevent false readings
         """
 
+        assert control_mode in [
+            "keyboard",
+            "controller",
+        ], f"Control mode: {control_mode} not supported. Available modes: [keyboard,controller]"
+
         self.screen_recorder = ScreenRecorder(
             width=width,
             height=height,
             get_controller_input=get_controller_input,
+            control_mode=control_mode,
             total_wait_secs=5,
             full_screen=full_screen,
         )  # We will wait after the initialization of this class
@@ -207,23 +231,39 @@ class ImageSequencer:
         self.get_controller_input = get_controller_input
 
         if get_controller_input:
-            self.controller_sequences = np.repeat(
-                np.expand_dims(
-                    np.asarray(
-                        [
-                            np.zeros(3),
-                            np.zeros(3),
-                            np.zeros(3),
-                            np.zeros(3),
-                            np.zeros(3),
-                        ],
-                        dtype=np.float32,
+            if control_mode == "keyboard":
+                self.input_sequences = np.repeat(
+                    np.expand_dims(
+                        np.asarray(
+                            [
+                                np.zeros(1),
+                            ],
+                            dtype=np.int,
+                        ),
+                        0,
                     ),
-                    0,
-                ),
-                num_sequences,
-                axis=0,
-            )
+                    num_sequences,
+                    axis=0,
+                )
+            else:
+
+                self.input_sequences = np.repeat(
+                    np.expand_dims(
+                        np.asarray(
+                            [
+                                np.zeros(3),
+                                np.zeros(3),
+                                np.zeros(3),
+                                np.zeros(3),
+                                np.zeros(3),
+                            ],
+                            dtype=np.float32,
+                        ),
+                        0,
+                    ),
+                    num_sequences,
+                    axis=0,
+                )
 
         self.capture_rate = capturerate
         self.sequence_delay: float = 1.0 / capturerate / num_sequences
@@ -256,16 +296,14 @@ class ImageSequencer:
             for i in range(self.num_sequences):
                 start_time: float = time.time()
 
-                image, controller_input = np.copy(self.screen_recorder.get_image())
+                image, user_input = np.copy(self.screen_recorder.get_image())
 
                 self.image_sequences[i][0] = preprocess_image(image)
                 self.image_sequences[i] = self.image_sequences[i][[1, 2, 3, 4, 0]]
 
                 if self.get_controller_input:
-                    self.controller_sequences[i][0] = controller_input
-                    self.controller_sequences[i] = self.controller_sequences[i][
-                        [1, 2, 3, 4, 0]
-                    ]
+                    self.input_sequences[i][0] = user_input
+                    self.input_sequences[i] = self.input_sequences[i][[1, 2, 3, 4, 0]]
 
                 self.actual_sequence = i
                 self.num_sequence += 1
