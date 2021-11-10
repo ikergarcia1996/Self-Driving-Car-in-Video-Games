@@ -3,8 +3,6 @@ from typing import Union, List
 import numpy as np
 import os
 
-import torch
-
 
 def print_message(message: str) -> None:
     """

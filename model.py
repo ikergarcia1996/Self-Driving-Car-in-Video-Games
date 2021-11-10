@@ -1,4 +1,4 @@
-from typing import List, Union
+from typing import List
 import torch
 import torch.nn as nn
 import torchvision.models as models
@@ -49,7 +49,7 @@ class WeightedMseLoss(nn.Module):
 
         """
         Input:
-        - predicted: torch.tensor [batch_size, 3] Output from the model
+        - predicted: torch.tensor [batch_size, 3] Output from the cnn_model_name
         - predicted: torch.tensor [batch_size, 3] Gold values
 
 
@@ -126,7 +126,7 @@ class CrossEntropyLoss(torch.nn.Module):
 
         """
         Input:
-        - predicted: torch.tensor [batch_size, 9] Output from the model
+        - predicted: torch.tensor [batch_size, 9] Output from the cnn_model_name
         - predicted: torch.tensor [batch_size] Gold values
 
 
@@ -137,29 +137,28 @@ class CrossEntropyLoss(torch.nn.Module):
         return self.CrossEntropyLoss(predicted.view(-1, 9), target.view(-1).long())
 
 
-def get_resnet(model: int, pretrained: bool) -> torchvision.models.resnet.ResNet:
+def get_cnn(cnn_model_name: str, pretrained: bool) -> (torchvision.models, int):
     """
-    Get resnet model
+    Get resnet cnn_model_name
 
     Output:
      torchvision.models.resnet[18,34,50,101,152]
 
     Hyperparameters:
-    - model: Resnet model from torchvision.models (number of layers): [18,34,50,101,152]
-    - pretrained: Load model pretrained weights
+    - cnn_model_name: Resnet cnn_model_name from torchvision.models (number of layers): [18,34,50,101,152]
+    - pretrained: Load cnn_model_name pretrained weights
     """
-    if model == 18:
-        return models.resnet18(pretrained=pretrained)
-    elif model == 34:
-        return models.resnet34(pretrained=pretrained)
-    elif model == 50:
-        return models.resnet50(pretrained=pretrained)
-    elif model == 101:
-        return models.resnet101(pretrained=pretrained)
-    elif model == 152:
-        return models.resnet152(pretrained=pretrained)
 
-    raise ValueError(f"Resnet_{model} not found in torchvision.models")
+    cnn_call_method = getattr(models, cnn_model_name)
+    cnn_model = cnn_call_method(pretrained=pretrained)
+    _ = cnn_model._modules.popitem()
+    cnn_model = nn.Sequential(*list(cnn_model.children()))
+
+    # Test output_size
+    features = cnn_model(torch.zeros((1, 3, 270, 480), dtype=torch.float32))
+    output_size: int = features.reshape(features.size(0), -1).size(1)
+
+    return cnn_model, output_size
 
 
 class EncoderCNN(nn.Module):
@@ -183,33 +182,26 @@ class EncoderCNN(nn.Module):
     def __init__(
         self,
         embedded_size: int,
-        dropout_cnn: float,
         dropout_cnn_out: float,
-        resnet: int,
-        pretrained_resnet: bool,
+        cnn_model_name: str,
+        pretrained_cnn: bool,
     ):
         super(EncoderCNN, self).__init__()
-        resnet: models.resnet.ResNet = get_resnet(resnet, pretrained_resnet)
-        original_modules: List[nn.Module] = list(resnet.children())[:-1]
-        modules: List[Union[nn.Module, nn.Dropout]] = []  # delete the last fc layer.
 
-        for layer_no, layer in enumerate(original_modules):
-            modules.append(layer)
-            if layer_no + 1 != len(original_modules):
-                modules.append(nn.Dropout(dropout_cnn))
-
-        self.resnet: nn.Module = nn.Sequential(*modules)
+        self.cnn, self.cnn_output_size = get_cnn(
+            cnn_model_name=cnn_model_name, pretrained=pretrained_cnn
+        )
 
         # if resnet.fc.in_features != embedded_size:
-        self.fc: nn.Linear = nn.Linear(resnet.fc.in_features, embedded_size)
+        self.fc: nn.Linear = nn.Linear(self.cnn_output_size, embedded_size)
         # self.bn: nn.BatchNorm1d = nn.BatchNorm1d(embedded_size, momentum=0.01)
         self.dropout: nn.Dropout = nn.Dropout(p=dropout_cnn_out)
 
     def forward(self, images: torch.tensor) -> torch.tensor:
         features = self.resnet(images)
         features = features.reshape(features.size(0), -1)
-        # features = self.bn(features)
-        features = self.dropout(self.fc(features))
+        features = self.dropout(features)
+        features = self.fc(features)
         return features
 
 
@@ -536,19 +528,18 @@ class TEDD1104LSTM(nn.Module):
     - dropout_cnn_out: dropout probability for the cnn features (output layer)
     - dropout_lstm: dropout probability for the LSTM
     - dropout_encoder_features: Dropout probability for the LSTM output
-    - control_mode: Keyboard: Classification model with 9 classes. Controller: Regression model with 3 variables
+    - control_mode: Keyboard: Classification cnn_model_name with 9 classes. Controller: Regression cnn_model_name with 3 variables
 
     """
 
     def __init__(
         self,
-        resnet: int,
-        pretrained_resnet: bool,
+        cnn_model_name: str,
+        pretrained_cnn: bool,
         embedded_size: int,
         hidden_size: int,
         num_layers_lstm: int,
         bidirectional_lstm: bool,
-        dropout_cnn: float,
         dropout_cnn_out: float,
         dropout_lstm: float,
         dropout_encoder_features: float,
@@ -559,14 +550,13 @@ class TEDD1104LSTM(nn.Module):
         super(TEDD1104LSTM, self).__init__()
 
         # Remember hyperparameters.
-        self.resnet: int = resnet
-        self.pretrained_resnet: bool = pretrained_resnet
+        self.cnn_model_name: str = cnn_model_name
+        self.pretrained_cnn: bool = pretrained_cnn
         self.sequence_size: int = sequence_size
         self.embedded_size: int = embedded_size
         self.hidden_size: int = hidden_size
         self.num_layers_lstm: int = num_layers_lstm
         self.bidirectional_lstm: bool = bidirectional_lstm
-        self.dropout_cnn: float = dropout_cnn
         self.dropout_cnn_out: float = dropout_cnn_out
         self.dropout_lstm: float = dropout_lstm
         self.dropout_encoder_features = dropout_encoder_features
@@ -574,10 +564,9 @@ class TEDD1104LSTM(nn.Module):
 
         self.EncoderCNN: EncoderCNN = EncoderCNN(
             embedded_size=embedded_size,
-            dropout_cnn=dropout_cnn,
             dropout_cnn_out=dropout_cnn_out,
-            resnet=resnet,
-            pretrained_resnet=pretrained_resnet,
+            cnn_model_name=cnn_model_name,
+            pretrained_cnn=pretrained_cnn,
         )
 
         self.PackFeatureVectors: PackFeatureVectors = PackFeatureVectors(
@@ -636,18 +625,17 @@ class TEDD1104Transformer(nn.Module):
     - dropout_transformer: dropout probability for the transformer layers
     - dropout_encoder_features: Dropout probability for the transformer output
     - mask_prob: probability of masking each input vector before the transformer
-    - control_mode: Keyboard: Classification model with 9 classes. Controller: Regression model with 3 variables
+    - control_mode: Keyboard: Classification cnn_model_name with 9 classes. Controller: Regression cnn_model_name with 3 variables
 
     """
 
     def __init__(
         self,
-        resnet: int,
-        pretrained_resnet: bool,
+        cnn_model_name: str,
+        pretrained_cnn: bool,
         embedded_size: int,
         nhead: int,
         num_layers_transformer: int,
-        dropout_cnn: float,
         dropout_cnn_out: float,
         positional_embeddings_dropout: float,
         dropout_transformer: float,
@@ -659,13 +647,12 @@ class TEDD1104Transformer(nn.Module):
         super(TEDD1104Transformer, self).__init__()
 
         # Remember hyperparameters.
-        self.resnet: int = resnet
-        self.pretrained_resnet: bool = pretrained_resnet
+        self.cnn_model_name: str = cnn_model_name
+        self.pretrained_cnn: bool = pretrained_cnn
         self.sequence_size: int = sequence_size
         self.embedded_size: int = embedded_size
         self.nhead: int = nhead
         self.num_layers_transformer: int = num_layers_transformer
-        self.dropout_cnn: float = dropout_cnn
         self.dropout_cnn_out: float = dropout_cnn_out
         self.positional_embeddings_dropout: float = positional_embeddings_dropout
         self.dropout_transformer: float = dropout_transformer
@@ -675,10 +662,9 @@ class TEDD1104Transformer(nn.Module):
 
         self.EncoderCNN: EncoderCNN = EncoderCNN(
             embedded_size=embedded_size,
-            dropout_cnn=dropout_cnn,
             dropout_cnn_out=dropout_cnn_out,
-            resnet=resnet,
-            pretrained_resnet=pretrained_resnet,
+            cnn_model_name=cnn_model_name,
+            pretrained_cnn=pretrained_cnn,
         )
 
         self.PackFeatureVectors: PackFeatureVectors = PackFeatureVectors(
@@ -715,8 +701,8 @@ class Tedd1104ModelPL(pl.LightningModule):
     """
     T.E.D.D. 1104 (https://nazizombiesplus.fandom.com/wiki/T.E.D.D.) is the neural network that learns
     how to drive in videogames. It has been develop with Grand Theft Auto V (GTAV) in mind. However
-    it can learn how to drive in any videogame and if the model and controls are modified accordingly
-    it can play any game. The model receive as input 5 consecutive images that have been captured
+    it can learn how to drive in any videogame and if the cnn_model_name and controls are modified accordingly
+    it can play any game. The cnn_model_name receive as input 5 consecutive images that have been captured
     with a fixed time interval between then (by default 1/10 seconds) and learns the correct
     controller input.
 
@@ -747,19 +733,18 @@ class Tedd1104ModelPL(pl.LightningModule):
     - positional_embeddings_dropout: dropout probability for the transformer input embeddings
     - dropout_transformer_out: dropout probability for the transformer features (output layer)
     - mask_prob: probability of masking each input vector before the transformer
-    - control_mode: Keyboard: Classification model with 9 classes. Controller: Regression model with 3 variables
+    - control_mode: Keyboard: Classification cnn_model_name with 9 classes. Controller: Regression cnn_model_name with 3 variables
     - Encoder type: Use LSTM or Transformer as feature encoder [lstm, transformer]
     """
 
     def __init__(
         self,
-        resnet: int,
-        pretrained_resnet: bool,
+        cnn_model_name: str,
+        pretrained_cnn: bool,
         embedded_size: int,
         nhead: int,
         num_layers_encoder: int,
         lstm_hidden_size: int,
-        dropout_cnn: float,
         dropout_cnn_out: float,
         positional_embeddings_dropout: float,
         dropout_encoder: float,
@@ -788,13 +773,12 @@ class Tedd1104ModelPL(pl.LightningModule):
             "controller",
         ], f"{self.control_mode} control mode not supported. Supported dataset types: [keyboard, controller].  "
 
-        self.resnet: int = resnet
-        self.pretrained_resnet: bool = pretrained_resnet
+        self.cnn_model_name: str = cnn_model_name
+        self.pretrained_cnn: bool = pretrained_cnn
         self.sequence_size: int = sequence_size
         self.embedded_size: int = embedded_size
         self.nhead: int = nhead
         self.num_layers_encoder: int = num_layers_encoder
-        self.dropout_cnn: float = dropout_cnn
         self.dropout_cnn_out: float = dropout_cnn_out
         self.positional_embeddings_dropout: float = positional_embeddings_dropout
         self.dropout_encoder: float = dropout_encoder
@@ -808,12 +792,11 @@ class Tedd1104ModelPL(pl.LightningModule):
 
         if self.encoder_type == "transformer":
             self.model = TEDD1104Transformer(
-                resnet=self.resnet,
-                pretrained_resnet=self.pretrained_resnet,
+                cnn_model_name=self.cnn_model_name,
+                pretrained_cnn=self.pretrained_cnn,
                 embedded_size=self.embedded_size,
                 nhead=self.nhead,
                 num_layers_transformer=self.num_layers_encoder,
-                dropout_cnn=self.dropout_cnn,
                 dropout_cnn_out=self.dropout_cnn_out,
                 positional_embeddings_dropout=self.positional_embeddings_dropout,
                 dropout_transformer=self.dropout_encoder,
@@ -824,12 +807,11 @@ class Tedd1104ModelPL(pl.LightningModule):
             )
         else:
             self.model = TEDD1104LSTM(
-                resnet=self.resnet,
-                pretrained_resnet=self.pretrained_resnet,
+                cnn_model_name=self.cnn_model_name,
+                pretrained_cnn=self.pretrained_cnn,
                 embedded_size=self.embedded_size,
                 hidden_size=self.lstm_hidden_size,
                 num_layers_lstm=self.num_layers_encoder,
-                dropout_cnn=self.dropout_cnn,
                 bidirectional_lstm=self.bidirectional_lstm,
                 dropout_cnn_out=self.dropout_cnn_out,
                 dropout_lstm=self.dropout_encoder,

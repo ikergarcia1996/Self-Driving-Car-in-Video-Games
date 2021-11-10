@@ -5,7 +5,6 @@ from dataset import Tedd1104ataModule
 import os
 from pytorch_lightning import loggers as pl_loggers
 import pytorch_lightning as pl
-import glob
 
 
 def train(
@@ -98,7 +97,7 @@ def train_new_model(
     output_dir: str,
     batch_size: int,
     max_epochs: int,
-    resnet: int,
+    cnn_model_name: str,
     accumulation_steps: int = 1,
     hide_map_prob: float = 0.0,
     dropout_images_prob=None,
@@ -106,12 +105,11 @@ def train_new_model(
     control_mode: str = "keyboard",
     val_check_interval: float = 0.25,
     dataloader_num_workers=os.cpu_count(),
-    pretrained_resnet: bool = True,
+    pretrained_cnn: bool = True,
     embedded_size: int = 512,
     nhead: int = 8,
     num_layers_encoder: int = 1,
     lstm_hidden_size: int = 512,
-    dropout_cnn: float = 0.0,
     dropout_cnn_out: float = 0.1,
     positional_embeddings_dropout: float = 0.1,
     dropout_encoder: float = 0.1,
@@ -170,13 +168,12 @@ def train_new_model(
         dropout_images_prob = [0.0, 0.0, 0.0, 0.0, 0.0]
 
     model: Tedd1104ModelPL = Tedd1104ModelPL(
-        resnet=resnet,
-        pretrained_resnet=pretrained_resnet,
+        cnn_model_name=cnn_model_name,
+        pretrained_cnn=pretrained_cnn,
         embedded_size=embedded_size,
         nhead=nhead,
         num_layers_encoder=num_layers_encoder,
         lstm_hidden_size=lstm_hidden_size,
-        dropout_cnn=dropout_cnn,
         dropout_cnn_out=dropout_cnn_out,
         positional_embeddings_dropout=positional_embeddings_dropout,
         dropout_encoder=dropout_encoder,
@@ -431,18 +428,17 @@ if __name__ == "__main__":
     )
 
     parser.add_argument(
-        "--resnet",
-        type=int,
-        default=50,
-        choices=[18, 34, 50, 101, 152],
-        help="[new_model] Which of the resnet model availabel in torchvision.models use. Availabel model:"
-        "18, 34, 50, 101 and 152.",
+        "--cnn_model_name",
+        type=str,
+        default="resnet18152",
+        help="[new_model] CNN model name from torchvision models, see https://pytorch.org/vision/stable/models.html "
+        "for a list of available models.",
     )
 
     parser.add_argument(
-        "--do_not_load_pretrained_resnet",
+        "--do_not_load_pretrained_cnn",
         action="store_true",
-        help="[new_model] Do not load the pretrained weights for the resnet model",
+        help="[new_model] Do not load the pretrained weights for the cnn model",
     )
 
     parser.add_argument(
@@ -477,13 +473,6 @@ if __name__ == "__main__":
         "--bidirectional_lstm",
         action="store_true",
         help="[new_model LSTM] Use a bidirectional LSTM instead of a forward LSTM",
-    )
-
-    parser.add_argument(
-        "--dropout_cnn",
-        type=float,
-        default=0.0,
-        help="[new_model] Dropout of the CNN layers between 0.0 and 1.0",
     )
 
     parser.add_argument(
@@ -552,7 +541,7 @@ if __name__ == "__main__":
             output_dir=args.output_dir,
             batch_size=args.batch_size,
             max_epochs=args.max_epochs,
-            resnet=args.resnet,
+            cnn_model_name=args.cnn_model_name,
             accumulation_steps=args.accumulation_steps,
             hide_map_prob=args.hide_map_prob,
             dropout_images_prob=args.dropout_images_prob,
@@ -560,12 +549,11 @@ if __name__ == "__main__":
             control_mode=args.control_mode,
             val_check_interval=args.val_check_interval,
             dataloader_num_workers=args.dataloader_num_workers,
-            pretrained_resnet=not args.do_not_load_pretrained_resnet,
+            pretrained_cnn=not args.do_not_load_pretrained_cnn,
             embedded_size=args.embedded_size,
             nhead=args.nhead,
             num_layers_encoder=args.num_layers_encoder,
             lstm_hidden_size=args.lstm_hidden_size,
-            dropout_cnn=args.dropout_cnn,
             dropout_cnn_out=args.dropout_cnn_out,
             dropout_encoder_features=args.dropout_encoder_features,
             positional_embeddings_dropout=args.positional_embeddings_dropout,
