@@ -430,7 +430,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--cnn_model_name",
         type=str,
-        default="resnet18152",
+        default="resnet152",
         help="[new_model] CNN model name from torchvision models, see https://pytorch.org/vision/stable/models.html "
         "for a list of available models.",
     )

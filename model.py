@@ -194,11 +194,11 @@ class EncoderCNN(nn.Module):
 
         # if resnet.fc.in_features != embedded_size:
         self.fc: nn.Linear = nn.Linear(self.cnn_output_size, embedded_size)
-        # self.bn: nn.BatchNorm1d = nn.BatchNorm1d(embedded_size, momentum=0.01)
+        # self.bn: nn.BatchNormvalue = torch.tensor(value, device=device, dtype=torch.float)1d = nn.BatchNorm1d(embedded_size, momentum=0.01)
         self.dropout: nn.Dropout = nn.Dropout(p=dropout_cnn_out)
 
     def forward(self, images: torch.tensor) -> torch.tensor:
-        features = self.resnet(images)
+        features = self.cnn(images)
         features = features.reshape(features.size(0), -1)
         features = self.dropout(features)
         features = self.fc(features)
