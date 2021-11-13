@@ -11,13 +11,13 @@ def train(
     model: Tedd1104ModelPL,
     train_dir: str,
     val_dir: str,
-    test_dir: str,
     output_dir: str,
     batch_size: int,
     accumulation_steps: int,
     max_epochs: int,
     hide_map_prob: float,
     dropout_images_prob: List[float],
+    test_dir: str = None,
     control_mode: str = "keyboard",
     val_check_interval: float = 0.25,
     dataloader_num_workers=os.cpu_count(),
@@ -86,20 +86,20 @@ def train(
     trainer.fit(model, datamodule=data)
 
     print(f"Best model path: {checkpoint_callback.best_model_path}")
-
-    trainer.test(datamodule=data, ckpt_path="best")
+    if test_dir:
+        trainer.test(datamodule=data, ckpt_path="best")
 
 
 def train_new_model(
     train_dir: str,
     val_dir: str,
-    test_dir: str,
     output_dir: str,
     batch_size: int,
     max_epochs: int,
     cnn_model_name: str,
     accumulation_steps: int = 1,
     hide_map_prob: float = 0.0,
+    test_dir: str = None,
     dropout_images_prob=None,
     variable_weights: List[float] = None,
     control_mode: str = "keyboard",
@@ -206,14 +206,15 @@ def train_new_model(
 
 
 def continue_training(
-    checkpoint_dir: str,
+    checkpoint_path: str,
     train_dir: str,
     val_dir: str,
-    test_dir: str,
     batch_size: int,
     max_epochs: int,
     output_dir,
     accumulation_steps,
+    test_dir: str = None,
+    hparams_path: str = None,
     hide_map_prob: float = 0.0,
     dropout_images_prob=None,
     dataloader_num_workers=os.cpu_count(),
@@ -252,16 +253,27 @@ def continue_training(
     if dropout_images_prob is None:
         dropout_images_prob = [0.0, 0.0, 0.0, 0.0, 0.0]
 
-    model_path = os.path.join(checkpoint_dir, "checkpoints/epoch=0-last.ckpt")
-    if len(model_path) > 1:
-        print(
-            f"WARNING!!! We found multiple checkpoints in the directory, we will load the last one: {model_path}"
-        )
+    if hparams_path is None:
+        # Try to find hparams file
+        model_dir = os.path.dirname(checkpoint_path)
+        hparamsp = os.path.join(model_dir, "hparams.yaml")
 
-    hparams_path = os.path.join(checkpoint_dir, "hparams.yaml")
+        if os.path.exists(hparamsp):
+            hparams_path = hparamsp
+
+        else:
+            model_dir = os.path.dirname(model_dir)
+            hparamsp = os.path.join(model_dir, "hparams.yaml")
+            if os.path.exists(hparamsp):
+                hparams_path = hparamsp
+            else:
+                raise FileNotFoundError(
+                    f"Unable to find an hparams.yaml file, "
+                    f"please set the path for your hyperparameter file using the flag --hparams_path."
+                )
 
     model = Tedd1104ModelPL.load_from_checkpoint(
-        checkpoint_path=model_path, hparams_file=hparams_path
+        checkpoint_path=checkpoint_path, hparams_file=hparams_path
     )
 
     data = Tedd1104ataModule(
@@ -275,7 +287,7 @@ def continue_training(
         num_workers=dataloader_num_workers,
     )
 
-    print(f"Restoring checkpoint: {model_path}. hparams: {hparams_path}")
+    print(f"Restoring checkpoint: {checkpoint_path}. hparams: {hparams_path}")
 
     tb_logger = pl_loggers.TensorBoardLogger(output_dir)
     lr_monitor = pl.callbacks.LearningRateMonitor(logging_interval="step")
@@ -285,7 +297,7 @@ def continue_training(
     checkpoint_callback.CHECKPOINT_NAME_LAST = "{epoch}-last"
 
     trainer = pl.Trainer(
-        resume_from_checkpoint=model_path,
+        resume_from_checkpoint=checkpoint_path,
         precision=16,
         gpus=1,
         val_check_interval=val_check_interval,
@@ -299,7 +311,11 @@ def continue_training(
     )
 
     trainer.fit(model, datamodule=data)
-    trainer.test(datamodule=data, ckpt_path="best")
+
+    print(f"Best model path: {checkpoint_callback.best_model_path}")
+
+    if test_dir:
+        trainer.test(datamodule=data, ckpt_path="best")
 
 
 if __name__ == "__main__":
@@ -335,7 +351,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--test_dir",
         type=str,
-        required=True,
+        default=None,
         help="Directory containing the test files",
     )
 
@@ -518,9 +534,17 @@ if __name__ == "__main__":
     )
 
     parser.add_argument(
-        "--checkpoint_dir",
+        "--checkpoint_path",
         type=str,
         help="[continue_training] Path of the checkpoint to load for continue training it",
+    )
+
+    parser.add_argument(
+        "--hparams_path",
+        type=str,
+        default=None,
+        help="[continue_training] Path of the hparams file for the current checkpoint,"
+        "if not provided we will try to automatically find it",
     )
 
     parser.add_argument(
@@ -568,7 +592,8 @@ if __name__ == "__main__":
 
     else:
         continue_training(
-            checkpoint_dir=args.checkpoint_dir,
+            checkpoint_path=args.checkpoint_path,
+            hparams_path=args.hparams_path,
             train_dir=args.train_dir,
             val_dir=args.val_dir,
             test_dir=args.test_dir,

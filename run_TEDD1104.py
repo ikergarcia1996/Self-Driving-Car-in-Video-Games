@@ -12,7 +12,6 @@ from torchvision import transforms
 from utils import mse
 from keyboard.inputsHandler import select_key
 from keyboard.getkeys import key_press
-from utils import IOHandler
 import os
 from typing import Optional
 
@@ -119,9 +118,6 @@ def run_ted1104(
     model.eval()
     model.to(device)
 
-    model_output_mode: str = model.control_mode
-    io_handler: IOHandler = IOHandler()
-
     if control_mode == "controller":
         xbox_controller: Optional[XboxControllerEmulator] = XboxControllerEmulator()
     else:
@@ -159,7 +155,7 @@ def run_ted1104(
     last_num: int = 5  # The image sequence starts with images containing zeros, wait until it is filled
 
     close_app: bool = False
-    model_prediction = np.zeros(3 if model_output_mode == "controller" else 1)
+    model_prediction = np.zeros(3 if control_mode == "controller" else 1)
 
     while not close_app:
         try:
@@ -186,11 +182,11 @@ def run_ted1104(
                 ).to(device=device, dtype=torch.float)
 
                 with torch.no_grad():
-                    model_prediction: torch.tensor = model(x)[0].cpu().numpy()
-
-                model_prediction = io_handler.input_conversion(
-                    input_value=model_prediction, output_type=control_mode,
-                )
+                    model_prediction: torch.tensor = (
+                        model(x, output_mode=control_mode, return_best=True)[0]
+                        .cpu()
+                        .numpy()
+                    )
 
                 if control_mode == "controller":
                     xbox_controller.set_controller_state(

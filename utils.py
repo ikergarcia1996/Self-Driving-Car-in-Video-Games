@@ -89,14 +89,15 @@ class IOHandler:
         self, image_name: str, output_type: str
     ) -> Union[int, np.ndarray]:
 
-        input_values_txt: List[str] = (
-            os.path.basename(image_name)[:-5].split("_")[-1].split(",")
-        )
+        metadata = os.path.basename(image_name)[:-5]
+        header, values = metadata.split("%")
+        control_mode = header[0]
+        values = values.split("_")
 
-        if len(input_values_txt) > 1:
+        if control_mode == "controller":
 
             input_value: np.ndarray = np.asarray(
-                [float(x) for x in input_values_txt],
+                [float(x) for x in values[-1].split(",")],
                 dtype=np.float32,
             )
 
@@ -113,7 +114,7 @@ class IOHandler:
                     f"{output_type} output type not supported. Supported outputs: [keyboard,controller]"
                 )
         else:
-            input_value: int = int(input_values_txt[0])
+            input_value: int = int(values[-1])
 
             if output_type == "controller":
                 return self.keys2controller(input_value)

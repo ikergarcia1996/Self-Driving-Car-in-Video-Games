@@ -270,12 +270,12 @@ class Tedd1104Dataset(Dataset):
 class Tedd1104ataModule(pl.LightningDataModule):
     def __init__(
         self,
-        train_dir: str,
-        val_dir: str,
-        test_dir: str,
         batch_size: int,
-        hide_map_prob: float,
-        dropout_images_prob: List[float],
+        train_dir: str = None,
+        val_dir: str = None,
+        test_dir: str = None,
+        hide_map_prob: float = 0.0,
+        dropout_images_prob: List[float] = None,
         control_mode: str = "keyboard",
         num_workers: int = os.cpu_count(),
     ):
@@ -286,7 +286,9 @@ class Tedd1104ataModule(pl.LightningDataModule):
         self.batch_size = batch_size
 
         self.hide_map_prob = hide_map_prob
-        self.dropout_images_prob = dropout_images_prob
+        self.dropout_images_prob = (
+            dropout_images_prob if dropout_images_prob else [0.0, 0.0, 0.0, 0.0, 0.0]
+        )
         self.control_mode = control_mode
 
         self.num_workers = num_workers

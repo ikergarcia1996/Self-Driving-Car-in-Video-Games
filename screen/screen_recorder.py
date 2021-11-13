@@ -120,9 +120,11 @@ class ScreenRecorder:
                 self.front_buffer,
                 None
                 if not self.get_controller_input
-                else keys_to_id(key_check())
-                if self.control_mode == "keyboard"
-                else self.controller_reader.read(),
+                else (
+                    keys_to_id(key_check())
+                    if self.control_mode == "keyboard"
+                    else self.controller_reader.read()
+                ),
             )
 
             self.fps = int(1.0 / (time.time() - last_time))
