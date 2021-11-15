@@ -18,21 +18,21 @@ def key_check():
 
 def keys_to_id(keys: str) -> int:
 
-    if  keys=="A":
+    if keys == "A":
         return 1
-    if keys =="D":
+    if keys == "D":
         return 2
-    if keys =="W":
+    if keys == "W":
         return 3
-    if keys =="S":
+    if keys == "S":
         return 4
-    if keys=="AW"
+    if keys == "AW":
         return 5
     if keys == "AS":
         return 6
-    if keys =="DW":
+    if keys == "DW":
         return 7
-    if keys=="DS":
+    if keys == "DS":
         return 8
 
     return 0
