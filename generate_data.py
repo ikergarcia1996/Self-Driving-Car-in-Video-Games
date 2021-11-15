@@ -266,6 +266,14 @@ if __name__ == "__main__":
         "is not added we will use probability to try to generate a balanced dataset",
     )
 
+    parser.add_argument(
+        "--control_mode",
+        type=str,
+        default="keyboard",
+        choices=["keyboard", "controller"],
+        help="Record the keyboard or the controller",
+    )
+
     args = parser.parse_args()
 
     generate_dataset(
@@ -275,4 +283,5 @@ if __name__ == "__main__":
         full_screen=args.full_screen,
         max_examples_per_second=args.examples_per_second,
         use_probability=not args.save_everything,
+        control_mode=args.control_mode,
     )
