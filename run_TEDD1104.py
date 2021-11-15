@@ -159,10 +159,10 @@ def run_ted1104(
 
     while not close_app:
         try:
-            while last_num == img_sequencer.actual_sequence:
+            while last_num == img_sequencer.num_sequence:
                 time.sleep(0.01)
 
-            last_num = img_sequencer.actual_sequence
+            last_num = img_sequencer.num_sequence
             img_seq, _ = img_sequencer.get_sequence()
 
             init_copy_time: float = time.time()

@@ -3,8 +3,8 @@
 
 import win32api as wapi
 
-keyList = ["\b"]
-for char in "ABCDEFGHIJKLMNOPQRSTUVWXYZ 123456789,.'APS$/\\":
+keyList = []  # ["\b"]
+for char in "WASD":  # "ABCDEFGHIJKLMNOPQRSTUVWXYZ 123456789,.'APS$/\\":
     keyList.append(char)
 
 
@@ -13,7 +13,7 @@ def key_check():
     for key in keyList:
         if wapi.GetAsyncKeyState(ord(key)):
             keys.append(key)
-    return keys
+    return "".join(set(keys))
 
 
 def keys_to_id(keys: str) -> int:
@@ -26,13 +26,13 @@ def keys_to_id(keys: str) -> int:
         return 3
     if keys == "S":
         return 4
-    if keys == "AW":
+    if keys == "AW" or keys == "WA":
         return 5
-    if keys == "AS":
+    if keys == "AS" or keys == "SA":
         return 6
-    if keys == "DW":
+    if keys == "DW" or keys == "WD":
         return 7
-    if keys == "DS":
+    if keys == "DS" or keys == "SD":
         return 8
 
     return 0

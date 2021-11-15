@@ -55,6 +55,7 @@ class BalancedDataset:
             if np.random.rand() <= prop:
                 self.class_matrix[example_class] += 1
                 self.total += 1
+                return True
             else:
                 return False
         else:
@@ -95,9 +96,7 @@ def save_data(
     ], f"Control mode: {control_mode} not supported. Available modes: [keyboard,controller]"
 
     filename = (
-        "K"
-        if control_mode == "keyboard"
-        else "C"
+        ("K" if control_mode == "keyboard" else "C")
         + str(number)
         + "%"
         + "_".join([",".join([str(e) for e in elem]) for elem in y])
@@ -119,7 +118,7 @@ def get_last_file_num(dir_path: str) -> int:
     """
 
     files = [
-        int(f.split("%")[0])
+        int(f.split("%")[0][1:])
         for f in os.listdir(dir_path)
         if os.path.isfile(os.path.join(dir_path, f)) and f.endswith(".jpeg")
     ]
@@ -188,10 +187,10 @@ def generate_dataset(
     while not close_app:
         try:
             start_time: float = time.time()
-            while last_num == img_sequencer.actual_sequence:
+            while last_num == img_sequencer.num_sequence:
                 time.sleep(0.01)
 
-            last_num = img_sequencer.actual_sequence
+            last_num = img_sequencer.num_sequence
             img_seq, controller_input = img_sequencer.get_sequence()
 
             if not use_probability or data_balancer.balance_dataset(
@@ -216,9 +215,7 @@ def generate_dataset(
                 f"Examples per second: {round(1/(time.time()-start_time),1)} \n"
                 f"Images in sequence {len(img_seq)}\n"
                 f"Training data len {number_of_files} sequences\n"
-                f"LX: {int(controller_input[-1][0]*100)}%\n"
-                f"LT: {int(controller_input[-1][1]*100)}%\n"
-                f"LX: {int(controller_input[-1][2]*100)}%\n"
+                f"User input: {controller_input[-1]}\n"
                 f"Examples per class matrix:\n"
                 f"{None if not use_probability else data_balancer.get_matrix.T}\n"
                 f"Push Ctrl + C to exit",

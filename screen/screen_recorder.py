@@ -19,10 +19,7 @@ def preprocess_image(image):
     - numpy ndarray: [480,270,3]
     """
     processed_image = cv2.resize(image, (480, 270))
-    return np.asarray(
-        processed_image,
-        dtype=np.uint8,
-    )
+    return np.asarray(processed_image, dtype=np.uint8,)
 
 
 class ScreenRecorder:
@@ -159,7 +156,7 @@ class ImageSequencer:
     screen_recorder: ScreenRecorder
     num_sequences: int
     image_sequences: np.ndarray
-    controller_sequences: np.ndarray
+    input_sequences: np.ndarray
     get_controller_input: float
     capture_rate: float
     sequence_delay: float
@@ -173,7 +170,7 @@ class ImageSequencer:
         full_screen: bool = False,
         get_controller_input: bool = False,
         capturerate: float = 10.0,
-        num_sequences: int = 2,
+        num_sequences: int = 1,
         total_wait_secs: int = 10,
         control_mode: str = "keyboard",
     ):
@@ -239,8 +236,12 @@ class ImageSequencer:
                         np.asarray(
                             [
                                 np.zeros(1),
+                                np.zeros(1),
+                                np.zeros(1),
+                                np.zeros(1),
+                                np.zeros(1),
                             ],
-                            dtype=np.int,
+                            dtype=int,
                         ),
                         0,
                     ),
@@ -353,5 +354,5 @@ class ImageSequencer:
             self.image_sequences[self.actual_sequence],
             None
             if not self.get_controller_input
-            else self.controller_sequences[self.actual_sequence],
+            else self.input_sequences[self.actual_sequence],
         )
