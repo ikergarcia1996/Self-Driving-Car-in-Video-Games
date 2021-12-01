@@ -931,7 +931,7 @@ class Tedd1104ModelPL(pl.LightningModule):
             )
         """
 
-    def test_step(self, batch, batch_idx):
+    def test_step(self, batch, batch_idx, dataset_idx: int = 0):
         x, y = batch["images"], batch["y"]
         x = torch.flatten(x, start_dim=0, end_dim=1)
         preds = self.forward(x, output_mode="keyboard", return_best=False)
