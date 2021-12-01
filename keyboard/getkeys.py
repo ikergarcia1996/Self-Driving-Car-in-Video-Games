@@ -4,7 +4,7 @@
 import win32api as wapi
 
 keyList = []  # ["\b"]
-for char in "WASD":  # "ABCDEFGHIJKLMNOPQRSTUVWXYZ 123456789,.'APS$/\\":
+for char in "WASDJL":  # "ABCDEFGHIJKLMNOPQRSTUVWXYZ 123456789,.'APS$/\\":
     keyList.append(char)
 
 
