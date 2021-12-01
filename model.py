@@ -823,10 +823,18 @@ class Tedd1104ModelPL(pl.LightningModule):
         self.total_batches = 0
         self.running_loss = 0
 
-        self.validation_accuracy_k1 = torchmetrics.Accuracy(num_classes=9, top_k=1)
-        self.validation_accuracy_k3 = torchmetrics.Accuracy(num_classes=9, top_k=3)
-        self.test_accuracy_k1 = torchmetrics.Accuracy(num_classes=9, top_k=1)
-        self.test_accuracy_k3 = torchmetrics.Accuracy(num_classes=9, top_k=3)
+        self.validation_accuracy_k1 = torchmetrics.Accuracy(
+            num_classes=9, top_k=1, average="macro"
+        )
+        self.validation_accuracy_k3 = torchmetrics.Accuracy(
+            num_classes=9, top_k=3, average="macro"
+        )
+        self.test_accuracy_k1 = torchmetrics.Accuracy(
+            num_classes=9, top_k=1, average="macro"
+        )
+        self.test_accuracy_k3 = torchmetrics.Accuracy(
+            num_classes=9, top_k=3, average="macro"
+        )
 
         if self.control_mode == "keyboard":
             self.criterion = CrossEntropyLoss(weights=self.weights)
