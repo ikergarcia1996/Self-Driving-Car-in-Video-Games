@@ -1376,7 +1376,7 @@ class Tedd1104ModelPLForImageReordering(pl.LightningModule):
         self.train_accuracy(outputs["preds"], outputs["y"])
         self.log(
             "Train/acc",
-            self.validation_accuracy_k1,
+            self.train_accuracy,
         )
 
     def validation_step(self, batch, batch_idx):
@@ -1406,7 +1406,7 @@ class Tedd1104ModelPLForImageReordering(pl.LightningModule):
 
         self.log(
             "Test/acc",
-            self.test_accuracy_k1_micro,
+            self.test_accuracy,
         )
 
     def configure_optimizers(self):
