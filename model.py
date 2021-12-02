@@ -214,8 +214,8 @@ class EncoderCNN(nn.Module):
         self.dense = nn.Linear(self.cnn_output_size, self.cnn_output_size)
         self.layer_norm = nn.LayerNorm(self.cnn_output_size, eps=1e-05)
 
-        self.decoder = nn.Linear(self.cnn_output_size, self.d_model)
-        self.bias = nn.Parameter(torch.zeros(self.d_model))
+        self.decoder = nn.Linear(self.cnn_output_size, self.embedded_size)
+        self.bias = nn.Parameter(torch.zeros(self.embedded_size))
         self.decoder.bias = self.bias
         self.gelu = nn.GELU()
 
