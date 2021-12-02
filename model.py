@@ -544,7 +544,7 @@ class ImageOrderingLayer(nn.Module):
         self.gelu = nn.GELU()
 
     def forward(self, x):
-        x = self.dense(x)
+        x = self.dense(x)[:, 1:, :]  # Remove CLS
         x = self.gelu(x)
         x = self.layer_norm(x)
         x = self.decoder(x)
