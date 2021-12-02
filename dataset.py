@@ -94,6 +94,35 @@ class SplitImages(object):
         }
 
 
+class SequenceColorJitter(object):
+    """Prepares the images for the model, unique dictionary instead of 5"""
+
+    def __init__(self, brightness=0.5, contrast=0.1, saturation=0.1, hue=0.5):
+        self.jitter = transforms.ColorJitter(
+            brightness=brightness, contrast=contrast, saturation=saturation, hue=hue
+        )
+
+    def __call__(self, sample):
+        image1, image2, image3, image4, image5, y = (
+            sample["image1"],
+            sample["image2"],
+            sample["image3"],
+            sample["image4"],
+            sample["image5"],
+            sample["y"],
+        )
+
+        images = self.jitter(torch.stack([image1, image2, image3, image4, image5]))
+        return {
+            "image1": images[0],
+            "image2": images[1],
+            "image3": images[2],
+            "image4": images[3],
+            "image5": images[4],
+            "y": y,
+        }
+
+
 class MergeImages(object):
     """Prepares the images for the model, unique dictionary instead of 5"""
 
@@ -225,6 +254,7 @@ class Tedd1104Dataset(Dataset):
                 RemoveImage(dropout_images_prob=dropout_images_prob),
                 SplitImages(),
                 ToTensor(),
+                SequenceColorJitter(),
                 Normalize(),
                 MergeImages(),
             ]

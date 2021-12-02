@@ -2,7 +2,6 @@ from __future__ import print_function, division
 import os
 import torch
 from skimage import io
-import numpy as np
 from torch.utils.data import Dataset, DataLoader
 from torchvision import transforms
 import glob
@@ -15,6 +14,7 @@ from dataset import (
     SplitImages,
     MergeImages,
     Normalize,
+    SequenceColorJitter,
 )
 
 
@@ -112,6 +112,7 @@ class Tedd1104Dataset(Dataset):
                 RemoveImage(dropout_images_prob=dropout_images_prob),
                 SplitImages(),
                 ToTensor(),
+                SequenceColorJitter(),
                 Normalize(),
                 MergeImages(),
                 ReOrderImages(),
