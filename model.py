@@ -1370,7 +1370,7 @@ class Tedd1104ModelPLForImageReordering(pl.LightningModule):
         self.log(
             "Train/running_loss", self.running_loss / self.total_batches, sync_dist=True
         )
-        return {"preds": torch.argmax(preds, dim=-1), "y": y}
+        return {"preds": torch.argmax(preds, dim=-1), "y": y, "loss": loss}
 
     def training_step_end(self, outputs):
         self.train_accuracy(outputs["preds"], outputs["y"])
