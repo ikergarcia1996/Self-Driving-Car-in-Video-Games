@@ -90,19 +90,38 @@ def eval_model(
         results.append(
             [
                 os.path.basename(test_dir),
-                round(out["Test/acc_k@1"] * 100, 1),
-                round(out["Test/acc_k@3"] * 100, 1),
+                round(out["Test/acc_k@1_micro"] * 100, 1),
+                round(out["Test/acc_k@3_micro"] * 100, 1),
+                round(out["Test/acc_k@1_macro"] * 100, 1),
+                round(out["Test/acc_k@3_macro"] * 100, 1),
             ]
         )
         # print(out)
 
-    print(tabulate(results, headers=["Accuracy K@1", "Accuracy K@3"]))
+    print(
+        tabulate(
+            results,
+            headers=[
+                "Micro-Accuracy K@1",
+                "Micro-Accuracy K@3",
+                "Macro-Accuracy K@1",
+                "Macro-Accuracy K@3",
+            ],
+        )
+    )
 
     if output_path:
         with open(output_path, "w+", encoding="utf8") as output_file:
             print(
                 tabulate(
-                    results, headers=["Accuracy K@1", "Accuracy K@3"], tablefmt="tsv"
+                    results,
+                    headers=[
+                        "Micro-Accuracy K@1",
+                        "Micro-Accuracy K@3",
+                        "Macro-Accuracy K@1",
+                        "Macro-Accuracy K@3",
+                    ],
+                    tablefmt="tsv",
                 ),
                 file=output_file,
             )
