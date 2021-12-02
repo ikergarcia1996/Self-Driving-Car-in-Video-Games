@@ -1384,7 +1384,7 @@ class Tedd1104ModelPLForImageReordering(pl.LightningModule):
         x = torch.flatten(x, start_dim=0, end_dim=1)
         preds = self.forward(x, return_best=True)
 
-        return {"preds": torch.argmax(preds, dim=-1), "y": y}
+        return {"preds": preds, "y": y}
 
     def validation_step_end(self, outputs):
         self.validation_accuracy(outputs["preds"], outputs["y"])
@@ -1399,7 +1399,7 @@ class Tedd1104ModelPLForImageReordering(pl.LightningModule):
         x = torch.flatten(x, start_dim=0, end_dim=1)
         preds = self.forward(x, return_best=True)
 
-        return {"preds": torch.argmax(preds, dim=-1), "y": y}
+        return {"preds": preds, "y": y}
 
     def test_step_end(self, outputs):
         self.test_accuracy(outputs["preds"], outputs["y"])
