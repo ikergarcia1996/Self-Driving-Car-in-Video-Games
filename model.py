@@ -203,6 +203,7 @@ class EncoderCNN(nn.Module):
         dropout_cnn_out: float,
         cnn_model_name: str,
         pretrained_cnn: bool,
+        sequence_size: int,
     ):
         super(EncoderCNN, self).__init__()
 
@@ -210,6 +211,7 @@ class EncoderCNN(nn.Module):
         self.cnn_model_name = cnn_model_name
         self.dropout_cnn_out = dropout_cnn_out
         self.pretrained_cnn = pretrained_cnn
+        self.sequence_size = sequence_size
 
         self.cnn, self.cnn_output_size = get_cnn(
             cnn_model_name=cnn_model_name, pretrained=pretrained_cnn
@@ -670,6 +672,7 @@ class TEDD1104LSTM(nn.Module):
             dropout_cnn_out=dropout_cnn_out,
             cnn_model_name=cnn_model_name,
             pretrained_cnn=pretrained_cnn,
+            sequence_size=self.sequence_size,
         )
 
         self.EncoderRNN: EncoderRNN = EncoderRNN(
@@ -763,6 +766,7 @@ class TEDD1104Transformer(nn.Module):
             dropout_cnn_out=dropout_cnn_out,
             cnn_model_name=cnn_model_name,
             pretrained_cnn=pretrained_cnn,
+            sequence_size=self.sequence_size,
         )
 
         self.PositionalEncoding = PositionalEmbedding(
@@ -859,6 +863,7 @@ class TEDD1104TransformerForImageReordering(nn.Module):
             dropout_cnn_out=dropout_cnn_out,
             cnn_model_name=cnn_model_name,
             pretrained_cnn=pretrained_cnn,
+            sequence_size=self.sequence_size,
         )
 
         self.PositionalEncoding = PositionalEmbedding(
