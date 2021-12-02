@@ -515,7 +515,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--dropout_encoder_features",
         type=float,
-        default=0.8,
+        default=0.2,
         help="[new_model] Dropout of the encoder output between 0.0 and 1.0",
     )
 

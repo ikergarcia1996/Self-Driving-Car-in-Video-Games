@@ -137,6 +137,24 @@ class CrossEntropyLoss(torch.nn.Module):
         return self.CrossEntropyLoss(predicted.view(-1, 9), target.view(-1).long())
 
 
+class ImageReorderingAccuracy(torchmetrics.Metric):
+    def __init__(self, dist_sync_on_step=False):
+        super().__init__(dist_sync_on_step=dist_sync_on_step)
+
+        self.add_state("correct", default=torch.tensor(0), dist_reduce_fx="sum")
+        self.add_state("total", default=torch.tensor(0), dist_reduce_fx="sum")
+
+    def update(self, preds: torch.Tensor, target: torch.Tensor):
+        preds, target = self._input_format(preds, target)
+        assert preds.shape == target.shape
+
+        self.correct += torch.sum(torch.all(preds == target, dim=-1))
+        self.total += target.size(0)
+
+    def compute(self):
+        return self.correct.float() / self.total
+
+
 def get_cnn(cnn_model_name: str, pretrained: bool) -> (torchvision.models, int):
     """
     Get resnet cnn_model_name
@@ -192,17 +210,35 @@ class EncoderCNN(nn.Module):
             cnn_model_name=cnn_model_name, pretrained=pretrained_cnn
         )
 
-        # if resnet.fc.in_features != embedded_size:
-        self.fc: nn.Linear = nn.Linear(self.cnn_output_size, embedded_size)
-        # self.bn: nn.BatchNormvalue = torch.tensor(value, device=device, dtype=torch.float)1d = nn.BatchNorm1d(embedded_size, momentum=0.01)
-        self.dropout: nn.Dropout = nn.Dropout(p=dropout_cnn_out)
+        self.dp = nn.Dropout(p=dropout_cnn_out)
+        self.dense = nn.Linear(self.cnn_output_size, self.cnn_output_size)
+        self.layer_norm = nn.LayerNorm(self.cnn_output_size, eps=1e-05)
+
+        self.decoder = nn.Linear(self.cnn_output_size, self.d_model)
+        self.bias = nn.Parameter(torch.zeros(self.d_model))
+        self.decoder.bias = self.bias
+        self.gelu = nn.GELU()
 
     def forward(self, images: torch.tensor) -> torch.tensor:
         features = self.cnn(images)
         features = features.reshape(features.size(0), -1)
-        features = self.dropout(features)
-        features = self.fc(features)
+
+        features = features.view(
+            int(features.size(0) / self.sequence_size),
+            self.sequence_size,
+            features.size(1),
+        )
+
+        features = self.dp(features)
+        features = self.dense(features)
+        features = self.gelu(features)
+        features = self.layer_norm(features)
+        features = self.decoder(features)
         return features
+
+    def _tie_weights(self):
+        # To tie those two weights if they get disconnected (on TPU or when the bias is resized)
+        self.bias = self.decoder.bias
 
 
 class PackFeatureVectors(nn.Module):
@@ -305,11 +341,13 @@ class PositionalEmbedding(nn.Module):
         pe = pe.unsqueeze(0)
         self.pe = torch.nn.Parameter(pe)
         torch.nn.init.normal_(self.pe, std=0.02)
+        self.LayerNorm = nn.LayerNorm(self.d_model, eps=1e-05)
         self.dp = torch.nn.Dropout(p=dropout)
 
     def forward(self, x: torch.tensor) -> torch.tensor:
         pe = self.pe[:, : x.size(1)]
         x = pe + x
+        x = self.LayerNorm(x)
         x = self.dp(x)
         return x
 
@@ -412,6 +450,9 @@ class EncoderTransformer(nn.Module):
 
 class OutputLayer(nn.Module):
     """
+
+    FROM https://github.com/huggingface/transformers/blob/master/src/transformers/models/roberta/modeling_roberta.py
+
     Output linear layer that produces the predictions
 
     Input:
@@ -427,25 +468,70 @@ class OutputLayer(nn.Module):
     """
 
     def __init__(
-        self, d_model: int, num_classes: int, dropout_encoder_features: float = 0.8
+        self, d_model: int, num_classes: int, dropout_encoder_features: float = 0.2
     ):
         super(OutputLayer, self).__init__()
 
         self.d_model = d_model
         self.num_classes = num_classes
-
-        self.dp = torch.nn.Dropout(p=dropout_encoder_features)
-
-        self.fc_action = torch.nn.Linear(self.d_model, self.num_classes)
-
-        self.fc_action.requires_grad = True
-
-        torch.nn.init.xavier_uniform_(self.fc_action.weight)
-        self.fc_action.bias.data.zero_()
+        self.dense = nn.Linear(self.d_model, self.d_model)
+        self.dp = nn.Dropout(p=dropout_encoder_features)
+        self.out_proj = nn.Linear(self.d_model, self.num_classes)
+        self.tanh = nn.Tanh()
 
     def forward(self, x):
-        self.dp(x)
-        return self.fc_action(x)
+        x = x[:, 0, :]  # GET CLS TOKEN
+        x = self.dropout(x)
+        x = self.dense(x)
+        x = torch.tanh(x)
+        x = self.dropout(x)
+        x = self.out_proj(x)
+        return x
+
+
+class ImageOrderingLayer(nn.Module):
+    """
+
+    FROM https://github.com/huggingface/transformers/blob/master/src/transformers/models/roberta/modeling_roberta.py
+
+    Output linear layer that produces the predictions
+
+    Input:
+     torch.tensor [batch_size, hidden_size]
+
+    Output:
+     Forward: torch.tensor [batch_size, num_classes] (output values without softmax)
+
+
+    Hyperparameters:
+    - d_model: Size of the feature vectors
+    - num_classes: Number of classes, 9 for keyboard 3 for controller
+    """
+
+    def __init__(
+        self, d_model: int, num_classes: int, dropout_encoder_features: float = 0.2
+    ):
+        super(ImageOrderingLayer, self).__init__()
+
+        self.d_model = d_model
+        self.num_classes = num_classes
+        self.dense = nn.Linear(self.d_model, self.d_model)
+        self.layer_norm = nn.LayerNorm(self.d_model, eps=1e-05)
+        self.decoder = nn.Linear(self.d_model, self.num_classes)
+        self.bias = nn.Parameter(torch.zeros(num_classes))
+        self.decoder.bias = self.bias
+        self.gelu = nn.GELU()
+
+    def forward(self, x):
+        x = self.dense(x)
+        x = self.gelu(x)
+        x = self.layer_norm(x)
+        x = self.decoder(x)
+        return x
+
+    def _tie_weights(self):
+        # To tie those two weights if they get disconnected (on TPU or when the bias is resized)
+        self.bias = self.decoder.bias
 
 
 class Controller2Keyboard(nn.Module):
@@ -569,10 +655,6 @@ class TEDD1104LSTM(nn.Module):
             pretrained_cnn=pretrained_cnn,
         )
 
-        self.PackFeatureVectors: PackFeatureVectors = PackFeatureVectors(
-            sequence_size=sequence_size
-        )
-
         self.EncoderRNN: EncoderRNN = EncoderRNN(
             embedded_size=embedded_size,
             hidden_size=hidden_size,
@@ -589,7 +671,6 @@ class TEDD1104LSTM(nn.Module):
 
     def forward(self, x: torch.tensor) -> torch.tensor:
         x = self.EncoderCNN(x)
-        x = self.PackFeatureVectors(x)
         x = self.EncoderRNN(x)
         return self.OutputLayer(x)
 
@@ -667,10 +748,6 @@ class TEDD1104Transformer(nn.Module):
             pretrained_cnn=pretrained_cnn,
         )
 
-        self.PackFeatureVectors: PackFeatureVectors = PackFeatureVectors(
-            sequence_size=sequence_size
-        )
-
         self.PositionalEncoding = PositionalEmbedding(
             d_model=embedded_size, dropout=self.positional_embeddings_dropout
         )
@@ -691,9 +768,104 @@ class TEDD1104Transformer(nn.Module):
 
     def forward(self, x: torch.tensor) -> torch.tensor:
         x = self.EncoderCNN(x)
-        x = self.PackFeatureVectors(x)
         x = self.PositionalEncoding(x)
-        x = self.EncoderTransformer(x)[:, 0, :]
+        x = self.EncoderTransformer(x)
+        return self.OutputLayer(x)
+
+
+class TEDD1104TransformerForImageReordering(nn.Module):
+    """
+    T.E.D.D 1104 Transformer consists of 3 modules:
+        [*] A CNN (Resnet) that extract features from the images
+        [*] A Transformer that generates a representation of the sequence of features from the CNN
+        [*] A linear output layer that predicts the controller input.
+
+    Input:
+     torch.tensor [batch_size, num_channels, H, W]
+     For efficiency the input input is not packed as sequence of 5 images, all the images in the batch will be
+     encoded in the CNN and the features vectors will be packed as sequences of 5 vectors before feeding them to the
+     RNN.
+
+    Output:
+     Forward: torch.tensor [batch_size, 9 for keyboard 3 for controller] (output values without softmax)
+
+
+    Hyperparameters:
+    - resnet: resnet module to use [18,34,50,101,152]
+    - pretrained_resnet: Load pretrained resnet weights
+    - sequence_size: Length of each series of features
+    - embedded_size: Size of the feature vectors
+    - nhead: number of heads for the transformer layer
+    - num_layers_transformer: number of transformer layers in the encoder
+    - layers_out: list of integer, for each integer i a linear layer with i neurons will be added.
+    - dropout_cnn: dropout probability for the CNN layers
+    - dropout_cnn_out: dropout probability for the cnn features (output layer)
+    - positional_embeddings_dropout: dropout probability for the transformer input embeddings
+    - dropout_transformer: dropout probability for the transformer layers
+    - dropout_encoder_features: Dropout probability for the transformer output
+    - mask_prob: probability of masking each input vector before the transformer
+    - control_mode: Keyboard: Classification cnn_model_name with 9 classes. Controller: Regression cnn_model_name with 3 variables
+
+    """
+
+    def __init__(
+        self,
+        cnn_model_name: str,
+        pretrained_cnn: bool,
+        embedded_size: int,
+        nhead: int,
+        num_layers_transformer: int,
+        dropout_cnn_out: float,
+        positional_embeddings_dropout: float,
+        dropout_transformer: float,
+        dropout_encoder_features: float,
+        mask_prob: float,
+        sequence_size: int = 5,
+    ):
+        super(TEDD1104TransformerForImageReordering, self).__init__()
+
+        # Remember hyperparameters.
+        self.cnn_model_name: str = cnn_model_name
+        self.pretrained_cnn: bool = pretrained_cnn
+        self.sequence_size: int = sequence_size
+        self.embedded_size: int = embedded_size
+        self.nhead: int = nhead
+        self.num_layers_transformer: int = num_layers_transformer
+        self.dropout_cnn_out: float = dropout_cnn_out
+        self.positional_embeddings_dropout: float = positional_embeddings_dropout
+        self.dropout_transformer: float = dropout_transformer
+        self.mask_prob = mask_prob
+        self.dropout_encoder_features = dropout_encoder_features
+
+        self.EncoderCNN: EncoderCNN = EncoderCNN(
+            embedded_size=embedded_size,
+            dropout_cnn_out=dropout_cnn_out,
+            cnn_model_name=cnn_model_name,
+            pretrained_cnn=pretrained_cnn,
+        )
+
+        self.PositionalEncoding = PositionalEmbedding(
+            d_model=embedded_size, dropout=self.positional_embeddings_dropout
+        )
+
+        self.EncoderTransformer: EncoderTransformer = EncoderTransformer(
+            d_model=embedded_size,
+            nhead=nhead,
+            num_layers=num_layers_transformer,
+            mask_prob=self.mask_prob,
+            dropout=self.dropout_transformer,
+        )
+
+        self.OutputLayer: ImageOrderingLayer = ImageOrderingLayer(
+            d_model=embedded_size,
+            num_classes=self.sequence_size,
+            dropout_encoder_features=dropout_encoder_features,
+        )
+
+    def forward(self, x: torch.tensor) -> torch.tensor:
+        x = self.EncoderCNN(x)
+        x = self.PositionalEncoding(x)
+        x = self.EncoderTransformer(x)
         return self.OutputLayer(x)
 
 
@@ -849,6 +1021,7 @@ class Tedd1104ModelPL(pl.LightningModule):
             self.validation_distance = torchmetrics.MeanSquaredError()
             self.criterion = WeightedMseLoss(weights=self.weights)
             self.Controller2Keyboard = Controller2Keyboard()
+
         self.save_hyperparameters()
 
     def forward(self, x, output_mode: str = "keyboard", return_best: bool = True):
@@ -1001,6 +1174,177 @@ class Tedd1104ModelPL(pl.LightningModule):
                 self.test_distance,
             )
         """
+
+    def configure_optimizers(self):
+        optimizer = torch.optim.AdamW(
+            self.parameters(), lr=self.learning_rate, weight_decay=self.weight_decay
+        )
+
+        return {
+            "optimizer": optimizer,
+            "lr_scheduler": {
+                "scheduler": torch.optim.lr_scheduler.ReduceLROnPlateau(
+                    optimizer, "min", patience=5, verbose=True
+                ),
+                "monitor": "Val/acc_k@1",
+            },
+        }
+
+
+class Tedd1104ModelPLForImageReordering(pl.LightningModule):
+    """
+    T.E.D.D. 1104 (https://nazizombiesplus.fandom.com/wiki/T.E.D.D.) is the neural network that learns
+    how to drive in videogames. It has been develop with Grand Theft Auto V (GTAV) in mind. However
+    it can learn how to drive in any videogame and if the cnn_model_name and controls are modified accordingly
+    it can play any game. The cnn_model_name receive as input 5 consecutive images that have been captured
+    with a fixed time interval between then (by default 1/10 seconds) and learns the correct
+    controller input.
+
+    T.E.D.D 1104 consists of 3 modules:
+        [*] A CNN (Resnet) that extract features from the images
+        [*] A Transformer or LSTM that generates a representation of the sequence of features from the CNN
+        [*] A linear output layer that predicts the controller input.
+
+    Input:
+     torch.tensor [batch_size, num_channels, H, W]
+     For efficiency the input input is not packed as sequence of 5 images, all the images in the batch will be
+     encoded in the CNN and the features vectors will be packed as sequences of 5 vectors before feeding them to the
+     RNN.
+
+    Output:
+     Forward: torch.tensor [batch_size, 9 for keyboard 3 for controller] (output values without softmax)
+
+
+    Hyperparameters:
+    - resnet: resnet module to use [18,34,50,101,152]
+    - pretrained_resnet: Load pretrained resnet weights
+    - sequence_size: Length of each series of features
+    - embedded_size: Size of the feature vectors
+    - nhead: number of heads for the transformer layer
+    - num_layers_transformer: number of transformer layers in the encoder
+    - dropout_cnn: dropout probability for the CNN layers
+    - dropout_cnn_out: dropout probability for the cnn features (output layer)
+    - positional_embeddings_dropout: dropout probability for the transformer input embeddings
+    - dropout_transformer_out: dropout probability for the transformer features (output layer)
+    - mask_prob: probability of masking each input vector before the transformer
+    - control_mode: Keyboard: Classification cnn_model_name with 9 classes. Controller: Regression cnn_model_name with 3 variables
+    - Encoder type: Use LSTM or Transformer as feature encoder [lstm, transformer]
+    """
+
+    def __init__(
+        self,
+        cnn_model_name: str,
+        pretrained_cnn: bool,
+        embedded_size: int,
+        nhead: int,
+        num_layers_encoder: int,
+        dropout_cnn_out: float,
+        positional_embeddings_dropout: float,
+        dropout_encoder: float,
+        mask_prob: float,
+        dropout_encoder_features: float = 0.8,
+        sequence_size: int = 5,
+        learning_rate: float = 1e-5,
+        weight_decay: float = 1e-3,
+    ):
+
+        super(Tedd1104ModelPLForImageReordering, self).__init__()
+
+        self.cnn_model_name: str = cnn_model_name
+        self.pretrained_cnn: bool = pretrained_cnn
+        self.sequence_size: int = sequence_size
+        self.embedded_size: int = embedded_size
+        self.nhead: int = nhead
+        self.num_layers_encoder: int = num_layers_encoder
+        self.dropout_cnn_out: float = dropout_cnn_out
+        self.positional_embeddings_dropout: float = positional_embeddings_dropout
+        self.dropout_encoder: float = dropout_encoder
+        self.dropout_encoder_features = dropout_encoder_features
+        self.mask_prob = mask_prob
+        self.learning_rate = learning_rate
+        self.weight_decay = weight_decay
+
+        self.model = TEDD1104TransformerForImageReordering(
+            cnn_model_name=self.cnn_model_name,
+            pretrained_cnn=self.pretrained_cnn,
+            embedded_size=self.embedded_size,
+            nhead=self.nhead,
+            num_layers_transformer=self.num_layers_encoder,
+            dropout_cnn_out=self.dropout_cnn_out,
+            positional_embeddings_dropout=self.positional_embeddings_dropout,
+            dropout_transformer=self.dropout_encoder,
+            mask_prob=self.mask_prob,
+            sequence_size=self.sequence_size,
+            dropout_encoder_features=self.dropout_encoder_features,
+        )
+
+        self.total_batches = 0
+        self.running_loss = 0
+
+        self.train_accuracy = ImageReorderingAccuracy()
+        self.validation_accuracy = ImageReorderingAccuracy()
+        self.test_accuracy = ImageReorderingAccuracy()
+
+        self.criterion = WeightedMseLoss()
+
+        self.save_hyperparameters()
+
+    def forward(self, x, return_best: bool = True):
+        x = self.model(x)
+        if return_best:
+            return torch.argmax(x, dim=-1)
+        else:
+            return x
+
+    def training_step(self, batch, batch_idx):
+        x, y = batch["images"], batch["y"]
+        x = torch.flatten(x, start_dim=0, end_dim=1)
+        preds = self.model(x)
+        loss = self.criterion(preds, y)
+        self.total_batches += 1
+        self.running_loss += loss.item()
+        self.log("Train/loss", loss, sync_dist=True)
+        self.log(
+            "Train/running_loss", self.running_loss / self.total_batches, sync_dist=True
+        )
+        return {"preds": torch.argmax(preds, dim=1), "y": y}
+
+    def training_step_end(self, outputs):
+        self.train_accuracy(outputs["preds"], outputs["y"])
+        self.log(
+            "Train/acc",
+            self.validation_accuracy_k1,
+        )
+
+    def validation_step(self, batch, batch_idx):
+        x, y = batch["images"], batch["y"]
+        x = torch.flatten(x, start_dim=0, end_dim=1)
+        preds = self.forward(x, return_best=True)
+
+        return {"preds": preds, "y": y}
+
+    def validation_step_end(self, outputs):
+        self.validation_accuracy(outputs["preds"], outputs["y"])
+
+        self.log(
+            "Val/acc",
+            self.validation_accuracy,
+        )
+
+    def test_step(self, batch, batch_idx, dataset_idx: int = 0):
+        x, y = batch["images"], batch["y"]
+        x = torch.flatten(x, start_dim=0, end_dim=1)
+        preds = self.forward(x, return_best=True)
+
+        return {"preds": preds, "y": y}
+
+    def test_step_end(self, outputs):
+        self.test_accuracy(outputs["preds"], outputs["y"])
+
+        self.log(
+            "Test/acc",
+            self.test_accuracy_k1_micro,
+        )
 
     def configure_optimizers(self):
         optimizer = torch.optim.AdamW(

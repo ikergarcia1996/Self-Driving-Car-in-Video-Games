@@ -1,7 +1,7 @@
 import os
 import argparse
-from model import Tedd1104ModelPL
-from dataset import Tedd1104Dataset
+from model import Tedd1104ModelPLForImageReordering
+from dataset_image_reordering import Tedd1104Dataset
 import pytorch_lightning as pl
 from typing import List, Union
 from torch.utils.data import DataLoader
@@ -36,36 +36,18 @@ def eval_model(
                     f"please set the path for your hyperparameter file using the flag --hparams_path."
                 )
 
-    model = Tedd1104ModelPL.load_from_checkpoint(
-        checkpoint_path=checkpoint_path, hparams_file=hparams_path
+    model = Tedd1104ModelPLForImageReordering.load_from_checkpoint(
+        checkpoint_path=checkpoint_path,
+        hparams_file=hparams_path,
+        strict=False,
     )
-    """
-    test_dataloaders = [
-        DataLoader(
-            Tedd1104Dataset(
-                dataset_dir=dataset_dir,
-                hide_map_prob=0.0,
-                dropout_images_prob=[0.0, 0.0, 0.0, 0.0, 0.0],
-                control_mode="keyboard",
-            ),
-            batch_size=batch_size,
-            num_workers=dataloader_num_workers,
-            pin_memory=True,
-            shuffle=False,
-        )
-        for dataset_dir in test_dirs
-    ]
-    """
+
     print(f"Restoring checkpoint: {checkpoint_path}. hparams: {hparams_path}")
 
     trainer = pl.Trainer(
-        resume_from_checkpoint=checkpoint_path,
         precision=16,
         gpus=1,
         # accelerator="ddp",
-        default_root_dir=os.path.join(
-            os.path.dirname(os.path.abspath(checkpoint_path)), "trainer_checkpoint"
-        ),
     )
 
     results: List[List[Union[str, float]]] = []
@@ -76,7 +58,6 @@ def eval_model(
                 dataset_dir=test_dir,
                 hide_map_prob=0.0,
                 dropout_images_prob=[0.0, 0.0, 0.0, 0.0, 0.0],
-                control_mode="keyboard",
             ),
             batch_size=batch_size,
             num_workers=dataloader_num_workers,
@@ -90,10 +71,7 @@ def eval_model(
         results.append(
             [
                 os.path.basename(test_dir),
-                round(out["Test/acc_k@1_micro"] * 100, 1),
-                round(out["Test/acc_k@3_micro"] * 100, 1),
-                round(out["Test/acc_k@1_macro"] * 100, 1),
-                round(out["Test/acc_k@3_macro"] * 100, 1),
+                round(out["Test/acc"] * 100, 1),
             ]
         )
         # print(out)
@@ -102,10 +80,7 @@ def eval_model(
         tabulate(
             results,
             headers=[
-                "Micro-Accuracy K@1",
-                "Micro-Accuracy K@3",
-                "Macro-Accuracy K@1",
-                "Macro-Accuracy K@3",
+                "Accuracy",
             ],
         )
     )
@@ -116,10 +91,7 @@ def eval_model(
                 tabulate(
                     results,
                     headers=[
-                        "Micro-Accuracy K@1",
-                        "Micro-Accuracy K@3",
-                        "Macro-Accuracy K@1",
-                        "Macro-Accuracy K@3",
+                        "Accuracy",
                     ],
                     tablefmt="tsv",
                 ),
