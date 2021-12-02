@@ -1059,12 +1059,27 @@ class Tedd1104ModelPL(pl.LightningModule):
         self.total_batches = 0
         self.running_loss = 0
 
-        self.validation_accuracy_k1 = torchmetrics.Accuracy(
+        self.test_accuracy_k1_macro = torchmetrics.Accuracy(
+            num_classes=9, top_k=1, average="macro"
+        )
+
+        self.test_accuracy_k3_micro = torchmetrics.Accuracy(
             num_classes=9, top_k=1, average="micro"
         )
-        self.validation_accuracy_k3 = torchmetrics.Accuracy(
+
+        self.validation_accuracy_k1_micro = torchmetrics.Accuracy(
+            num_classes=9, top_k=1, average="micro"
+        )
+        self.validation_accuracy_k3_micro = torchmetrics.Accuracy(
             num_classes=9, top_k=3, average="micro"
         )
+        self.validation_accuracy_k1_macro = torchmetrics.Accuracy(
+            num_classes=9, top_k=1, average="macro"
+        )
+        self.validation_accuracy_k3_macro = torchmetrics.Accuracy(
+            num_classes=9, top_k=3, average="macro"
+        )
+
         self.test_accuracy_k1_micro = torchmetrics.Accuracy(
             num_classes=9, top_k=1, average="micro"
         )
@@ -1144,16 +1159,27 @@ class Tedd1104ModelPL(pl.LightningModule):
         return {"preds": preds, "y": y}  # "loss":loss}
 
     def validation_step_end(self, outputs):
-        self.validation_accuracy_k1(outputs["preds"], outputs["y"])
-        self.validation_accuracy_k3(outputs["preds"], outputs["y"])
+        self.validation_accuracy_k1_micro(outputs["preds"], outputs["y"])
+        self.validation_accuracy_k3_micro(outputs["preds"], outputs["y"])
+        self.validation_accuracy_k1_macro(outputs["preds"], outputs["y"])
+        self.validation_accuracy_k3_macro(outputs["preds"], outputs["y"])
+
         self.log(
-            "Val/acc_k@1",
-            self.validation_accuracy_k1,
+            "Validation/acc_k@1_micro",
+            self.validation_accuracy_k1_micro,
+        )
+        self.log(
+            "Validation/acc_k@3_micro",
+            self.validation_accuracy_k3_micro,
         )
 
         self.log(
-            "Val/acc_k@3",
-            self.validation_accuracy_k3,
+            "Validation/acc_k@1_macro",
+            self.validation_accuracy_k1_macro,
+        )
+        self.log(
+            "Validation/acc_k@3_macro",
+            self.validation_accuracy_k3_macro,
         )
 
     def test_step(self, batch, batch_idx, dataset_idx: int = 0):
@@ -1196,9 +1222,9 @@ class Tedd1104ModelPL(pl.LightningModule):
             "optimizer": optimizer,
             "lr_scheduler": {
                 "scheduler": torch.optim.lr_scheduler.ReduceLROnPlateau(
-                    optimizer, "min", patience=5, verbose=True
+                    optimizer, "max", patience=5, verbose=True
                 ),
-                "monitor": "Val/acc_k@1",
+                "monitor": "Validation/acc_k@1_macro",
             },
         }
 

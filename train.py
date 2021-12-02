@@ -66,7 +66,7 @@ def train(
     tb_logger = pl_loggers.TensorBoardLogger(output_dir)
     lr_monitor = pl.callbacks.LearningRateMonitor(logging_interval="step")
     checkpoint_callback = pl.callbacks.ModelCheckpoint(
-        monitor="Val/acc_k@1", mode="max", save_last=True
+        monitor="Validation/acc_k@1_macro", mode="max", save_last=True
     )
     checkpoint_callback.CHECKPOINT_NAME_LAST = "{epoch}-last"
 
@@ -314,7 +314,7 @@ def continue_training(
     tb_logger = pl_loggers.TensorBoardLogger(output_dir)
     lr_monitor = pl.callbacks.LearningRateMonitor(logging_interval="step")
     checkpoint_callback = pl.callbacks.ModelCheckpoint(
-        monitor="Val/acc_k@1", mode="max", save_last=True
+        monitor="Validation/acc_k@1_macro", mode="max", save_last=True
     )
     checkpoint_callback.CHECKPOINT_NAME_LAST = "{epoch}-last"
 
