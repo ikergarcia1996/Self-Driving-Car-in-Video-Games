@@ -146,7 +146,9 @@ class ImageReorderingAccuracy(torchmetrics.Metric):
 
     def update(self, preds: torch.Tensor, target: torch.Tensor):
 
-        assert preds.size() == target.size()
+        assert (
+            preds.size() == target.size()
+        ), f"Pred sise: {preds.size()} != Target size: {target.size()}"
 
         self.correct += torch.sum(torch.all(preds == target, dim=-1))
         self.total += target.size(0)
