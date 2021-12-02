@@ -137,6 +137,45 @@ class CrossEntropyLoss(torch.nn.Module):
         return self.CrossEntropyLoss(predicted.view(-1, 9), target.view(-1).long())
 
 
+class CrossEntropyLossImageReorder(torch.nn.Module):
+    """
+    Weighted CrossEntropyLoss
+    """
+
+    def __init__(
+        self,
+    ):
+        """
+        INIT
+        Input:
+        - weights:  torch.tensor [9] Weights for each variable
+        - reduction:  reduction method: sum or mean
+
+        """
+
+        super(CrossEntropyLossImageReorder, self).__init__()
+
+        self.CrossEntropyLoss = torch.nn.CrossEntropyLoss()
+
+    def forward(
+        self,
+        predicted: torch.tensor,
+        target: torch.tensor,
+    ) -> torch.tensor:
+
+        """
+        Input:
+        - predicted: torch.tensor [batch_size, 9] Output from the cnn_model_name
+        - predicted: torch.tensor [batch_size] Gold values
+
+
+        Output:
+        -Weighted CrossEntropyLoss: torch.tensor  [1] if reduction == "mean"
+                                                    [9] if reduction == "sum"
+        """
+        return self.CrossEntropyLoss(predicted.view(-1, 5), target.view(-1).long())
+
+
 class ImageReorderingAccuracy(torchmetrics.Metric):
     def __init__(self, dist_sync_on_step=False):
         super().__init__(dist_sync_on_step=dist_sync_on_step)
@@ -1309,7 +1348,7 @@ class Tedd1104ModelPLForImageReordering(pl.LightningModule):
         self.validation_accuracy = ImageReorderingAccuracy()
         self.test_accuracy = ImageReorderingAccuracy()
 
-        self.criterion = CrossEntropyLoss()
+        self.criterion = CrossEntropyLossImageReorder()
 
         self.save_hyperparameters()
 
@@ -1331,7 +1370,7 @@ class Tedd1104ModelPLForImageReordering(pl.LightningModule):
         self.log(
             "Train/running_loss", self.running_loss / self.total_batches, sync_dist=True
         )
-        return {"preds": torch.argmax(preds, dim=1), "y": y}
+        return {"preds": torch.argmax(preds, dim=-1), "y": y}
 
     def training_step_end(self, outputs):
         self.train_accuracy(outputs["preds"], outputs["y"])
@@ -1345,7 +1384,7 @@ class Tedd1104ModelPLForImageReordering(pl.LightningModule):
         x = torch.flatten(x, start_dim=0, end_dim=1)
         preds = self.forward(x, return_best=True)
 
-        return {"preds": preds, "y": y}
+        return {"preds": torch.argmax(preds, dim=-1), "y": y}
 
     def validation_step_end(self, outputs):
         self.validation_accuracy(outputs["preds"], outputs["y"])
@@ -1360,7 +1399,7 @@ class Tedd1104ModelPLForImageReordering(pl.LightningModule):
         x = torch.flatten(x, start_dim=0, end_dim=1)
         preds = self.forward(x, return_best=True)
 
-        return {"preds": preds, "y": y}
+        return {"preds": torch.argmax(preds, dim=-1), "y": y}
 
     def test_step_end(self, outputs):
         self.test_accuracy(outputs["preds"], outputs["y"])
