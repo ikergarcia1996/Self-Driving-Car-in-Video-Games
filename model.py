@@ -1059,6 +1059,10 @@ class Tedd1104ModelPL(pl.LightningModule):
         self.total_batches = 0
         self.running_loss = 0
 
+        self.train_accuracy = torchmetrics.Accuracy(
+            num_classes=9, top_k=1, average="macro"
+        )
+
         self.test_accuracy_k1_macro = torchmetrics.Accuracy(
             num_classes=9, top_k=1, average="macro"
         )
@@ -1149,7 +1153,15 @@ class Tedd1104ModelPL(pl.LightningModule):
         self.log(
             "Train/running_loss", self.running_loss / self.total_batches, sync_dist=True
         )
-        return loss
+
+        return {"preds": torch.argmax(preds, dim=-1), "y": y, "loss": loss}
+
+    def training_step_end(self, outputs):
+        self.train_accuracy(outputs["preds"], outputs["y"])
+        self.log(
+            "Train/acc_k@1_macro",
+            self.train_accuracy,
+        )
 
     def validation_step(self, batch, batch_idx):
         x, y = batch["images"], batch["y"]
