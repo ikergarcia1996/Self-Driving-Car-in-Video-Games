@@ -14,7 +14,6 @@ from dataset import (
     RemoveImage,
     SplitImages,
     MergeImages,
-    ToTensor,
     Normalize,
 )
 
@@ -30,6 +29,37 @@ class ReOrderImages(object):
 
         return {
             "images": images[y],
+            "y": y,
+        }
+
+
+class ToTensor(object):
+    """Convert ndarrays in sample to Tensors."""
+
+    def __call__(self, sample):
+        image1, image2, image3, image4, image5, y = (
+            sample["image1"],
+            sample["image2"],
+            sample["image3"],
+            sample["image4"],
+            sample["image5"],
+            sample["y"],
+        )
+
+        # swap color axis because
+        # numpy image: H x W x C
+        # torch image: C X H X W
+        image1 = image1.transpose((2, 0, 1))
+        image2 = image2.transpose((2, 0, 1))
+        image3 = image3.transpose((2, 0, 1))
+        image4 = image4.transpose((2, 0, 1))
+        image5 = image5.transpose((2, 0, 1))
+        return {
+            "image1": torch.from_numpy(image1),
+            "image2": torch.from_numpy(image2),
+            "image3": torch.from_numpy(image3),
+            "image4": torch.from_numpy(image4),
+            "image5": torch.from_numpy(image5),
             "y": y,
         }
 

@@ -145,8 +145,8 @@ class ImageReorderingAccuracy(torchmetrics.Metric):
         self.add_state("total", default=torch.tensor(0), dist_reduce_fx="sum")
 
     def update(self, preds: torch.Tensor, target: torch.Tensor):
-        preds, target = self._input_format(preds, target)
-        assert preds.shape == target.shape
+
+        assert preds.size() == target.size()
 
         self.correct += torch.sum(torch.all(preds == target, dim=-1))
         self.total += target.size(0)
