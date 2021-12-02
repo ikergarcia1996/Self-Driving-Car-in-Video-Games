@@ -541,15 +541,15 @@ class OutputLayer(nn.Module):
 
     def forward(self, x):
         x = x[:, 0, :]  # GET CLS TOKEN
-        x = self.dropout(x)
+        x = self.dp(x)
         x = self.dense(x)
         x = torch.tanh(x)
-        x = self.dropout(x)
+        x = self.dp(x)
         x = self.out_proj(x)
         return x
 
 
-class ImageOrderingLayer(nn.Module):
+class OutputImageOrderingLayer(nn.Module):
     """
 
     FROM https://github.com/huggingface/transformers/blob/master/src/transformers/models/roberta/modeling_roberta.py
@@ -571,7 +571,7 @@ class ImageOrderingLayer(nn.Module):
     def __init__(
         self, d_model: int, num_classes: int, dropout_encoder_features: float = 0.2
     ):
-        super(ImageOrderingLayer, self).__init__()
+        super(OutputImageOrderingLayer, self).__init__()
 
         self.d_model = d_model
         self.num_classes = num_classes
@@ -919,7 +919,7 @@ class TEDD1104TransformerForImageReordering(nn.Module):
             dropout=self.dropout_transformer,
         )
 
-        self.OutputLayer: ImageOrderingLayer = ImageOrderingLayer(
+        self.OutputLayer: OutputImageOrderingLayer = OutputImageOrderingLayer(
             d_model=embedded_size,
             num_classes=self.sequence_size,
             dropout_encoder_features=dropout_encoder_features,
@@ -1003,6 +1003,7 @@ class Tedd1104ModelPL(pl.LightningModule):
         ], f"Encoder type {self.encoder_type} not supported, supported feature encoders [lstm,transformer]."
 
         self.control_mode = control_mode.lower()
+
         assert self.control_mode in [
             "keyboard",
             "controller",
@@ -1139,11 +1140,6 @@ class Tedd1104ModelPL(pl.LightningModule):
         x, y = batch["images"], batch["y"]
         x = torch.flatten(x, start_dim=0, end_dim=1)
         preds = self.forward(x, output_mode="keyboard", return_best=False)
-        # loss = self.criterion(preds, y)
-        # self.log("Val/loss", loss, sync_dist=True)
-
-        # if self.control_mode == "keyboard":
-        #    preds = torch.functional.F.softmax(preds, dim=1)
 
         return {"preds": preds, "y": y}  # "loss":loss}
 
@@ -1160,36 +1156,10 @@ class Tedd1104ModelPL(pl.LightningModule):
             self.validation_accuracy_k3,
         )
 
-        """
-        if self.control_mode == "keyboard":
-            self.validation_accuracy_k1(outputs["preds"], outputs["y"])
-            self.validation_accuracy_k3(outputs["preds"], outputs["y"])
-            self.log(
-                "Val/acc_k@1",
-                self.validation_accuracy_k1,
-            )
-
-            self.log(
-                "Val/acc_k@3",
-                self.validation_accuracy_k3,
-            )
-        else:
-            self.validation_distance(outputs["preds"], outputs["y"])
-            self.log(
-                "Val/mse",
-                self.validation_distance,
-            )
-        """
-
     def test_step(self, batch, batch_idx, dataset_idx: int = 0):
         x, y = batch["images"], batch["y"]
         x = torch.flatten(x, start_dim=0, end_dim=1)
         preds = self.forward(x, output_mode="keyboard", return_best=False)
-        # loss = self.criterion(preds, y)
-        # self.log("Val/loss", loss, sync_dist=True)
-
-        # if self.control_mode == "keyboard":
-        #    preds = torch.functional.F.softmax(preds, dim=1)
 
         return {"preds": preds, "y": y}  # "loss":loss}
 
@@ -1216,27 +1186,6 @@ class Tedd1104ModelPL(pl.LightningModule):
             "Test/acc_k@3_macro",
             self.test_accuracy_k3_macro,
         )
-
-        """
-        if self.control_mode == "keyboard":
-            self.test_accuracy_k1(outputs["preds"], outputs["y"])
-            self.test_accuracy_k3(outputs["preds"], outputs["y"])
-            self.log(
-                "Test/acc_k@1",
-                self.test_accuracy_k1,
-            )
-
-            self.log(
-                "Test/acc_k@3",
-                self.test_accuracy_k3,
-            )
-        else:
-            self.test_distance(outputs["preds"], outputs["y"])
-            self.log(
-                "Test/mse",
-                self.test_distance,
-            )
-        """
 
     def configure_optimizers(self):
         optimizer = torch.optim.AdamW(
@@ -1309,6 +1258,7 @@ class Tedd1104ModelPLForImageReordering(pl.LightningModule):
         sequence_size: int = 5,
         learning_rate: float = 1e-5,
         weight_decay: float = 1e-3,
+        encoder_type: str = "transformer",
     ):
 
         super(Tedd1104ModelPLForImageReordering, self).__init__()
@@ -1326,6 +1276,7 @@ class Tedd1104ModelPLForImageReordering(pl.LightningModule):
         self.mask_prob = mask_prob
         self.learning_rate = learning_rate
         self.weight_decay = weight_decay
+        self.encoder_type = encoder_type
 
         self.model = TEDD1104TransformerForImageReordering(
             cnn_model_name=self.cnn_model_name,
@@ -1420,6 +1371,6 @@ class Tedd1104ModelPLForImageReordering(pl.LightningModule):
                 "scheduler": torch.optim.lr_scheduler.ReduceLROnPlateau(
                     optimizer, "min", patience=5, verbose=True
                 ),
-                "monitor": "Val/acc_k@1",
+                "monitor": "Val/acc",
             },
         }

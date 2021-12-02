@@ -44,7 +44,7 @@ def run_ted1104(
     full_screen: bool = False,
     evasion_score=1000,
     control_mode: str = "keyboard",
-    hparams_path: str = None,
+    # hparams_path: str = None,
 ) -> None:
     """
     Generate dataset exampled from a human playing a videogame
@@ -91,7 +91,7 @@ def run_ted1104(
 
     show_what_ai_sees: bool = False
     fp16: bool
-
+    """
     if hparams_path is None:
         # Try to find hparams file
         model_dir = os.path.dirname(checkpoint_path)
@@ -110,10 +110,11 @@ def run_ted1104(
                     f"Unable to find an hparams.yaml file, "
                     f"please set the path for your hyperparameter file using the flag --hparams_path."
                 )
-
+    
+    """
     model = Tedd1104ModelPL.load_from_checkpoint(
-        checkpoint_path=checkpoint_path, hparams_file=hparams_path
-    )
+        checkpoint_path=checkpoint_path
+    )  # hparams_file=hparams_path
 
     model.eval()
     model.to(device)
@@ -309,14 +310,14 @@ if __name__ == "__main__":
         required=True,
         help="Path to the model checkpoint",
     )
-
+    """
     parser.add_argument(
         "--hparams_path",
         type=str,
         default=None,
         help="Path to the hparams.yalm file, if None we will attempt to automatically discover it",
     )
-
+    """
     parser.add_argument("--width", type=int, default=1600, help="Game window width")
     parser.add_argument("--height", type=int, default=900, help="Game window height")
 
@@ -376,5 +377,5 @@ if __name__ == "__main__":
         num_parallel_sequences=args.num_parallel_sequences,
         evasion_score=args.evasion_score,
         control_mode=args.control_mode,
-        hparams_path=args.hparams_path,
+        # hparams_path=args.hparams_path,
     )

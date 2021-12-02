@@ -120,6 +120,7 @@ def train_new_model(
     bidirectional_lstm=True,
     learning_rate: float = 1e-5,
     weight_decay: float = 1e-3,
+    checkpoint_path: str = None,
 ):
 
     """
@@ -164,29 +165,49 @@ def train_new_model(
 
     """
 
+    assert control_mode.lower() in [
+        "keyboard",
+        "controller",
+    ], f"{control_mode.lower()} control mode not supported. Supported dataset types: [keyboard, controller].  "
+
     if dropout_images_prob is None:
         dropout_images_prob = [0.0, 0.0, 0.0, 0.0, 0.0]
 
-    model: Tedd1104ModelPL = Tedd1104ModelPL(
-        cnn_model_name=cnn_model_name,
-        pretrained_cnn=pretrained_cnn,
-        embedded_size=embedded_size,
-        nhead=nhead,
-        num_layers_encoder=num_layers_encoder,
-        lstm_hidden_size=lstm_hidden_size,
-        dropout_cnn_out=dropout_cnn_out,
-        positional_embeddings_dropout=positional_embeddings_dropout,
-        dropout_encoder=dropout_encoder,
-        dropout_encoder_features=dropout_encoder_features,
-        mask_prob=mask_prob,
-        control_mode=control_mode,
-        sequence_size=sequence_size,
-        encoder_type=encoder_type,
-        bidirectional_lstm=bidirectional_lstm,
-        learning_rate=learning_rate,
-        weight_decay=weight_decay,
-        weights=variable_weights,
-    )
+    if not checkpoint_path:
+        model: Tedd1104ModelPL = Tedd1104ModelPL(
+            cnn_model_name=cnn_model_name,
+            pretrained_cnn=pretrained_cnn,
+            embedded_size=embedded_size,
+            nhead=nhead,
+            num_layers_encoder=num_layers_encoder,
+            lstm_hidden_size=lstm_hidden_size,
+            dropout_cnn_out=dropout_cnn_out,
+            positional_embeddings_dropout=positional_embeddings_dropout,
+            dropout_encoder=dropout_encoder,
+            dropout_encoder_features=dropout_encoder_features,
+            mask_prob=mask_prob,
+            control_mode=control_mode,
+            sequence_size=sequence_size,
+            encoder_type=encoder_type,
+            bidirectional_lstm=bidirectional_lstm,
+            learning_rate=learning_rate,
+            weight_decay=weight_decay,
+            weights=variable_weights,
+        )
+
+    else:
+
+        print(f"Restoring model from {checkpoint_path}.")
+        model = Tedd1104ModelPL.load_from_checkpoint(
+            checkpoint_path=checkpoint_path,
+            dropout_cnn_out=dropout_cnn_out,
+            positional_embeddings_dropout=positional_embeddings_dropout,
+            dropout_encoder=dropout_encoder,
+            dropout_encoder_features=dropout_encoder_features,
+            mask_prob=mask_prob,
+            control_mode=control_mode,
+            strict=False,
+        )
 
     train(
         model=model,
@@ -253,6 +274,7 @@ def continue_training(
     if dropout_images_prob is None:
         dropout_images_prob = [0.0, 0.0, 0.0, 0.0, 0.0]
 
+    """
     if hparams_path is None:
         # Try to find hparams file
         model_dir = os.path.dirname(checkpoint_path)
@@ -271,10 +293,10 @@ def continue_training(
                     f"Unable to find an hparams.yaml file, "
                     f"please set the path for your hyperparameter file using the flag --hparams_path."
                 )
-
+    """
     model = Tedd1104ModelPL.load_from_checkpoint(
-        checkpoint_path=checkpoint_path, hparams_file=hparams_path
-    )
+        checkpoint_path=checkpoint_path
+    )  # "hparams_file=hparams_path", strict=True
 
     data = Tedd1104ataModule(
         train_dir=train_dir,
@@ -536,15 +558,9 @@ if __name__ == "__main__":
     parser.add_argument(
         "--checkpoint_path",
         type=str,
-        help="[continue_training] Path of the checkpoint to load for continue training it",
-    )
-
-    parser.add_argument(
-        "--hparams_path",
-        type=str,
         default=None,
-        help="[continue_training] Path of the hparams file for the current checkpoint,"
-        "if not provided we will try to automatically find it",
+        help="Path of the checkpoint to load for continue training it (Could be a TEDD model or a pretrained "
+        "TEEDforImageReordering model",
     )
 
     parser.add_argument(
@@ -588,12 +604,12 @@ if __name__ == "__main__":
             bidirectional_lstm=args.bidirectional_lstm,
             learning_rate=args.learning_rate,
             weight_decay=args.weight_decay,
+            checkpoint_path=args.checkpoint_path,
         )
 
     else:
         continue_training(
             checkpoint_path=args.checkpoint_path,
-            hparams_path=args.hparams_path,
             train_dir=args.train_dir,
             val_dir=args.val_dir,
             test_dir=args.test_dir,
