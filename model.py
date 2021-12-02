@@ -1309,7 +1309,7 @@ class Tedd1104ModelPLForImageReordering(pl.LightningModule):
         self.validation_accuracy = ImageReorderingAccuracy()
         self.test_accuracy = ImageReorderingAccuracy()
 
-        self.criterion = WeightedMseLoss()
+        self.criterion = CrossEntropyLoss()
 
         self.save_hyperparameters()
 
