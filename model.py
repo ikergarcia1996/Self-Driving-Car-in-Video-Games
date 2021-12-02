@@ -206,6 +206,11 @@ class EncoderCNN(nn.Module):
     ):
         super(EncoderCNN, self).__init__()
 
+        self.embedded_size = embedded_size
+        self.cnn_model_name = cnn_model_name
+        self.dropout_cnn_out = dropout_cnn_out
+        self.pretrained_cnn = pretrained_cnn
+
         self.cnn, self.cnn_output_size = get_cnn(
             cnn_model_name=cnn_model_name, pretrained=pretrained_cnn
         )
@@ -296,6 +301,12 @@ class EncoderRNN(nn.Module):
     ):
         super(EncoderRNN, self).__init__()
 
+        self.embedded_size = embedded_size
+        self.hidden_size = hidden_size
+        self.num_layers = num_layers
+        self.bidirectional_lstm = bidirectional_lstm
+        self.dropout_lstm = dropout_lstm
+
         self.lstm: nn.LSTM = nn.LSTM(
             embedded_size,
             hidden_size,
@@ -334,8 +345,12 @@ class PositionalEmbedding(nn.Module):
 
     def __init__(self, d_model: int, sequence_length: int = 5, dropout: float = 0.1):
         super(PositionalEmbedding, self).__init__()
-        self.dropout = nn.Dropout(p=dropout)
 
+        self.d_model = d_model
+        self.sequence_length = sequence_length
+        self.dropout = dropout
+
+        self.dropout = nn.Dropout(p=dropout)
         pe = torch.zeros(sequence_length, d_model).float()
         pe.requires_grad = True
         pe = pe.unsqueeze(0)
@@ -384,6 +399,7 @@ class EncoderTransformer(nn.Module):
         self.nhead = nhead
         self.num_layers = num_layers
         self.mask_prob = mask_prob
+        self.dropout = dropout
         self.sequence_length = sequence_length
 
         cls_token = torch.zeros(1, 1, self.d_model).float()
@@ -474,6 +490,7 @@ class OutputLayer(nn.Module):
 
         self.d_model = d_model
         self.num_classes = num_classes
+        self.dropout_encoder_features = dropout_encoder_features
         self.dense = nn.Linear(self.d_model, self.d_model)
         self.dp = nn.Dropout(p=dropout_encoder_features)
         self.out_proj = nn.Linear(self.d_model, self.num_classes)
