@@ -332,9 +332,9 @@ def continue_training(
         log_every_n_steps=10,
     )
 
-    trainer.fit(model, datamodule=data)
+    trainer.fit(model, datamodule=data, ckpt_path=checkpoint_path)
 
-    print(f"Best model path: {checkpoint_callback.best_model_path}")
+    # print(f"Best model path: {checkpoint_callback.best_model_path}")
 
     if test_dir:
         trainer.test(datamodule=data, ckpt_path="best")
