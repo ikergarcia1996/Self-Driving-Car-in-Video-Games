@@ -1379,7 +1379,7 @@ class Tedd1104ModelPLForImageReordering(pl.LightningModule):
         self.validation_accuracy(outputs["preds"], outputs["y"])
 
         self.log(
-            "Val/acc",
+            "Validation/acc",
             self.validation_accuracy,
         )
 
