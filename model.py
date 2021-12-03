@@ -1154,7 +1154,7 @@ class Tedd1104ModelPL(pl.LightningModule):
             "Train/running_loss", self.running_loss / self.total_batches, sync_dist=True
         )
 
-        return {"preds": torch.argmax(preds, dim=-1), "y": y, "loss": loss}
+        return {"preds": preds, "y": y, "loss": loss}
 
     def training_step_end(self, outputs):
         self.train_accuracy(outputs["preds"], outputs["y"])
