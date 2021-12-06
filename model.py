@@ -1409,6 +1409,6 @@ class Tedd1104ModelPLForImageReordering(pl.LightningModule):
                 "scheduler": torch.optim.lr_scheduler.ReduceLROnPlateau(
                     optimizer, "min", patience=5, verbose=True
                 ),
-                "monitor": "Val/acc",
+                "monitor": "Validation/acc",
             },
         }
