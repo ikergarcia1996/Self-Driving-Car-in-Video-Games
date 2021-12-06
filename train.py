@@ -206,6 +206,8 @@ def train_new_model(
             dropout_encoder_features=dropout_encoder_features,
             mask_prob=mask_prob,
             control_mode=control_mode,
+            lstm_hidden_size=lstm_hidden_size,
+            bidirectional_lstm=bidirectional_lstm,
             strict=False,
         )
 
