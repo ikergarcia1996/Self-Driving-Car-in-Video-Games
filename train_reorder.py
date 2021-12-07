@@ -70,13 +70,13 @@ def train(
 
     trainer = pl.Trainer(
         precision=16,
-        gpus=1,
+        gpus=2,
         val_check_interval=val_check_interval,
         accumulate_grad_batches=accumulation_steps,
         max_epochs=max_epochs,
         logger=tb_logger,
         callbacks=[checkpoint_callback, lr_monitor],
-        # accelerator="ddp",
+        accelerator="ddp",
         default_root_dir=os.path.join(output_dir, "trainer_checkpoint"),
         log_every_n_steps=10,
     )
@@ -287,13 +287,13 @@ def continue_training(
     trainer = pl.Trainer(
         resume_from_checkpoint=checkpoint_path,
         precision=16,
-        gpus=2,
+        gpus=1,
         val_check_interval=val_check_interval,
         accumulate_grad_batches=accumulation_steps,
         max_epochs=max_epochs,
         logger=tb_logger,
         callbacks=[checkpoint_callback, lr_monitor],
-        accelerator="ddp",
+        #accelerator="ddp",
         default_root_dir=os.path.join(output_dir, "trainer_checkpoint"),
         log_every_n_steps=10,
     )
