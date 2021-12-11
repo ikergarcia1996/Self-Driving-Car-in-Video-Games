@@ -72,6 +72,7 @@ class Tedd1104Dataset(Dataset):
         dataset_dir: str,
         hide_map_prob: float,
         dropout_images_prob: List[float],
+        train: bool = False,
     ):
         """
         Init
@@ -106,18 +107,31 @@ class Tedd1104Dataset(Dataset):
                 f"dropout_images_prob: {dropout_images_prob}"
             )
 
-        self.transform = transforms.Compose(
-            [
-                RemoveMinimap(hide_map_prob=hide_map_prob),
-                RemoveImage(dropout_images_prob=dropout_images_prob),
-                SplitImages(),
-                ToTensor(),
-                SequenceColorJitter(),
-                Normalize(),
-                MergeImages(),
-                ReOrderImages(),
-            ]
-        )
+        if train:
+            self.transform = transforms.Compose(
+                [
+                    RemoveMinimap(hide_map_prob=hide_map_prob),
+                    RemoveImage(dropout_images_prob=dropout_images_prob),
+                    SplitImages(),
+                    ToTensor(),
+                    SequenceColorJitter(),
+                    Normalize(),
+                    MergeImages(),
+                    ReOrderImages(),
+                ]
+            )
+        else:
+            self.transform = transforms.Compose(
+                [
+                    RemoveMinimap(hide_map_prob=hide_map_prob),
+                    RemoveImage(dropout_images_prob=dropout_images_prob),
+                    SplitImages(),
+                    ToTensor(),
+                    Normalize(),
+                    MergeImages(),
+                    ReOrderImages(),
+                ]
+            )
         self.dataset_files = glob.glob(os.path.join(dataset_dir, "*.jpeg"))
 
         self.IOHandler = IOHandler()
@@ -183,6 +197,7 @@ class Tedd1104ataModuleForImageReordering(pl.LightningDataModule):
                 dataset_dir=self.train_dir,
                 hide_map_prob=self.hide_map_prob,
                 dropout_images_prob=self.dropout_images_prob,
+                train=True,
             )
 
             print(f"Total training samples: {len(self.train_dataset)}.")

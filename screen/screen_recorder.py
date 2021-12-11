@@ -351,8 +351,8 @@ class ImageSequencer:
         """
 
         return (
-            self.image_sequences[self.actual_sequence],
+            np.copy(self.image_sequences[self.actual_sequence]),
             None
             if not self.get_controller_input
-            else self.input_sequences[self.actual_sequence],
+            else np.copy(self.input_sequences[self.actual_sequence]),
         )

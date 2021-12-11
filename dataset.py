@@ -208,6 +208,7 @@ class Tedd1104Dataset(Dataset):
         hide_map_prob: float,
         dropout_images_prob: List[float],
         control_mode: str = "keyboard",
+        train: bool = False,
     ):
         """
         Init
@@ -248,17 +249,30 @@ class Tedd1104Dataset(Dataset):
                 f"dropout_images_prob: {dropout_images_prob}"
             )
 
-        self.transform = transforms.Compose(
-            [
-                RemoveMinimap(hide_map_prob=hide_map_prob),
-                RemoveImage(dropout_images_prob=dropout_images_prob),
-                SplitImages(),
-                ToTensor(),
-                SequenceColorJitter(),
-                Normalize(),
-                MergeImages(),
-            ]
-        )
+        if train:
+            self.transform = transforms.Compose(
+                [
+                    RemoveMinimap(hide_map_prob=hide_map_prob),
+                    RemoveImage(dropout_images_prob=dropout_images_prob),
+                    SplitImages(),
+                    ToTensor(),
+                    SequenceColorJitter(),
+                    Normalize(),
+                    MergeImages(),
+                ]
+            )
+        else:
+            self.transform = transforms.Compose(
+                [
+                    RemoveMinimap(hide_map_prob=hide_map_prob),
+                    RemoveImage(dropout_images_prob=dropout_images_prob),
+                    SplitImages(),
+                    ToTensor(),
+                    Normalize(),
+                    MergeImages(),
+                ]
+            )
+
         self.dataset_files = glob.glob(os.path.join(dataset_dir, "*.jpeg"))
 
         self.IOHandler = IOHandler()
@@ -288,8 +302,7 @@ class Tedd1104Dataset(Dataset):
                 ]
 
         y = self.IOHandler.imagename_input_conversion(
-            image_name=img_name,
-            output_type=self.control_mode,
+            image_name=img_name, output_type=self.control_mode,
         )
 
         sample = {"image": image, "y": y}
@@ -330,6 +343,7 @@ class Tedd1104ataModule(pl.LightningDataModule):
                 hide_map_prob=self.hide_map_prob,
                 dropout_images_prob=self.dropout_images_prob,
                 control_mode=self.control_mode,
+                train=True,
             )
 
             print(f"Total training samples: {len(self.train_dataset)}.")

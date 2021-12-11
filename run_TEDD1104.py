@@ -12,7 +12,7 @@ from torchvision import transforms
 from utils import mse
 from keyboard.inputsHandler import select_key
 from keyboard.getkeys import key_press
-import os
+
 from typing import Optional
 
 try:
@@ -44,7 +44,8 @@ def run_ted1104(
     full_screen: bool = False,
     evasion_score=1000,
     control_mode: str = "keyboard",
-    # hparams_path: str = None,
+    enable_segmentation: str = False,
+    dtype=torch.float32,
 ) -> None:
     """
     Generate dataset exampled from a human playing a videogame
@@ -117,7 +118,13 @@ def run_ted1104(
     )  # hparams_file=hparams_path
 
     model.eval()
-    model.to(device)
+    model.to(dtype=dtype, device=device)
+
+    image_segformer = None
+    if enable_segmentation:
+        from segmentation.segmentation_segformer import ImageSegmentation
+
+        image_segformer = ImageSegmentation(device=device)
 
     if control_mode == "controller":
         xbox_controller: Optional[XboxControllerEmulator] = XboxControllerEmulator()
@@ -180,7 +187,7 @@ def run_ted1104(
                         transform(img_seq[4] / 255.0),
                     ),
                     dim=0,
-                ).to(device=device, dtype=torch.float)
+                ).to(device=device, dtype=dtype)
 
                 with torch.no_grad():
                     model_prediction: torch.tensor = (
@@ -250,6 +257,10 @@ def run_ted1104(
                 key_push_time: float = 0.0
 
             if show_what_ai_sees:
+
+                if enable_segmentation:
+                    img_seq = image_segformer.add_segmentation(images=img_seq)
+
                 cv2.imshow("window1", img_seq[0])
                 cv2.waitKey(1)
                 cv2.imshow("window2", img_seq[1])
@@ -365,6 +376,16 @@ if __name__ == "__main__":
         help="full_screen: If you are playing in full screen (no window border on top) set this flag",
     )
 
+    parser.add_argument(
+        "--enable_segmentation",
+        action="store_true",
+        help="enable_segmentation: Perform image segmentation to the input sequences",
+    )
+
+    parser.add_argument(
+        "--fp16", action="store_true", help="Use FP16 for inference (bfloat16)",
+    )
+
     args = parser.parse_args()
 
     run_ted1104(
@@ -377,5 +398,7 @@ if __name__ == "__main__":
         num_parallel_sequences=args.num_parallel_sequences,
         evasion_score=args.evasion_score,
         control_mode=args.control_mode,
+        enable_segmentation=args.enable_segmentation,
+        dtype=torch.float32 if not args.fp16 else torch.bfloat16,
         # hparams_path=args.hparams_path,
     )
