@@ -124,9 +124,10 @@ class Tedd1104Dataset(Dataset):
             self.transform = transforms.Compose(
                 [
                     RemoveMinimap(hide_map_prob=hide_map_prob),
-                    RemoveImage(dropout_images_prob=dropout_images_prob),
+                    # RemoveImage(dropout_images_prob=dropout_images_prob),
                     SplitImages(),
                     ToTensor(),
+                    # SequenceColorJitter(),
                     Normalize(),
                     MergeImages(),
                     ReOrderImages(),

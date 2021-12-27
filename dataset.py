@@ -264,10 +264,11 @@ class Tedd1104Dataset(Dataset):
         else:
             self.transform = transforms.Compose(
                 [
-                    RemoveMinimap(hide_map_prob=hide_map_prob),
-                    RemoveImage(dropout_images_prob=dropout_images_prob),
+                    # RemoveMinimap(hide_map_prob=hide_map_prob),
+                    # RemoveImage(dropout_images_prob=dropout_images_prob),
                     SplitImages(),
                     ToTensor(),
+                    # SequenceColorJitter(),
                     Normalize(),
                     MergeImages(),
                 ]
@@ -302,7 +303,8 @@ class Tedd1104Dataset(Dataset):
                 ]
 
         y = self.IOHandler.imagename_input_conversion(
-            image_name=img_name, output_type=self.control_mode,
+            image_name=img_name,
+            output_type=self.control_mode,
         )
 
         sample = {"image": image, "y": y}
