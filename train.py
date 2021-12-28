@@ -78,7 +78,7 @@ def train(
         max_epochs=max_epochs,
         logger=tb_logger,
         callbacks=[checkpoint_callback, lr_monitor],
-        # accelerator="ddp",
+        accelerator="ddp",
         default_root_dir=os.path.join(output_dir, "trainer_checkpoint"),
         log_every_n_steps=10,
     )
