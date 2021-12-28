@@ -72,7 +72,7 @@ def train(
 
     trainer = pl.Trainer(
         precision=16,
-        gpus=1,
+        gpus=-1,
         val_check_interval=val_check_interval,
         accumulate_grad_batches=accumulation_steps,
         max_epochs=max_epochs,
