@@ -1227,7 +1227,10 @@ class Tedd1104ModelPL(pl.LightningModule):
 
     def configure_optimizers(self):
         optimizer = torch.optim.AdamW(
-            self.parameters(), lr=self.learning_rate, weight_decay=self.weight_decay
+            self.parameters(),
+            lr=self.learning_rate,
+            weight_decay=self.weight_decay,
+            eps=1e-4,
         )
 
         return {
@@ -1400,7 +1403,10 @@ class Tedd1104ModelPLForImageReordering(pl.LightningModule):
 
     def configure_optimizers(self):
         optimizer = torch.optim.AdamW(
-            self.parameters(), lr=self.learning_rate, weight_decay=self.weight_decay
+            self.parameters(),
+            lr=self.learning_rate,
+            weight_decay=self.weight_decay,
+            eps=1e-4,
         )
 
         return {
