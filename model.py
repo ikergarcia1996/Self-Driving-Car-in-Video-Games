@@ -615,7 +615,7 @@ class Controller2Keyboard(nn.Module):
         self.register_buffer("keys2vector_matrix", keys2vector_matrix)
 
     def forward(self, x: torch.tensor):
-        return 1.0 / (torch.cdist(x, self.keys2vector_matrix) + 1.0)
+        return torch.softmax(torch.cdist(x, self.keys2vector_matrix), dim=-1)
 
 
 class Keyboard2Controller(nn.Module):
