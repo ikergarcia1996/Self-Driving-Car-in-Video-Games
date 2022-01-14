@@ -16,6 +16,8 @@ def eval_model(
     dataloader_num_workers: int = 16,
     output_path: str = None,
 ):
+    if not os.path.exists(os.path.dirname(output_path)):
+        os.makedirs(os.path.dirname(output_path))
 
     if hparams_path is None:
         # Try to find hparams file
