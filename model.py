@@ -176,6 +176,33 @@ class CrossEntropyLossImageReorder(torch.nn.Module):
         return self.CrossEntropyLoss(predicted.view(-1, 5), target.view(-1).long())
 
 
+def linear_combination(x, y, epsilon):
+    return epsilon * x + (1 - epsilon) * y
+
+
+class LabelSmoothingCrossEntropy(nn.Module):
+    def __init__(self, epsilon: float = 0.1, reduction="mean"):
+        super().__init__()
+        self.epsilon = epsilon
+        self.reduction = reduction
+
+    def reduce_loss(self, loss):
+        return (
+            loss.mean()
+            if self.reduction == "mean"
+            else loss.sum()
+            if self.reduction == "sum"
+            else loss
+        )
+
+    def forward(self, preds, target):
+        n = preds.size()[-1]
+        log_preds = torch.functional.F.log_softmax(preds, dim=-1)
+        loss = self.reduce_loss(-log_preds.sum(dim=-1))
+        nll = self.F.nll_loss(log_preds, target, reduction=self.reduction)
+        return linear_combination(loss / n, nll, self.epsilon)
+
+
 class ImageReorderingAccuracy(torchmetrics.Metric):
     def __init__(self, dist_sync_on_step=False):
         super().__init__(dist_sync_on_step=dist_sync_on_step)
@@ -1098,7 +1125,7 @@ class Tedd1104ModelPL(pl.LightningModule):
         )
 
         if self.control_mode == "keyboard":
-            self.criterion = CrossEntropyLoss(weights=self.weights)
+            self.criterion = LabelSmoothingCrossEntropy()  # (weights=self.weights)
             self.Keyboard2Controller = Keyboard2Controller()
         else:
             self.validation_distance = torchmetrics.MeanSquaredError()
