@@ -199,7 +199,7 @@ class LabelSmoothingCrossEntropy(nn.Module):
         n = preds.size()[-1]
         log_preds = torch.functional.F.log_softmax(preds, dim=-1)
         loss = self.reduce_loss(-log_preds.sum(dim=-1))
-        nll = self.F.nll_loss(log_preds, target, reduction=self.reduction)
+        nll = torch.functional.F.nll_loss(log_preds, target, reduction=self.reduction)
         return linear_combination(loss / n, nll, self.epsilon)
 
 
