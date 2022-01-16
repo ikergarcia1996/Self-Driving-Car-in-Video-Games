@@ -1184,11 +1184,12 @@ class Tedd1104ModelPL(pl.LightningModule):
         return {"preds": preds.detach(), "y": y, "loss": loss}
 
     def training_step_end(self, outputs):
-        self.train_accuracy(outputs["preds"], outputs["y"])
-        self.log(
-            "Train/acc_k@1_macro",
-            self.train_accuracy,
-        )
+        if self.control_mode == "keyboard":
+            self.train_accuracy(outputs["preds"], outputs["y"])
+            self.log(
+                "Train/acc_k@1_macro",
+                self.train_accuracy,
+            )
 
     def validation_step(self, batch, batch_idx):
         x, y = batch["images"], batch["y"]
