@@ -11,9 +11,7 @@ from utils import IOHandler
 
 class BalancedDataset:
     """
-    Divides the continuous input into classes and ensures that we don't get to many
-    examples of one class to produce a balanced dataset.
-
+    Generate a dataset of images with balanced classes.
     """
 
     class_matrix: np.ndarray
@@ -21,7 +19,6 @@ class BalancedDataset:
     total: int
 
     def __init__(self):
-
         """
         INIT
         """
@@ -33,14 +30,15 @@ class BalancedDataset:
 
     def balance_dataset(self, input_value: Union[np.ndarray, int]) -> bool:
         """
-        Given a controller inputs decide if we will add this example to the dataset or no depending of how
-        many example of the class of the input are already in the dataset. Fewer examples of the same class
-        increases the probability of adding it to the dataset.
-        Input:
-         -controller input: np.ndarray [3] or int
-        Output:
-         -bool: True if we should add the example, False if there are already to many examples of this class
+        Decide if a given input value is to be added to the dataset or not.
+        The probability of returning True is proportional to the number of examples per class.
+        The higher the number of examples of a given class, the lower the probability of returning True
+        for examples of that class. Xbox controller inputs are mapped to keys.
+
+        :param int input_value: The controller input value to decide if the example is to be added to the dataset or not.
+        :return: True if the example is to be added to the dataset, False otherwise.
         """
+
         example_class = self.io_handler.input_conversion(
             input_value=input_value, output_type="keyboard"
         )
@@ -66,10 +64,9 @@ class BalancedDataset:
     @property
     def get_matrix(self) -> np.ndarray:
         """
-        Return the matrix containing the number of examples per class in the dataset
-        Input:
-        Output:
-         -matrix: np.ndarray [9]
+        Get the class matrix.
+
+        :return: The class matrix.
         """
         return self.class_matrix
 
@@ -82,12 +79,14 @@ def save_data(
     control_mode: str = "keyboard",
 ):
     """
-    Save a training example
-    Input:
-     - dir_path path of the directory where the files are going to be stored
-     - data numpy ndarray
-     - number integer used to name the file
-    Output:
+    Save a training example (the images and the labels) in the given directory.
+
+    :param str dir_path: The directory where the example will be saved.
+    :param np.ndarray images: The images to be saved.
+    :param np.ndarray y: The labels to be saved.
+    :param int number: The number of the example.
+    :param str control_mode: Type of the user input: "keyboard" or "controller"
+
 
     """
     assert control_mode in [
@@ -110,11 +109,10 @@ def save_data(
 
 def get_last_file_num(dir_path: str) -> int:
     """
-    Given a directory with files in the format [number].jpeg return the higher number
-    Input:
-     - dir_path path of the directory where the files are stored
-    Output:
-     - int max number in the directory. -1 if no file exits
+    Get the number of the last file in the given directory.
+
+    :param str dir_path: The directory where the files are.
+    :return: int - The number of the last file.
     """
 
     files = [
@@ -137,23 +135,25 @@ def generate_dataset(
 ) -> None:
     """
     Generate dataset exampled from a human playing a videogame
+
     HOWTO:
-        Set your game in windowed mode
-        Set your game to width x height resolution
-        Move the game window to the top left corner, there should be a blue line of 1 pixel in the left bezel of your
-         screen and the window top bar should start in the top bezel of your screen.
-        Play the game! The program will capture your screen and generate the training examples. There will be saved
-         as files named "training_dataX.npz" (numpy compressed array). Don't worry if you re-launch this script,
-          the program will search for already existing dataset files in the directory and it won't overwrite them.
+       - If you play in windowed mode move the game window to the top left corner of the primary screen.
+       - If you play in full screen mode, set the full screen parameter to True.
+       - Set your game to width x height resolution specified in the parameters.
+       - If you want to record the input from the keyboard set the control_mode parameter to "keyboard".
+       - If you want to record the input from an xbox controller set the control_mode parameter to "controller".
+       - Play the game! The program will capture your screen and generate the training examples.
+       - The program will save the training examples in the output_dir directory.
+       - You can call this function again to generate more examples.
+       - More info in the README.md file.
 
-    Input:
-    - output_dir: Directory where the training files will be saved
-    - width: Game window width
-    - height: Game window height
-    - full_screen: If you are playing in full screen (no window border on top) enable this
-    - examples_per_second: Number of training examples per second to capture
-    Output:
-
+    :param str output_dir: The directory where the examples will be saved.
+    :param int width: The width of the game window.
+    :param int height: The height of the game window.
+    :param bool full_screen: If the game is played in full screen mode.
+    :param int max_examples_per_second: The maximum number of examples per second to capture.
+    :param bool use_probability: We will try to balance the number of examples per class recorded.
+    :param str control_mode: Type of the user input: "keyboard" or "controller"
     """
 
     assert control_mode in [
@@ -230,37 +230,43 @@ def generate_dataset(
 
 if __name__ == "__main__":
 
-    parser = argparse.ArgumentParser()
+    parser = argparse.ArgumentParser(
+        description="Generate training data from the game. See the README.md file for more info."
+    )
 
     parser.add_argument(
         "--save_dir",
         type=str,
         default=os.getcwd(),
-        help="Directory where the training data will be saved",
+        help="The directory where the examples will be saved.",
     )
 
-    parser.add_argument("--width", type=int, default=1600, help="Game window width")
-    parser.add_argument("--height", type=int, default=900, help="Game window height")
+    parser.add_argument(
+        "--width", type=int, default=1600, help="The width of the game window."
+    )
+    parser.add_argument(
+        "--height", type=int, default=900, help="The height of the game window."
+    )
 
     parser.add_argument(
         "--full_screen",
         action="store_true",
-        help="full_screen: If you are playing in full screen (no window border on top) set this flag",
+        help="If the game is played in full screen mode.",
     )
 
     parser.add_argument(
         "--examples_per_second",
         type=int,
         default=8,
-        help="Number of training examples per second to capture",
+        help="The maximum number of examples per second to capture.",
     )
 
     parser.add_argument(
         "--save_everything",
         action="store_true",
-        help="If this flag is added we will save every recorded sequence, "
-        "it will result in a very unbalanced dataset. If this flag "
-        "is not added we will use probability to try to generate a balanced dataset",
+        help="Do not try to balance the number of examples per class recorded. "
+        "Not recommended you will end up with a huge amount of examples, "
+        "specially if you set the examples_per_second to a high value.",
     )
 
     parser.add_argument(
@@ -268,7 +274,7 @@ if __name__ == "__main__":
         type=str,
         default="keyboard",
         choices=["keyboard", "controller"],
-        help="Record the keyboard or the controller",
+        help='Type of the user input: "keyboard" or "controller"',
     )
 
     args = parser.parse_args()

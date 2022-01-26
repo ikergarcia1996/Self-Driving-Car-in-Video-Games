@@ -13,13 +13,16 @@ from keyboard.getkeys import key_check, keys_to_id
 def preprocess_image(image):
     """
     Given an image resize it and convert it to a numpy array
-    Input:
-    - image: PIL image
-    Output:
-    - numpy ndarray: [480,270,3]
+
+    :param PIL.image image:
+    :returns:
+        numpy ndarray - image as a numpy array of dimensions [480,270,3]
     """
     processed_image = cv2.resize(image, (480, 270))
-    return np.asarray(processed_image, dtype=np.uint8,)
+    return np.asarray(
+        processed_image,
+        dtype=np.uint8,
+    )
 
 
 class ScreenRecorder:
@@ -50,13 +53,12 @@ class ScreenRecorder:
         """
         INIT
 
-        Input:
-         - width: Game window width
-         - height: Game window height
-         - full_screen: If you are playing in full screen (no window border on top) enable this
-         - get_controller_input: If true a xbox controller input will be recorded together with the images
-         - total_wait_secs: Total secs to wait to prevent false readings
-
+        :param int width: Width of the game window
+        :param int height:  Height of the game window
+        :param bool full_screen: True if the game is in full screen (no window border on top). False if not
+        :param bool get_controller_input: True if the controller input should be captured
+        :param str control_mode: Record the input from the "keyboard" or "controller"
+        :param int total_wait_secs: Total time to wait for the controller and image recorder to be ready (in seconds)
         """
         print(f"We will capture a window of W:{width} x H:{height} size")
 
@@ -101,8 +103,8 @@ class ScreenRecorder:
     def _img_thread(self, stop_event: threading.Event):
         """
         Thread that continuously captures the screen
-        Input:
-         - stop_event: threading.Event that will stop the infinite loop when set
+
+        :param threading.Event stop_event: Event to stop the thread
         """
         if self.get_controller_input and self.control_mode == "controller":
             self.controller_reader = XboxControllerReader(total_wait_secs=2)
@@ -130,12 +132,12 @@ class ScreenRecorder:
 
     def get_image(self) -> (np.ndarray, Union[np.ndarray, None]):
         """
-        Return the last image captured and the xbox controller input when it was captured
-        Input:
-        Output:
-        - np.ndarray  [width x height x 3]: Last image captured
-        - np.ndarray [3] if get_controller_input:  xbox controller input when image was captured
-          None if not get_controller_input
+        Return the last image captured and the controller input when it was captured
+
+        :returns:
+            np.ndarray - The last image captured of size [width x height x 3]
+            Union[np.ndarray, None] - The last controller input when it was captured. None if not requested
+
         """
         return (
             self.back_buffer,
@@ -145,13 +147,14 @@ class ScreenRecorder:
     def stop(self):
         """
         Stops the screen recording and the sequence thread
-        Input:
-        Output:
         """
         self.stop_recording.set()
 
 
 class ImageSequencer:
+    """
+    Class that sequentially captures images from a screen recorder
+    """
 
     screen_recorder: ScreenRecorder
     num_sequences: int
@@ -177,21 +180,14 @@ class ImageSequencer:
         """
         INIT
 
-        Input:
-         - width: Game window width
-         - height: Game window height
-         - full_screen: If you are playing in full screen (no window border on top) enable this
-         - get_controller_input: If true a xbox controller input will be recorded together with the images
-         - capturerate: Number of images to capture per second.
-                        The delay between each image in the sequence will be 1/capturerate seconds
-         - num_sequences: Number of simultaneous sequences to store. Thread safe if num_sequences > 1
-                          More sequences if num_sequences is larger the recorded sequence of images will be
-                          updated faster and the model  will use more recent images as well as being able to
-                          do more iterations per second but the memory and CPU usage will increase.
-                          1-2 recommended for generating the dataset
-                          2-6 recommended for inference
-
-         - total_wait_secs: Total secs to wait to prevent false readings
+        :param int width: Width of the game window
+        :param int height:  Height of the game window
+        :param bool full_screen: True if the game is in full screen (no window border on top). False if not
+        :param bool get_controller_input: True if the controller input should be captured
+        :param float capturerate: The capture rate in frames per second
+        :param int num_sequences: The number of parallel sequences to capture (Useful for inference)
+        :param int total_wait_secs: The total time to wait for the game to fill the sequences (in seconds)
+        :param str control_mode: Record the input from the "keyboard" or "controller"
         """
 
         assert control_mode in [
@@ -291,8 +287,8 @@ class ImageSequencer:
     def _sequence_thread(self, stop_event: threading.Event):
         """
         Thread that continuously captures sequences of images
-        Input:
-         - stop_event: threading.Event that will stop the infinite loop when set
+
+        :param threading.Event stop_event: Event to stop the thread
         """
 
         while not stop_event.is_set():
@@ -324,30 +320,24 @@ class ImageSequencer:
     @property
     def sequence_number(self) -> int:
         """
-        Get the number of the last sequence captured
-        Input:
-        Output:
-         -Integer: Last sequence captured
+        Returns the current sequence number
+
+        :return: int - current sequence number
         """
         return self.num_sequence
 
     def stop(self):
         """
         Stops the screen recording and the sequence thread
-        Input:
-        Output:
         """
         self.stop_recording.set()
         self.screen_recorder.stop()
 
     def get_sequence(self) -> (np.ndarray, Union[np.ndarray, None]):
         """
-        Return the last sequence and the xbox controller input when it was captured
-        Input:
-        Output:
-        - np.ndarray  [5, width x height x 3]: Last image captured
-        - np.ndarray [5, 3] if get_controller_input:  xbox controller input when image was captured
-          None if not get_controller_input
+        Return the last sequence and the controller input if requested
+
+        :return: (np.ndarray, Union[np.ndarray, None]) - last sequence and the controller input if requested
         """
 
         return (

@@ -5,7 +5,7 @@ from skimage import io
 from torch.utils.data import Dataset, DataLoader
 from torchvision import transforms
 import glob
-from typing import List, Optional
+from typing import List, Optional, Dict
 from utils import IOHandler
 import pytorch_lightning as pl
 from dataset import (
@@ -16,12 +16,19 @@ from dataset import (
     Normalize,
     SequenceColorJitter,
 )
+import numpy as np
 
 
 class ReOrderImages(object):
     """Reorders the image given a tensor of positions"""
 
-    def __call__(self, sample):
+    def __call__(self, sample: Dict[str, torch.tensor]) -> Dict[str, torch.tensor]:
+        """
+        Applies the transformation to the sequence of images.
+
+        :param Dict[str, torch.tensor] sample: Sequence of images
+        :return: Dict[str, torch.tensor]- Reordered sequence of images
+        """
         images, y = (
             sample["images"],
             sample["y"],
@@ -34,9 +41,15 @@ class ReOrderImages(object):
 
 
 class ToTensor(object):
-    """Convert ndarrays in sample to Tensors."""
+    """Convert np.ndarray images to Tensors."""
 
-    def __call__(self, sample):
+    def __call__(self, sample: Dict[str, np.ndarray]) -> Dict[str, torch.tensor]:
+        """
+        Applies the transformation to the sequence of images.
+
+        :param Dict[str, np.ndarray] sample: Sequence of images
+        :return: Dict[str, torch.tensor]- Transformed sequence of images
+        """
         image1, image2, image3, image4, image5, y = (
             sample["image1"],
             sample["image2"],
@@ -65,7 +78,7 @@ class ToTensor(object):
 
 
 class Tedd1104Dataset(Dataset):
-    """TEDD1104 dataset."""
+    """TEDD1104 Reordering dataset."""
 
     def __init__(
         self,
@@ -75,16 +88,12 @@ class Tedd1104Dataset(Dataset):
         train: bool = False,
     ):
         """
-        Init
+        INIT
 
-        Input:
-        -dataset_dir: Directory containing the dataset files
-        -hide_map_prob: Probability for removing the minimap (black square)
-          from the sequence of images (0<=hide_map_prob<=1)
-        - dropout_images_prob List of 5 floats or None, probability for removing each input image during training
-         (black image) from a training example (0<=dropout_images_prob<=1)
-        - control_mode: Set if the dataset true values will be keyboard inputs (9 classes)
-          or Controller Inputs (2 continuous values)
+        :param str dataset_dir: The directory of the dataset.
+        :param bool hide_map_prob: Probability of hiding the minimap (0<=hide_map_prob<=1)
+        :param List[float] dropout_images_prob: Probability of dropping an image (0<=dropout_images_prob<=1)
+        :param bool train: If True, the dataset is used for training.
         """
 
         self.dataset_dir = dataset_dir
@@ -138,10 +147,20 @@ class Tedd1104Dataset(Dataset):
         self.IOHandler = IOHandler()
 
     def __len__(self):
+        """
+        Returns the length of the dataset.
+
+        :return: int - Length of the dataset.
+        """
         return len(self.dataset_files)
 
     def __getitem__(self, idx):
+        """
+        Returns a sample from the dataset.
 
+        :param int idx: Index of the sample.
+        :return: Dict[str, torch.tensor]- Transformed sequence of images
+        """
         if torch.is_tensor(idx):
             idx = idx.tolist()
 
@@ -169,6 +188,10 @@ class Tedd1104Dataset(Dataset):
 
 
 class Tedd1104ataModuleForImageReordering(pl.LightningDataModule):
+    """
+    Tedd1104DataModule is a PyTorch Lightning DataModule for the Tedd1104 dataset.
+    """
+
     def __init__(
         self,
         batch_size: int,
@@ -179,6 +202,19 @@ class Tedd1104ataModuleForImageReordering(pl.LightningDataModule):
         dropout_images_prob: List[float] = None,
         num_workers: int = os.cpu_count(),
     ):
+        """
+        Initializes the Tedd1104DataModule.
+
+        :param int batch_size: Batch size for the dataset.
+        :param str train_dir: Directory containing the training dataset.
+        :param str val_dir: Directory containing the validation dataset.
+        :param str test_dir: Directory containing the test dataset.
+        :param bool hide_map_prob: Probability of hiding the minimap (0<=hide_map_prob<=1)
+        :param float dropout_images_prob: Probability of dropping an image (0<=dropout_images_prob<=1)
+        :param str control_mode: Type of the user input: "keyboard" or "controller"
+        :param int num_workers: Number of workers to use to load the dataset.
+        """
+
         super().__init__()
         self.train_dir = train_dir
         self.val_dir = val_dir
@@ -193,6 +229,11 @@ class Tedd1104ataModuleForImageReordering(pl.LightningDataModule):
         self.num_workers = num_workers
 
     def setup(self, stage: Optional[str] = None) -> None:
+        """
+        Sets up the dataset.
+
+        :param str stage: Stage of the setup.
+        """
         if stage in (None, "fit"):
             self.train_dataset = Tedd1104Dataset(
                 dataset_dir=self.train_dir,
@@ -220,7 +261,12 @@ class Tedd1104ataModuleForImageReordering(pl.LightningDataModule):
 
             print(f"Total test samples: {len(self.test_dataset)}.")
 
-    def train_dataloader(self):
+    def train_dataloader(self) -> DataLoader:
+        """
+        Returns the training dataloader.
+
+        :return: DataLoader - Training dataloader.
+        """
         return DataLoader(
             self.train_dataset,
             batch_size=self.batch_size,
@@ -229,7 +275,12 @@ class Tedd1104ataModuleForImageReordering(pl.LightningDataModule):
             shuffle=True,
         )
 
-    def val_dataloader(self):
+    def val_dataloader(self) -> DataLoader:
+        """
+        Returns the validation dataloader.
+
+        :return: DataLoader - Validation dataloader.
+        """
         return DataLoader(
             self.val_dataset,
             batch_size=self.batch_size,
@@ -238,7 +289,12 @@ class Tedd1104ataModuleForImageReordering(pl.LightningDataModule):
             shuffle=False,
         )
 
-    def test_dataloader(self):
+    def test_dataloader(self) -> DataLoader:
+        """
+        Returns the test dataloader.
+
+        :return: DataLoader - Test dataloader.
+        """
         return DataLoader(
             self.test_dataset,
             batch_size=self.batch_size,
