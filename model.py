@@ -118,9 +118,7 @@ class CrossEntropyLoss(torch.nn.Module):
         self.register_buffer("weights", weights)
 
         self.CrossEntropyLoss = torch.nn.CrossEntropyLoss(
-            reduction=reduction,
-            weight=weights,
-            label_smoothing=label_smoothing,
+            reduction=reduction, weight=weights, label_smoothing=label_smoothing,
         )
 
     def forward(self, predicted: torch.tensor, target: torch.tensor,) -> torch.tensor:
@@ -141,8 +139,7 @@ class CrossEntropyLossImageReorder(torch.nn.Module):
     """
 
     def __init__(
-        self,
-        label_smoothing: float = 0.0,
+        self, label_smoothing: float = 0.0,
     ):
         """
         INIT
@@ -152,7 +149,9 @@ class CrossEntropyLossImageReorder(torch.nn.Module):
 
         super(CrossEntropyLossImageReorder, self).__init__()
 
-        self.CrossEntropyLoss = torch.nn.CrossEntropyLoss()
+        self.CrossEntropyLoss = torch.nn.CrossEntropyLoss(
+            label_smoothing=label_smoothing
+        )
 
     def forward(self, predicted: torch.tensor, target: torch.tensor,) -> torch.tensor:
 
@@ -363,10 +362,7 @@ class PositionalEmbedding(nn.Module):
     """
 
     def __init__(
-        self,
-        sequence_length: int,
-        d_model: int,
-        dropout: float = 0.1,
+        self, sequence_length: int, d_model: int, dropout: float = 0.1,
     ):
         """
         INIT
@@ -935,8 +931,7 @@ class TEDD1104TransformerForImageReordering(nn.Module):
         )
 
         self.OutputLayer: OutputImageOrderingLayer = OutputImageOrderingLayer(
-            d_model=embedded_size,
-            num_classes=self.sequence_size,
+            d_model=embedded_size, num_classes=self.sequence_size,
         )
 
     def forward(self, x: torch.tensor) -> torch.tensor:
