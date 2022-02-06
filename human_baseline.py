@@ -1,37 +1,21 @@
+"""
+Shows the images from the dataset and ask the human to label them.
+Requires xv image viewer. Tested on Ubuntu.
+"""
+
 import glob
 import os
-from skimage import io
 from utils import IOHandler
 import json
 from tqdm import tqdm
 import argparse
-from skimage import img_as_ubyte
-import cv2
-
-
-def keys_to_id(keys: str) -> int:
-    keys = keys.lower()
-    if keys == "a":
-        return 1
-    if keys == "d":
-        return 2
-    if keys == "w":
-        return 3
-    if keys == "s":
-        return 4
-    if keys == "aw" or keys == "wa":
-        return 5
-    if keys == "as" or keys == "sa":
-        return 6
-    if keys == "dw" or keys == "wd":
-        return 7
-    if keys == "ds" or keys == "ds":
-        return 8
-
-    return 0
+from keyboard.getkeys import keys_to_id
 
 
 def restore_dictionary(annotation_path: str):
+    """
+    Restores the dictionary from the annotation file
+    """
     if os.path.exists(annotation_path):
         with open(annotation_path, "r") as index_file:
             return json.load(index_file)
@@ -40,6 +24,11 @@ def restore_dictionary(annotation_path: str):
 
 
 def human_baseline(gold_dataset_dir: str, annotation_path: str):
+    """
+    Shows the images from the dataset and ask the human to label them.
+    :param str gold_dataset_dir: The directory of the gold dataset
+    :param str annotation_path: The path to the annotation file, if it exists we will resume the labeling session
+    """
     files = glob.glob(os.path.join(gold_dataset_dir, "*.jpeg"))
     io_handler = IOHandler()
     input_dictionary = restore_dictionary(annotation_path=annotation_path)
@@ -93,18 +82,20 @@ def human_baseline(gold_dataset_dir: str, annotation_path: str):
 
 if __name__ == "__main__":
 
-    parser = argparse.ArgumentParser()
+    parser = argparse.ArgumentParser(
+        description="Shows the images from the dataset and ask the human to label them."
+    )
 
     parser.add_argument(
         "--gold_dataset_dir",
         type=str,
-        help="Path of the gold dataset directory",
+        help="The directory of the gold dataset",
     )
 
     parser.add_argument(
         "--annotation_path",
         type=str,
-        help="Path where the human predictions will we stored, if it exists we will reload the progress",
+        help=" The path to the annotation file, if it exists we will resume the labeling session",
     )
 
     args = parser.parse_args()

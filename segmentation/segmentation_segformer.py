@@ -1,11 +1,27 @@
+"""
+Experimental segmentation module based on SegFormer.
+Only intended for testing purposes.
+Only supported in inference, may be part of the model in the future.
+It uses too much GPU resources, not viable for training or real time inference yet.
+Nvidia pls launch faster GPUs :)
+
+Requires the transformers library from huggingface to be installed (huggingface.co/transformers)
+"""
+
 import torch
 from torch.nn import functional
 from torchvision import transforms
 import numpy as np
 from transformers import SegformerFeatureExtractor, SegformerForSemanticSegmentation
+from typing import List, Dict
 
 
 def cityscapes_palette():
+    """
+    Returns the cityscapes palette.
+
+    :return: List[List[int]] - The cityscapes palette.
+    """
     return [
         [128, 64, 128],
         [244, 35, 232],
@@ -30,22 +46,41 @@ def cityscapes_palette():
 
 
 class SequenceResize(object):
-    """Prepares the images for the model, unique dictionary instead of 5"""
+    """Prepares the images for the model"""
 
     def __init__(self, size=(1024, 1024)):
+        """
+        INIT
+
+        :param Tuple[int, int] size:  - The size of the output images.
+        """
         self.size = size
 
-    def __call__(self, images):
+    def __call__(self, images: List[np.ndarray]) -> List[np.ndarray]:
+        """
+        Applies the transformation to the images.
 
+        :param List[np.ndarray] images: - The images to transform.
+        :return: List[np.ndarray] - The transformed images.
+        """
         return functional.interpolate(
-            images, size=self.size, mode="bilinear", align_corners=False,
+            images,
+            size=self.size,
+            mode="bilinear",
+            align_corners=False,
         )
 
 
 class ToTensor(object):
-    """Convert ndarrays in sample to Tensors."""
+    """Convert np.ndarray images to Tensors."""
 
-    def __call__(self, images):
+    def __call__(self, images: List[np.ndarray]) -> List[torch.Tensor]:
+        """
+        Applies the transformation to the sequence of images.
+
+        :param List[np.ndarray] images: - The images to transform.
+        :return: List[torch.Tensor] - The transformed images.
+        """
         image1, image2, image3, image4, image5 = (
             images[0],
             images[1],
@@ -73,9 +108,15 @@ class ToTensor(object):
 
 
 class MergeImages(object):
-    """Prepares the images for the model, unique dictionary instead of 5"""
+    """Merges the images into one torch.Tensor"""
 
-    def __call__(self, images):
+    def __call__(self, images: List[torch.tensor]) -> torch.tensor:
+        """
+        Applies the transformation to the sequence of images.
+
+        :param List[torch.tensor] images: - The images to transform.
+        :return: torch.Tensor - The transformed image.
+        """
         image1, image2, image3, image4, image5 = (
             images[0],
             images[1],
@@ -88,12 +129,24 @@ class MergeImages(object):
 
 
 class ImageSegmentation:
+    """
+    Class for performing image segmentation.
+    """
+
     def __init__(
         self,
         device: torch.device,
         model_name: str = "nvidia/segformer-b3-finetuned-cityscapes-1024-1024",
     ):
+        """
+        INIT
+
+        :param torch.device device: - The device to use.
+        :param str model_name: - The name of the model to use (https://huggingface.co/models)
+        """
+        print(f"Loading feature extractor for {model_name}")
         self.feature_extractor = SegformerFeatureExtractor.from_pretrained(model_name)
+        print(f"Loading segmentation model for {model_name}")
         self.model = SegformerForSemanticSegmentation.from_pretrained(model_name)
         self.device = device
         self.model = self.model.to(device=self.device)
@@ -102,15 +155,12 @@ class ImageSegmentation:
             [ToTensor(), MergeImages(), SequenceResize()]
         )
 
-    def add_segmentation(self, images: np.ndarray):
+    def add_segmentation(self, images: np.ndarray) -> np.ndarray:
         """
-        Given a list of images, we will perform image segmentation and the detected entities will be
-        printed over the original image to highlight them.
+        Adds the segmentation to the images. The segmentation is added as a mask over the original images.
 
-        Input:
-        -images: Array of images (num_images x height x width x num_channels)
-        Output:
-        -images modified with segmented entities printed over them: (num_images x height x width x num_channels)
+        :param np.ndarray images: - The images to add the segmentation to.
+        :return: np.ndarray - The images with the segmentation added.
         """
 
         original_image_size = images[0].shape

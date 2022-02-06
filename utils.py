@@ -6,23 +6,20 @@ import os
 
 def print_message(message: str) -> None:
     """
-    Print a message in the <date> : message format
-    Input:
-     - message: string to print
-    Output:
+    Prints a message with the current time.
+
+    :param str message: Message to print
     """
     print(f"<{str(datetime.datetime.now()).split('.')[0]}> {message}")
 
 
 def mse(image1: np.ndarray, image2: np.ndarray) -> np.float:
     """
-    Mean squared error between two numpy ndarrays.
-    If available we will use the GPU (cupy) else we will use the CPU (numpy)
-    Input:
-     - image1: fist numpy ndarray
-     - image2: second numpy ndarray
-    Ouput:
-     - Mean squared error numpy.float
+    Mean squared error between two images (np.ndarrays).
+
+    :param np.ndarray image1: First image
+    :param np.ndarray image2: Second image
+    :return: Float - Mean squared error
     """
     err = np.float(np.sum((np.asarray(image1) - np.asarray(image2)) ** 2))
     err /= np.float(image1.shape[0] * image1.shape[1])
@@ -32,15 +29,27 @@ def mse(image1: np.ndarray, image2: np.ndarray) -> np.float:
 def length_normalize(
     matrix: np.ndarray,
 ) -> np.ndarray:
+    """
+    Normalizes the length of a matrix.
 
+    :param np.ndarray matrix: Matrix to normalize
+    :return: np.ndarray - Normalized matrix
+    """
     norms = np.sqrt(np.sum(matrix ** 2, axis=1))
     norms[norms == 0] = 1
     return matrix / norms[:, np.newaxis]
 
 
 class IOHandler:
-    def __init__(self):
+    """
+    Class for handling input and output formats. It is used to convert between keyboard input and controller input.
+    It also handles the saving and loading of the data.
+    """
 
+    def __init__(self):
+        """
+        INIT
+        """
         self.keys2controllerMatrix = np.array(
             [
                 [0.0, 0.0],
@@ -58,19 +67,19 @@ class IOHandler:
         # self.keys2controllerMatrix_norm = length_normalize(self.keys2controllerMatrix)
 
     def keys2controller(self, keys: int) -> np.ndarray:
+        """
+        Converts a keyboard input to a controller input.
+
+        :param int keys: Keyboard input
+        :return: np.ndarray [2] - Controller input
+        """
         return self.keys2controllerMatrix[keys]
 
     def controller2keys(self, controller_vector: np.ndarray) -> int:
         """
-        return int(
-            np.argmax(
-                length_normalize(
-                    controller_vector[np.newaxis, :].dot(
-                        self.keys2controllerMatrix_norm.T
-                    )
-                )
-            )
-        )
+        Converts a controller input to a keyboard input.
+        :param np.ndarray controller_vector: Controller input [2]
+        :return: int - Keyboard input
         """
         return int(
             np.argmin(
@@ -88,7 +97,13 @@ class IOHandler:
     def imagename_input_conversion(
         self, image_name: str, output_type: str
     ) -> Union[int, np.ndarray]:
+        """
+        Converts an image name to an 'output_type' input
 
+        :param str image_name: Image name
+        :param str output_type: Output type: keyboard or controller
+        :return: Union[int, np.ndarray] - Output in the specified format
+        """
         metadata = os.path.basename(image_name)[:-5]
         header, values = metadata.split("%")
         control_mode = header[0]
@@ -128,6 +143,13 @@ class IOHandler:
     def input_conversion(
         self, input_value: Union[int, np.ndarray], output_type: str
     ) -> Union[int, np.ndarray]:
+        """
+        Converts an input to an 'output_type' input
+
+        :param Union[int, np.ndarray] input_value: Input value
+        :param str output_type: Output type: keyboard or controller
+        :return: Union[int, np.ndarray] - Output in the specified format
+        """
 
         if type(input_value) == int or input_value.size == 1:
             if output_type == "controller":

@@ -1,5 +1,5 @@
 # getkeys.py
-# Citation: Box Of Hats (https://github.com/Box-Of-Hats )
+# Citation: Box Of Hats (https://github.com/Box-Of-Hats)
 
 import win32api as wapi
 
@@ -8,7 +8,10 @@ for char in "WASDJL":  # "ABCDEFGHIJKLMNOPQRSTUVWXYZ 123456789,.'APS$/\\":
     keyList.append(char)
 
 
-def key_check():
+def key_check() -> str:
+    """
+    Checks if any keys are pressed.
+    """
     keys = []
     for key in keyList:
         if wapi.GetAsyncKeyState(ord(key)):
@@ -17,7 +20,13 @@ def key_check():
 
 
 def keys_to_id(keys: str) -> int:
+    """
+    Converts a  keys name to an integer.
 
+    :param str keys: The keys name.
+    :returns:
+        int - The key id.
+    """
     if keys == "A":
         return 1
     if keys == "D":
@@ -38,7 +47,14 @@ def keys_to_id(keys: str) -> int:
     return 0
 
 
-def key_press(key):
+def id_to_key(key: int) -> str:
+    """
+    Converts a key id to a string.
+
+    :param int key: The key id.
+    :returns:
+        str - The key name.
+    """
     if key == 1:
         return "A"
     if key == 2:

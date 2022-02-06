@@ -11,7 +11,8 @@ import cv2
 from torchvision import transforms
 from utils import mse
 from keyboard.inputsHandler import select_key
-from keyboard.getkeys import key_press
+from keyboard.getkeys import id_to_key
+import math
 
 from typing import Optional
 
@@ -25,7 +26,6 @@ except ImportError:
         f"[WARNING!] Controller emulation unavailable, see controller/setup.md for more info. "
         f"You can ignore this warning if you will use the keyboard as controller for TEDD1104."
     )
-
 
 if torch.cuda.is_available():
     device = torch.device("cuda:0")
@@ -92,27 +92,7 @@ def run_ted1104(
 
     show_what_ai_sees: bool = False
     fp16: bool
-    """
-    if hparams_path is None:
-        # Try to find hparams file
-        model_dir = os.path.dirname(checkpoint_path)
-        hparamsp = os.path.join(model_dir, "hparams.yaml")
 
-        if os.path.exists(hparamsp):
-            hparams_path = hparamsp
-
-        else:
-            model_dir = os.path.dirname(model_dir)
-            hparamsp = os.path.join(model_dir, "hparams.yaml")
-            if os.path.exists(hparamsp):
-                hparams_path = hparamsp
-            else:
-                raise FileNotFoundError(
-                    f"Unable to find an hparams.yaml file, "
-                    f"please set the path for your hyperparameter file using the flag --hparams_path."
-                )
-    
-    """
     model = Tedd1104ModelPL.load_from_checkpoint(
         checkpoint_path=checkpoint_path
     )  # hparams_file=hparams_path
@@ -165,6 +145,10 @@ def run_ted1104(
     close_app: bool = False
     model_prediction = np.zeros(3 if control_mode == "controller" else 1)
 
+    lt: float = 0
+    rt: float = 0
+    lx: float = 0
+
     while not close_app:
         try:
             while last_num == img_sequencer.num_sequence:
@@ -197,10 +181,20 @@ def run_ted1104(
                     )
 
                 if control_mode == "controller":
+
+                    if model_prediction[1] > 0:
+                        rt = min(1.0, float(model_prediction[1])) * 2 - 1
+                        lt = -1
+                    else:
+                        rt = -1
+                        lt = min(1.0, math.fabs(float(model_prediction[1]))) * 2 - 1
+
+                    lx = max(-1.0, min(1.0, float(model_prediction[0])))
+
                     xbox_controller.set_controller_state(
-                        lx=model_prediction[0],
-                        lt=model_prediction[1],
-                        rt=model_prediction[2],
+                        lx=lx,
+                        lt=lt,
+                        rt=rt,
                     )
                 else:
                     select_key(model_prediction)
@@ -283,16 +277,18 @@ def run_ted1104(
             time_it: float = time.time() - last_time
 
             if control_mode == "controller":
-                info_message = f"LX: {int(model_prediction[0]*100)}%\n"
-                f"LT: {int(model_prediction[1]*100)}%\n"
-                f"RT: {int(model_prediction[2]*100)}%"
+                info_message = (
+                    f"LX: {int(model_prediction[0] * 100)}%"
+                    f"\n LT: {int(lt * 100)}%\n"
+                    f"RT: {int(rt * 100)}%"
+                )
             else:
-                info_message = f"Predicted Key: {key_press(model_prediction)}"
+                info_message = f"Predicted Key: {id_to_key(model_prediction)}"
 
             print(
                 f"Recording at {img_sequencer.screen_recorder.fps} FPS\n"
-                f"Actions per second {None if time_it==0 else 1/time_it}\n"
-                f"Reaction time: {round(key_push_time-init_copy_time,3) if key_push_time>0 else 0} secs\n"
+                f"Actions per second {None if time_it == 0 else 1 / time_it}\n"
+                f"Reaction time: {round(key_push_time - init_copy_time, 3) if key_push_time > 0 else 0} secs\n"
                 f"{info_message}\n"
                 f"Difference from img 1 to img 5 {None if not enable_evasion else score}\n"
                 f"Push Ctrl + C to exit\n"
@@ -312,7 +308,6 @@ def run_ted1104(
 
 
 if __name__ == "__main__":
-
     parser = argparse.ArgumentParser()
 
     parser.add_argument(
@@ -383,7 +378,9 @@ if __name__ == "__main__":
     )
 
     parser.add_argument(
-        "--fp16", action="store_true", help="Use FP16 for inference (bfloat16)",
+        "--fp16",
+        action="store_true",
+        help="Use FP16 for inference (bfloat16)",
     )
 
     args = parser.parse_args()
@@ -400,5 +397,4 @@ if __name__ == "__main__":
         control_mode=args.control_mode,
         enable_segmentation=args.enable_segmentation,
         dtype=torch.float32 if not args.fp16 else torch.bfloat16,
-        # hparams_path=args.hparams_path,
     )
