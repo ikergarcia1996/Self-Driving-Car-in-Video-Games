@@ -52,10 +52,9 @@ We provide train/dev/test datasets for training and evaluating T.E.D.D 1107 mode
 
 ##  Architecture
 
-T.E.D.D. 1104 follows the End-To-End learning approach. We approach the task as a classification task. 
+T.E.D.D. 1104 is an End-To-End model. We approach the task as a classification task. 
 The input of the model is a sequence of 5 images, each image has been recorded with a 0.1s interval. 
-The output are the correct keys in the keyboard to press. Alternatively T.E.D.D. 1104 can also be trained  
-with a regression objective using xbox controller inputs. 
+The output are the correct keys in the keyboard to press. Alternatively T.E.D.D. 1104 can also be trained with a regression objective using xbox controller inputs. 
 
 <p align="center">
   <img src="github_images/network_architecture.png" alt="The brain!"/>
@@ -71,8 +70,8 @@ The model has been implemented using Pytorch: https://pytorch.org/ and PyTorch L
 
 # Software and HOW-TO
 This repository contains all the files need for generating the training data, training the model and use the model to 
-drive in the video game. The software has been written in Python 3. Model can be trained in any OS. Data generation
-and inference only works in Windows 10/11 which are the only SO supported by most video games. 
+drive in the video game (Real Time Inference). The software has been written in Python 3. You can train a model in any OS. 
+Data generation and inference only works in Windows 10/11 which are the only OS supported by most video games. 
 
 ## Requirements
 ```
@@ -91,7 +90,7 @@ win32api (PythonWin) - Should be installed by default in newest Python versions 
 
 pygame - Only required if you wish to generate data using a Xbox Controller
 PYXInput - Only required if you wish to use a Vitual Xbox Controller as game controller instead of the keyboard. 
-           See controller\setup.md for installation instructions. 
+           See controller\README.md for installation instructions. 
 ```
 
 ## Train your own model
