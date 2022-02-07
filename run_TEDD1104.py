@@ -343,7 +343,7 @@ if __name__ == "__main__":
         "--num_parallel_sequences",
         type=int,
         default=1,
-        help="num_parallel_sequences to record, is the number is larger the recorded sequence of images will be "
+        help="num_parallel_sequences to record, if the number is larger the recorded sequence of images will be "
         "updated faster and the model  will use more recent images as well as being able to do more iterations "
         "per second. However if num_parallel_sequences is too high it wont be able to update the sequences with "
         "1/10 secs between images (default capturete to generate training examples). ",
