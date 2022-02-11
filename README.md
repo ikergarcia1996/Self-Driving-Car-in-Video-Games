@@ -107,6 +107,64 @@ PYXInput - Only required if you wish to use a Vitual Xbox Controller as game con
            See controller\README.md for installation instructions. 
 ```
 
+
+## Run Inference 
+How to use a pretrained T.E.E.D. 1104 model to drive in GTAV
+
+### Configure the game
+You can run the game in "windowed mode" or "full screen" mode. 
+If you want to run the game in "windowed mode":
+- Run GTAV and set your game to windowed mode.
+- Set the desired game resolution (i.e 1600x900 resolution).
+- Move the game window to the top left corner.
+- Run the script with the "--width 1600" and "--height 900" parameters.
+
+<p align="center">
+  <img src="github_images/example_config.png" alt="Setup Example"/>
+</p>
+  
+
+If you want to run the game in "full screen" mode:
+- Run GTAV **in your main screen** (The one labelled as screen nº1) and set your game to full-screen mode.
+- Configure the game resolution with the resolution of your screen (i.e 2560x1440 resolution).
+- Run the script with the "--width 2560", "--height 1440" and "--full_screen" parameters.
+
+<p align="center">
+  <img src="github_images/example_config_full_screen.png" alt="Setup Example Full Screen"/>
+</p>
+
+In addition, if you want to run the pretrained models that we provide you must:
+- Set the Settings>Camera>First person Vehicle Hood to "On"
+- Change the camera to first-person-view (Push "V")
+- Set a waypoint in the minimap
+
+<p align="center">
+  <img src="github_images/additional_config.jpg" alt="Setup Example"/>
+</p>
+
+
+### Run a Model
+
+Use the *run_TEDD1104.py* script to run a model for real-time inference. See "run_TEDD1104.py -h" to get a description of all the available parameters. 
+
+```
+python run_TEDD1104.py \
+--checkpoint_path "models\TEDD1107_model.ckpt" \
+--width 1920 \
+--height 1080 \
+--num_parallel_sequences 5 \
+--control_mode keyboard
+```
+num_parallel_sequences: number of parallel sequences to record, if the number is higher the model will do more 
+iterations per second (will push keys more often) provided your GPU is fast enough. This improves the performance of the 
+model but increases the CPU and RAM usage. 
+
+control_mode: Choose between keyboard and controller (Xbox Controller). It doesn't matter how the model has been trained, 
+the output of the model will be converted to the desired control_mode. 
+
+If the model does not perform as expected (It doesn't seem to do anything or always chooses the same action) you can 
+push "L" while the script is running to verify the input images. 
+
 ## Train your own model
 ### Self Driving Model
 
@@ -183,64 +241,6 @@ python3 train.py \
 ```
 
 Use the eval_reorder.py script to evaluate a image reordering model in the test dataset.
-
-
-## Run Inference 
-How to use a pretrained T.E.E.D. 1104 model to drive in GTAV
-
-### Configure the game
-You can run the game in "windowed mode" or "full screen" mode. 
-If you want to run the game in "windowed mode":
-- Run GTAV and set your game to windowed mode.
-- Set the desired game resolution (i.e 1600x900 resolution).
-- Move the game window to the top left corner.
-- Run the script with the "--width 1600" and "--height 900" parameters.
-
-<p align="center">
-  <img src="github_images/example_config.png" alt="Setup Example"/>
-</p>
-  
-
-If you want to run the game in "full screen" mode:
-- Run GTAV **in your main screen** (The one labelled as screen nº1) and set your game to full-screen mode.
-- Configure the game resolution with the resolution of your screen (i.e 2560x1440 resolution).
-- Run the script with the "--width 2560", "--height 1440" and "--full_screen" parameters.
-
-<p align="center">
-  <img src="github_images/example_config_full_screen.png" alt="Setup Example Full Screen"/>
-</p>
-
-In addition, if you want to run the pretrained models that we provide you must:
-- Set the Settings>Camera>First person Vehicle Hood to "On"
-- Change the camera to first-person-view (Push "V")
-- Set a waypoint in the minimap
-
-<p align="center">
-  <img src="github_images/additional_config.jpg" alt="Setup Example"/>
-</p>
-
-
-### Run a Model
-
-Use the *run_TEDD1104.py* script to run a model for real-time inference. See "run_TEDD1104.py -h" to get a description of all the available parameters. 
-
-```
-python run_TEDD1104.py \
---checkpoint_path "models\TEDD1107_model.ckpt" \
---width 1920 \
---height 1080 \
---num_parallel_sequences 5 \
---control_mode keyboard
-```
-num_parallel_sequences: number of parallel sequences to record, if the number is higher the model will do more 
-iterations per second (will push keys more often) provided your GPU is fast enough. This improves the performance of the 
-model but increases the CPU and RAM usage. 
-
-control_mode: Choose between keyboard and controller (Xbox Controller). It doesn't matter how the model has been trained, 
-the output of the model will be converted to the desired control_mode. 
-
-If the model does not perform as expected (It doesn't seem to do anything or always chooses the same action) you can 
-push "L" while the script is running to verify the input images. 
 
 
 ## Generate Data
