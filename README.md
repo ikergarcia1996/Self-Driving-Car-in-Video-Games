@@ -190,10 +190,10 @@ How to use a pretrained T.E.E.D. 1104 model to drive in GTAV
 ### Configure the game
 You can run the game in "windowed mode" or "full screen" mode. 
 If you want to run the game in "windowed mode":
-- Run GTAV and set your game to windowed mode
-- Set the desired game resolution (i.e 1600x900 resolution)
-- Move the game window to the top left corner
-- Run the script with the "--width 1600" and "--height 900" parameters
+- Run GTAV and set your game to windowed mode.
+- Set the desired game resolution (i.e 1600x900 resolution).
+- Move the game window to the top left corner.
+- Run the script with the "--width 1600" and "--height 900" parameters.
 
 <p align="center">
   <img src="github_images/example_config.png" alt="Setup Example"/>
@@ -201,9 +201,9 @@ If you want to run the game in "windowed mode":
   
 
 If you want to run the game in "full screen" mode:
-- Run GTAV **in your main screen** (The one labelled as screen nº1) and set your game to full-screen mode
-- Configure the game resolution with the resolution of your screen (i.e 2560x1440 resolution)
-- Run the script with the "--width 2560", "--height 1440" and "--full_screen"
+- Run GTAV **in your main screen** (The one labelled as screen nº1) and set your game to full-screen mode.
+- Configure the game resolution with the resolution of your screen (i.e 2560x1440 resolution).
+- Run the script with the "--width 2560", "--height 1440" and "--full_screen" parameters.
 
 <p align="center">
   <img src="github_images/example_config_full_screen.png" alt="Setup Example Full Screen"/>
