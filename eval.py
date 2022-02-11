@@ -32,7 +32,6 @@ def eval_model(
     model = Tedd1104ModelPL.load_from_checkpoint(checkpoint_path=checkpoint_path)
 
     trainer = pl.Trainer(
-        resume_from_checkpoint=checkpoint_path,
         precision=16,
         gpus=1,
         # accelerator="ddp",
@@ -58,7 +57,9 @@ def eval_model(
         )
         print(f"Testing dataset: {os.path.basename(test_dir)}: ")
         print()
-        out = trainer.test(model, dataloaders=[dataloader])[0]
+        out = trainer.test(
+            ckpt_path=checkpoint_path, model=model, dataloaders=[dataloader]
+        )[0]
 
         results.append(
             [

@@ -235,7 +235,6 @@ def continue_training(
     checkpoint_callback.CHECKPOINT_NAME_LAST = "{epoch}-last"
 
     trainer = pl.Trainer(
-        resume_from_checkpoint=checkpoint_path,
         precision=16,
         gpus=1,
         val_check_interval=val_check_interval,
@@ -248,7 +247,11 @@ def continue_training(
         log_every_n_steps=10,
     )
 
-    trainer.fit(model, datamodule=data, ckpt_path=checkpoint_path)
+    trainer.fit(
+        ckpt_path=checkpoint_path,
+        model=model,
+        datamodule=data,
+    )
 
     # print(f"Best model path: {checkpoint_callback.best_model_path}")
 
