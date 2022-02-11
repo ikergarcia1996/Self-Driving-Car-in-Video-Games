@@ -1,9 +1,22 @@
-# T.E.D.D. 1104
+<p align="center">
+    <br>
+    <img src="github_images/TEDD1104.png" width="900"/>
+    <br>
+    <a href="https://twitter.com/intent/tweet?text=Wow:&url=https%3A%2F%2Fgithub.com%2Fikergarcia1996%2FSelf-Driving-Car-in-Video-Games"><img alt="Twitter" src="https://img.shields.io/twitter/url?style=social&url=https%3A%2F%2Fgithub.com%2Fikergarcia1996%2FSelf-Driving-Car-in-Video-Games"></a>
+    <a href="https://github.com/ikergarcia1996/Self-Driving-Car-in-Video-Games/blob/master/LICENSE"><img alt="GitHub license" src="https://img.shields.io/github/license/ikergarcia1996/Self-Driving-Car-in-Video-Games"></a>
+    <a href="https://github.com/ikergarcia1996/Self-Driving-Car-in-Video-Games/stargazers"><img alt="GitHub stars" src="https://img.shields.io/github/stars/ikergarcia1996/Self-Driving-Car-in-Video-Games?color=yellow"></a>
+    <a href="https://github.com/ikergarcia1996/Self-Driving-Car-in-Video-Games/network"><img alt="GitHub forks" src="https://img.shields.io/github/forks/ikergarcia1996/Self-Driving-Car-in-Video-Games"></a>
+    <a href="https://github.com/ikergarcia1996/Self-Driving-Car-in-Video-Games/releases"><img alt="GitHub release" src="https://img.shields.io/badge/Release-5.0.0-green"></a>
+    <a href="https://ikergarcia1996.github.io/Iker-Garcia-Ferrero/"><img alt="Author" src="https://img.shields.io/badge/Autorh-Iker García Ferrero-ff69b4"></a>
+    <br>
+    <br>
+</p>
+
 A supervised deep neural network that learns how to drive in video games. The main objective of this project is to 
 achieve a model that can drive in Grand Theft Auto V. Given a waypoint, the model is expected to reach the destination as
 fast as possible avoiding other cars, humans and obstacles. 
 
-The model is trained using human labeled data. We record the game and key inputs of humans while they play the game, this data
+The model is trained using human labelled data. We record the game and key inputs of humans while they play the game, this data
 is used to train the model. 
 
 While we focus on self-driving cars and the video game Grand Theft Auto V this model can be adapted to play any existing
@@ -22,21 +35,21 @@ The models are trained using 130 GB of human labelled data.
 The model has been trained in first-person-view with a route to follow in the minimap.  
 The model has learned to drive a large variety of vehicles in different weather conditions (Sun, night, sunny, rain...). 
 
-### T.E.D.D. 1104 Base: [Num_params] parameters. 
-Download link: See the Releases Tab
+### T.E.D.D. 1104 Base: 34.6M Parameters. 
+Download link: [See the Releases Tab](https://github.com/ikergarcia1996/Self-Driving-Car-in-Video-Games/releases)
 
 Accuracy in the test datasets:
 
 |         |              Time              |   Weather  | Micro-Acc K@1 | Micro-Acc k@3 | Macro-Acc K@1 |
 |---------|:------------------------------:|:----------:|:-------------:|:-------------:|:-------------:|
-| City    |         :sun_with_face:        |   :sunny:  |      49.8     |      83.8     |      44.1     |
-| City    |         :sun_with_face:        | :umbrella: |      52.1     |      84.7     |      46.1     |
-| City    | :first_quarter_moon_with_face: |   :sunny:  |      54.5     |      86.9     |       48      |
-| City    | :first_quarter_moon_with_face: | :umbrella: |      48.8     |      82.5     |      43.2     |
-| Highway |         :sun_with_face:        |   :sunny:  |      65.6     |      100      |      53.2     |
-| Highway |         :sun_with_face:        | :umbrella: |      70.6     |       98      |      54.2     |
-| Highway | :first_quarter_moon_with_face: |   :sunny:  |      71.3     |      100      |      52.3     |
-| Highway | :first_quarter_moon_with_face: | :umbrella: |      67.7     |      100      |      50.9     |
+| City    |         :sun_with_face:        |   :sunny:  |      49.8     |     83.8      |     44.1      |
+| City    |         :sun_with_face:        | :umbrella: |      52.1     |     84.7      |     46.1      |
+| City    | :first_quarter_moon_with_face: |   :sunny:  |      54.5     |     86.9      |     48.0      |
+| City    | :first_quarter_moon_with_face: | :umbrella: |      48.8     |     82.5      |     43.2      |
+| Highway |         :sun_with_face:        |   :sunny:  |      65.6     |     100.0     |     53.2      |
+| Highway |         :sun_with_face:        | :umbrella: |      70.6     |     98.0      |     54.2      |
+| Highway | :first_quarter_moon_with_face: |   :sunny:  |      71.3     |     100.0     |     52.3      |
+| Highway | :first_quarter_moon_with_face: | :umbrella: |      67.7     |     100.0     |     50.9      |
 
 ### T.E.D.D. 1104 Large: 
 Coming Soon...
@@ -54,14 +67,14 @@ We provide train/dev/test datasets for training and evaluating T.E.D.D 1107 mode
 
 T.E.D.D. 1104 is an End-To-End model. We approach the task as a classification task. 
 The input of the model is a sequence of 5 images, each image has been recorded with a 0.1s interval. 
-The output are the correct keys in the keyboard to press. Alternatively T.E.D.D. 1104 can also be trained with a regression objective using xbox controller inputs. 
+The outputs are the correct keys on the keyboard to press. Alternatively T.E.D.D. 1104 can also be trained with a regression objective using Xbox controller inputs. 
 
 <p align="center">
   <img src="github_images/network_architecture.png" alt="The brain!"/>
 </p>
 
 The model consists of three modules:
-First a **Convolutional Neural Network** that encodes each input image in a feature 
+First, a **Convolutional Neural Network** that encodes each input image in a feature 
 vector. We use EfficientNet (https://arxiv.org/abs/1905.11946).
 We use a **transformer encoder** (https://arxiv.org/abs/1706.03762) to generate bidirectional joint distributions over the feature vector
 sequence. Finally, we use the [CLS] token to predict the key combination. 
@@ -69,10 +82,9 @@ sequence. Finally, we use the [CLS] token to predict the key combination.
 The model has been implemented using Pytorch: https://pytorch.org/ and PyTorch Lightning: https://www.pytorchlightning.ai/
 
 # Software and HOW-TO
-This repository contains all the files need for generating the training data, training the model and use the model to 
-drive in the video game (Real Time Inference). The software has been written in Python 3. You can train a model in any OS. 
-Data generation and inference only works in Windows 10/11 which are the only OS supported by most video games. 
-
+This repository contains all the files need for generating the training data, training the model and using the model to 
+drive in the video game (Real-Time Inference). The software has been written in Python 3. You can train a model in any OS. 
+Data generation and inference only work in Windows 10/11 which are the only OS supported by most video games. 
 ## Requirements
 ```
 Python 3.7 or newer (3.9.7 tested)
@@ -100,35 +112,75 @@ Use the *train.py* script to train a new model from scratch or continue training
 See "train.py -h" to get a description of all the available parameters. 
 
 Example command:
-```
-Sample command
+```sh
+python3 train.py --train_new \
+  --train_dir dataset/train \
+  --val_dir  dataset/dev \
+  --output_dir runs/TEDD1104-base \
+  --encoder_type transformer \
+  --batch_size 16 \
+  --accumulation_steps 4 \
+  --max_epochs 12 \
+  --cnn_model_name efficientnet_b4 \
+  --num_layers_encoder 4 \
+  --mask_prob 0.2 \
+  --dropout_cnn_out 0.3 \
+  --dropout_encoder 0.1 \
+  --dropout_encoder_features 0.3 \
+  --control_mode keyboard \
+  --dataloader_num_workers 32 \
+  --val_check_interval 0.5 
 ```
 
 You can continue training a model using the "--continue_training" flag 
-```
-Sample command
+```sh
+python3 train.py --continue_training \
+  --checkpoint_path runs/TEDD1104-base/model.ckpt \
+  --train_dir dataset/train \
+  --val_dir  dataset/dev \
+  --output_dir runs/TEDD1104-base \
+  --batch_size 16 \
+  --accumulation_steps 4 \
+  --max_epochs 24 \
+  --cnn_model_name efficientnet_b4 \
+  --dataloader_num_workers 32 \
+  --val_check_interval 0.5 
 ```
 
 #### Evaluate model:
 Use the eval.py script to evaluate a model in the test dataset.
-```
-Sample command
+```sh
+python3 eval.py \
+  --checkpoint_path runs/TEDD1104-base/model.ckpt \
+  --batch_size 32 \
+  --test_dirs \
+   /data/gtaai_datasets/dev \
+   /data/gtaai_datasets/test/car_city_day_clear \
+   /data/gtaai_datasets/test/car_city_day_rain \
+   /data/gtaai_datasets/test/car_city_night_clear \
+   /data/gtaai_datasets/test/car_city_night_rain \
+   /data/gtaai_datasets/test/car_highway_day_clear \
+   /data/gtaai_datasets/test/car_highway_day_rain \
+   /data/gtaai_datasets/test/car_highway_night_clear \
+   /data/gtaai_datasets/test/car_highway_night_rain \
+  --output_path results/TEDD1104-base.tsv
 ```
 
 ### Image Reordering Model
 An experimental unsupervised pretraining objective. We shuffle the order of the input sequence and the model must 
-predict the correct order of the input images. See "train_reorder.py -h" to get a description of all the available parameters. 
+predict the correct order of the input images. See "train_reorder.py -h" to get a description of all the available parameters.
+This script is almost identical to the self-driving script, except it only supports transformer encoder models and doesn't
+have a 'control_mode' parameter. Refer to the [previous section](#self-driving-model) for training/eval details. 
 After training with the image reordering objective you can finetune the model in the Self-Driving objective. 
 
-```
+```sh
 python3 train.py \
 --new_model \
 --checkpoint_path models/image_reordering.ckpt \
 ...
 ```
 
-Use the eval.py script to evaluate a image reordering model in the test dataset.
-
+Use the eval_reorder.py script to evaluate a image reordering model in the test dataset.
 
 
 ## Run Inference 
@@ -138,7 +190,7 @@ How to use a pretrained T.E.E.D. 1104 model to drive in GTAV
 You can run the game in "windowed mode" or "full screen" mode. 
 If you want to run the game in "windowed mode":
 - Run GTAV and set your game to windowed mode
-- Set your the desired game resolution (i.e 1600x900 resolution)
+- Set the desired game resolution (i.e 1600x900 resolution)
 - Move the game window to the top left corner
 - Run the script with the "--width 1600" and "--height 900" parameters
 
@@ -148,7 +200,7 @@ If you want to run the game in "windowed mode":
   
 
 If you want to run the game in "full screen" mode:
-- Run GTAV **in your main screen** (The one labelled as screen nº1) and set your game to full screen mode
+- Run GTAV **in your main screen** (The one labelled as screen nº1) and set your game to full-screen mode
 - Configure the game resolution with the resolution of your screen (i.e 2560x1440 resolution)
 - Run the script with the "--width 2560", "--height 1440" and "--full_screen"
 
