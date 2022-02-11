@@ -48,36 +48,31 @@ def run_ted1104(
     dtype=torch.float32,
 ) -> None:
     """
-    Generate dataset exampled from a human playing a videogame
+    Run TEDD1104 model in Real-Time inference
+
     HOWTO:
-        Set your game in windowed mode
-        Set your game to 1600x900 resolution
-        Move the game window to the top left corner, there should be a blue line of 1 pixel in the left bezel of your
-         screen and the window top bar should start in the top bezel of your screen.
-        Let the AI play the game!
-    Controls:
-        Push QE to exit
-        Push L to see the input images
-        Push and hold J to use to use manual control
+       - If you play in windowed mode move the game window to the top left corner of the primary screen.
+       - If you play in full screen mode, set the full_screen parameter to True.
+       - Set your game to width x height resolution specified in the parameters.
+       - If you TEDD1104 to use the keyboard for controlling the game set the control_mode parameter to "keyboard".
+       - If you TEDD1104 to use an vXbox Controller for controlling the game set the control_mode parameter to "controller".
+       - Run the script and let TEDD1104 Play the game!
+       - Detailed instructions can be found in the README.md file.
 
-    Input:
-    - model_dir: Directory where the model to use is stored (model.bin and model_hyperparameters.json files)
-    - enable_evasion: automatic evasion maneuvers when the car gets stuck somewhere. Note: It adds computation time
-    - show_current_control: Show a window with text that indicates if the car is currently being driven by
-      the AI or a human
-    - num_parallel_sequences: num_parallel_sequences to record, is the number is larger the recorded sequence of images
-      will be updated faster and the model  will use more recent images as well as being able to do more iterations
-      per second. However if num_parallel_sequences is too high it wont be able to update the sequences with 1/10 secs
-      between images (default capturerate to generate training examples).
-    - width: Game window width
-    - height: Game window height
-    - full_screen: If you are playing in full screen (no window border on top) enable this
-    -evasion_score: Mean squared error value between images to activate the evasion maneuvers
-    -enable_segmentation: Image segmentation will be performed using a pretrained model. Cars, persons, bikes.. will be
-     highlighted to help the model to identify them.
-
-    Output:
-
+    :param str checkpoint_path: Path to the model checkpoint file.
+    :param bool enable_evasion: Enable evasion, if the vehicle gets stuck we will reverse and randomly turn left/right.
+    :param bool show_current_control: Show if TEDD or the user is driving in the screen .
+    :param int num_parallel_sequences: Number of sequences to run in parallel.
+    :param int width: Width of the game window.
+    :param int height: Height of the game window.
+    :param bool full_screen: If the game is played in full screen mode.
+    :param int evasion_score: Threshold to trigger the evasion.
+    :param str control_mode: Device that TEDD will use from driving "keyboard" or "controller" (xbox controller).
+    :param bool enable_segmentation: Experimental. Enable segmentation using segformer (It will only apply segmentation
+    to the images displayed to the user if you push the "L" key). Requires huggingface transformers to be installed
+    (https://huggingface.co/docs/transformers/index). Very GPU demanding!
+    :param dtype: Data type to use for the model. BF16 is only supported on Nvidia Ampere GPUs and requires
+    PyTorch 1.10 or higher.
     """
 
     assert control_mode in [
@@ -298,7 +293,6 @@ def run_ted1104(
                 end="\r",
             )
 
-
             last_time = time.time()
 
         except KeyboardInterrupt:
@@ -316,46 +310,38 @@ if __name__ == "__main__":
         "--checkpoint_path",
         type=str,
         required=True,
-        help="Path to the model checkpoint",
+        help="Path to the model checkpoint file.",
     )
-    """
-    parser.add_argument(
-        "--hparams_path",
-        type=str,
-        default=None,
-        help="Path to the hparams.yalm file, if None we will attempt to automatically discover it",
-    )
-    """
+
     parser.add_argument("--width", type=int, default=1600, help="Game window width")
     parser.add_argument("--height", type=int, default=900, help="Game window height")
 
     parser.add_argument(
         "--enable_evasion",
         action="store_true",
-        help="Enable automatic evasion maneuvers when the car gets stuck somewhere. Note: It adds computation time",
+        help="Enable evasion, if the vehicle gets stuck we will reverse and randomly turn left/right.",
     )
 
     parser.add_argument(
         "--show_current_control",
         action="store_true",
-        help="Show a window with text that indicates if the car is currently being driven by the AI or a human",
+        help="Show if TEDD or the user is driving in the screen .",
     )
 
     parser.add_argument(
         "--num_parallel_sequences",
         type=int,
-        default=1,
-        help="num_parallel_sequences to record, if the number is larger the recorded sequence of images will be "
-        "updated faster and the model  will use more recent images as well as being able to do more iterations "
-        "per second. However if num_parallel_sequences is too high it wont be able to update the sequences with "
-        "1/10 secs between images (default capturete to generate training examples). ",
+        default=3,
+        help="number of parallel sequences to record, if the number is higher the model will do more "
+        "iterations per second (will push keys more often) provided your GPU is fast enough. "
+        "This improves the performance of the model but increases the CPU and RAM usage.",
     )
 
     parser.add_argument(
         "--evasion_score",
         type=float,
         default=200,
-        help="Mean squared error value between images to activate the evasion maneuvers",
+        help="Threshold to trigger the evasion.",
     )
 
     parser.add_argument(
@@ -363,29 +349,43 @@ if __name__ == "__main__":
         type=str,
         choices=["keyboard", "controller"],
         default="keyboard",
-        help="Set if the dataset true values will be keyboard inputs (9 classes) "
-        "or Controller Inputs (2 continuous values)",
+        help="Device that TEDD will use from driving 'keyboard' or 'controller' (xbox controller).",
     )
 
     parser.add_argument(
         "--full_screen",
         action="store_true",
-        help="full_screen: If you are playing in full screen (no window border on top) set this flag",
+        help="If you are playing in full screen (no window border on top) set this flag",
     )
 
     parser.add_argument(
         "--enable_segmentation",
         action="store_true",
-        help="enable_segmentation: Perform image segmentation to the input sequences",
+        help="Experimental. Enable segmentation using segformer (It will only apply segmentation"
+        "to the images displayed to the user if you push the 'L' key). Requires huggingface transformers to be "
+        "installed (https://huggingface.co/docs/transformers/index). Very GPU demanding!"
+        ":param dtype: Data type to use for the model. BF16 is only supported on Nvidia Ampere GPUs and requires"
+        "PyTorch 1.10 or higher.",
     )
 
     parser.add_argument(
-        "--fp16",
-        action="store_true",
-        help="Use FP16 for inference (bfloat16)",
+        "--dtype",
+        choices=["fp32", "fp16", "bf16"],
+        default="fp32",
+        help="Use FP32, FP16 or BF16 (bfloat16) for inference. "
+        "BF16 requires a GPU with BF16 support (like Volta or Ampere) and Pytorch >= 1.10",
     )
 
     args = parser.parse_args()
+
+    if args.dtype == "fp32":
+        dtype = torch.float32
+    elif args.dtype == "fp16":
+        dtype = torch.float16
+    elif args.dtype == "bf16":
+        dtype = torch.bfloat16
+    else:
+        raise ValueError(f"Invalid dtype {args.dtype}. Choose from fp32, fp16 or bf16")
 
     run_ted1104(
         checkpoint_path=args.checkpoint_path,
@@ -398,5 +398,5 @@ if __name__ == "__main__":
         evasion_score=args.evasion_score,
         control_mode=args.control_mode,
         enable_segmentation=args.enable_segmentation,
-        dtype=torch.float32 if not args.fp16 else torch.bfloat16,
+        dtype=dtype,
     )

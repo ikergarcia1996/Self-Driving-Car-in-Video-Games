@@ -138,14 +138,14 @@ def generate_dataset(
 
     HOWTO:
        - If you play in windowed mode move the game window to the top left corner of the primary screen.
-       - If you play in full screen mode, set the full screen parameter to True.
+       - If you play in full screen mode, set the full_screen parameter to True.
        - Set your game to width x height resolution specified in the parameters.
        - If you want to record the input from the keyboard set the control_mode parameter to "keyboard".
        - If you want to record the input from an xbox controller set the control_mode parameter to "controller".
        - Play the game! The program will capture your screen and generate the training examples.
        - The program will save the training examples in the output_dir directory.
        - You can call this function again to generate more examples.
-       - More info in the README.md file.
+       - Detailed instructions can be found in the README.md file.
 
     :param str output_dir: The directory where the examples will be saved.
     :param int width: The width of the game window.
