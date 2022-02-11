@@ -34,7 +34,7 @@ We provide pretrained T.E.D.D. 1104 models that you can use for real-time infere
 The models are trained using 130 GB of human labelled data.  
 The model has been trained in first-person-view with a route to follow in the minimap.  
 The model has learned to drive a large variety of vehicles in different weather conditions (Sun, night, sunny, rain...). 
-See [Software and HOW-TO Section](Software-and-HOW-TO) for instructions on how run the models.
+See [Software and HOW-TO Section](software-and-how-to) for instructions on how run the models.
 
 ### T.E.D.D. 1104 Base: 34.6M Parameters. 
 Download link: [See the Releases Tab](https://github.com/ikergarcia1996/Self-Driving-Car-in-Video-Games/releases)
