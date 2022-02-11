@@ -8,7 +8,7 @@
     <a href="https://github.com/ikergarcia1996/Self-Driving-Car-in-Video-Games/network"><img alt="GitHub forks" src="https://img.shields.io/github/forks/ikergarcia1996/Self-Driving-Car-in-Video-Games"></a>
     <a href="https://github.com/ikergarcia1996/Self-Driving-Car-in-Video-Games/releases"><img alt="GitHub release" src="https://img.shields.io/badge/Release-5.0.0-green"></a>
     <a href="https://github.com/ikergarcia1996/Self-Driving-Car-in-Video-Games/releases"><img alt="Pretrained Models" src="https://img.shields.io/badge/Pretrained Models-Available-green"></a>
-    <a href="https://ikergarcia1996.github.io/Iker-Garcia-Ferrero/"><img alt="Author" src="https://img.shields.io/badge/Autorh-Iker García Ferrero-ff69b4"></a>
+    <a href="https://ikergarcia1996.github.io/Iker-Garcia-Ferrero/"><img alt="Author" src="https://img.shields.io/badge/Author-Iker García Ferrero-ff69b4"></a>
     <br>
     <br>
 </p>
