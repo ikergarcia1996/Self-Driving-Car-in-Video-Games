@@ -1,36 +1,51 @@
-from model import load_model, TEDD1104
-from keyboard.inputsHandler import select_key
-from keyboard.getkeys import key_check, key_press
+from model import Tedd1104ModelPL
+from keyboard.getkeys import key_check
 import argparse
-import threading
-import screen.record_screen as screen_recorder
+from screen.screen_recorder import ImageSequencer
 import torch
 import logging
 import time
 from tkinter import *
 import numpy as np
 import cv2
-from segmentation.segmentation_coco import ImageSegmentation
-from torch.cuda.amp import autocast
 from torchvision import transforms
 from utils import mse
+from keyboard.inputsHandler import select_key
+from keyboard.getkeys import id_to_key
+import math
+
+from typing import Optional
+
+try:
+    from controller.xbox_controller_emulator import XboxControllerEmulator
+
+    _controller_available = True
+except ImportError:
+    _controller_available = False
+    print(
+        f"[WARNING!] Controller emulation unavailable, see controller/setup.md for more info. "
+        f"You can ignore this warning if you will use the keyboard as controller for TEDD1104."
+    )
 
 if torch.cuda.is_available():
     device = torch.device("cuda:0")
 else:
     device = torch.device("cpu")
-    logging.warning(
-        "GPU not found, using CPU, inference will be very slow. CPU NOT COMPATIBLE WITH FP16"
-    )
+    logging.warning("GPU not found, using CPU, inference will be very slow.")
 
 
 def run_ted1104(
-    model_dir,
+    checkpoint_path: str,
     enable_evasion: bool,
     show_current_control: bool,
-    num_parallel_sequences: int = 1,
+    num_parallel_sequences: int = 2,
+    width: int = 1600,
+    height: int = 900,
+    full_screen: bool = False,
     evasion_score=1000,
-    enable_segmentation: bool = False,
+    control_mode: str = "keyboard",
+    enable_segmentation: str = False,
+    dtype=torch.float32,
 ) -> None:
     """
     Generate dataset exampled from a human playing a videogame
@@ -53,7 +68,10 @@ def run_ted1104(
     - num_parallel_sequences: num_parallel_sequences to record, is the number is larger the recorded sequence of images
       will be updated faster and the model  will use more recent images as well as being able to do more iterations
       per second. However if num_parallel_sequences is too high it wont be able to update the sequences with 1/10 secs
-      between images (default capturate to generate training examples).
+      between images (default capturerate to generate training examples).
+    - width: Game window width
+    - height: Game window height
+    - full_screen: If you are playing in full screen (no window border on top) enable this
     -evasion_score: Mean squared error value between images to activate the evasion maneuvers
     -enable_segmentation: Image segmentation will be performed using a pretrained model. Cars, persons, bikes.. will be
      highlighted to help the model to identify them.
@@ -62,17 +80,36 @@ def run_ted1104(
 
     """
 
+    assert control_mode in [
+        "keyboard",
+        "controller",
+    ], f"{control_mode} control mode not supported. Supported dataset types: [keyboard, controller].  "
+
+    if control_mode == "controller" and not _controller_available:
+        raise ModuleNotFoundError(
+            f"Controller emulation not available see controller/setup.md for more info."
+        )
+
     show_what_ai_sees: bool = False
     fp16: bool
-    model: TEDD1104
-    model, fp16 = load_model(save_dir=model_dir, device=device)
 
+    model = Tedd1104ModelPL.load_from_checkpoint(
+        checkpoint_path=checkpoint_path
+    )  # hparams_file=hparams_path
+
+    model.eval()
+    model.to(dtype=dtype, device=device)
+
+    image_segformer = None
     if enable_segmentation:
-        image_segmentation = ImageSegmentation(
-            model_name="fcn_resnet101", device=device, fp16=fp16
-        )
+        from segmentation.segmentation_segformer import ImageSegmentation
+
+        image_segformer = ImageSegmentation(device=device)
+
+    if control_mode == "controller":
+        xbox_controller: Optional[XboxControllerEmulator] = XboxControllerEmulator()
     else:
-        image_segmentation = None
+        xbox_controller = None
 
     transform = transforms.Compose(
         [
@@ -81,160 +118,216 @@ def run_ted1104(
         ]
     )
 
-    model.eval()
-    stop_recording: threading.Event = threading.Event()
-
-    th_img: threading.Thread = threading.Thread(
-        target=screen_recorder.img_thread, args=[stop_recording]
+    img_sequencer = ImageSequencer(
+        width=width,
+        height=height,
+        full_screen=full_screen,
+        get_controller_input=False,
+        num_sequences=num_parallel_sequences,
+        total_wait_secs=5,
     )
-    th_seq: threading.Thread = threading.Thread(
-        target=screen_recorder.multi_image_sequencer_thread,
-        args=[stop_recording, num_parallel_sequences],
-    )
-    th_img.setDaemon(True)
-    th_seq.setDaemon(True)
-    th_img.start()
-    # Wait to launch the image_sequencer_thread, it needs the img_thread to be running
-    time.sleep(5)
-    th_seq.start()
 
     if show_current_control:
         root = Tk()
         var = StringVar()
         var.set("T.E.D.D. 1104 Driving")
-        l = Label(root, textvariable=var, fg="green", font=("Courier", 44))
-        l.pack()
+        text_label = Label(root, textvariable=var, fg="green", font=("Courier", 44))
+        text_label.pack()
+    else:
+        root = None
+        var = None
+        text_label = None
 
     last_time: float = time.time()
-    model_prediction: np.ndarray = np.asarray([0])
     score: np.float = np.float(0)
-    last_num: int = 0
-    while True:
-        while (
-            last_num == screen_recorder.num
-        ):  # Don't run the same sequence again, the resulted key will be the same
-            time.sleep(0.0001)
-        last_num = screen_recorder.num
+    last_num: int = 5  # The image sequence starts with images containing zeros, wait until it is filled
 
-        init_copy_time: float = time.time()
-        if enable_segmentation:
-            img_seq: np.ndarray = image_segmentation.add_segmentation(
-                np.copy(screen_recorder.seq)
-            )
-        else:
-            img_seq: np.ndarray = np.copy(screen_recorder.seq)
+    close_app: bool = False
+    model_prediction = np.zeros(3 if control_mode == "controller" else 1)
 
-        keys = key_check()
-        if "J" not in keys:
+    lt: float = 0
+    rt: float = 0
+    lx: float = 0
 
-            X = torch.stack(
-                (
-                    transform(img_seq[0] / 255.0).half(),
-                    transform(img_seq[1] / 255.0).half(),
-                    transform(img_seq[2] / 255.0).half(),
-                    transform(img_seq[3] / 255.0).half(),
-                    transform(img_seq[4] / 255.0).half(),
-                ),
-                dim=0,
-            ).to(device)
+    while not close_app:
+        try:
+            while last_num == img_sequencer.num_sequence:
+                time.sleep(0.01)
 
-            if fp16:
-                with autocast():
-                    model_prediction: torch.tensor = model.predict(X).cpu().numpy()
-            else:
-                model_prediction: torch.tensor = model.predict(X).cpu().numpy()
+            last_num = img_sequencer.num_sequence
+            img_seq, _ = img_sequencer.get_sequence()
 
-            select_key(int(model_prediction[0]))
-            key_push_time: float = time.time()
+            init_copy_time: float = time.time()
 
-            if show_current_control:
-                var.set("T.E.D.D. 1104 Driving")
-                l.config(fg="green")
-                root.update()
+            keys = key_check()
+            if "J" not in keys:
 
-            if enable_evasion:
-                score = mse(img_seq[0], img_seq[4])
-                if score < evasion_score:
-                    if show_current_control:
-                        var.set("Evasion maneuver")
-                        l.config(fg="blue")
-                        root.update()
-                    select_key(4)
-                    time.sleep(1)
-                    if np.random.rand() > 0.5:
-                        select_key(6)
+                x: torch.tensor = torch.stack(
+                    (
+                        transform(img_seq[0] / 255.0),
+                        transform(img_seq[1] / 255.0),
+                        transform(img_seq[2] / 255.0),
+                        transform(img_seq[3] / 255.0),
+                        transform(img_seq[4] / 255.0),
+                    ),
+                    dim=0,
+                ).to(device=device, dtype=dtype)
+
+                with torch.no_grad():
+                    model_prediction: torch.tensor = (
+                        model(x, output_mode=control_mode, return_best=True)[0]
+                        .cpu()
+                        .numpy()
+                    )
+
+                if control_mode == "controller":
+
+                    if model_prediction[1] > 0:
+                        rt = min(1.0, float(model_prediction[1])) * 2 - 1
+                        lt = -1
                     else:
-                        select_key(8)
-                    time.sleep(0.2)
-                    if show_current_control:
-                        var.set("T.E.D.D. 1104 Driving")
-                        l.config(fg="green")
-                        root.update()
+                        rt = -1
+                        lt = min(1.0, math.fabs(float(model_prediction[1]))) * 2 - 1
 
-        else:
-            if show_current_control:
-                var.set("Manual Control")
-                l.config(fg="red")
-                root.update()
+                    lx = max(-1.0, min(1.0, float(model_prediction[0])))
 
-            key_push_time: float = 0.0
+                    xbox_controller.set_controller_state(
+                        lx=lx,
+                        lt=lt,
+                        rt=rt,
+                    )
+                else:
+                    select_key(model_prediction)
 
-        if show_what_ai_sees:
-            cv2.imshow("window1", img_seq[0])
-            cv2.waitKey(1)
-            cv2.imshow("window2", img_seq[1])
-            cv2.waitKey(1)
-            cv2.imshow("window3", img_seq[2])
-            cv2.waitKey(1)
-            cv2.imshow("window4", img_seq[3])
-            cv2.waitKey(1)
-            cv2.imshow("window5", img_seq[4])
-            cv2.waitKey(1)
+                key_push_time: float = time.time()
 
-        if "Q" in keys and "E" in keys:
-            print("\nStopping...")
-            stop_recording.set()
-            th_seq.join()
-            th_img.join()
-            if show_what_ai_sees:
-                cv2.destroyAllWindows()
+                if show_current_control:
+                    var.set("T.E.D.D. 1104 Driving")
+                    text_label.config(fg="green")
+                    root.update()
 
-            break
+                if enable_evasion:
+                    score = mse(img_seq[0], img_seq[4])
+                    if score < evasion_score:
+                        if show_current_control:
+                            var.set("Evasion maneuver")
+                            text_label.config(fg="blue")
+                            root.update()
+                        if control_mode == "controller":
+                            xbox_controller.set_controller_state(lx=0, lt=1.0, rt=-1.0)
+                            time.sleep(1)
+                            if np.random.rand() > 0.5:
+                                xbox_controller.set_controller_state(
+                                    lx=1.0, lt=0.0, rt=-1.0
+                                )
+                            else:
+                                xbox_controller.set_controller_state(
+                                    lx=-1.0, lt=0.0, rt=-1.0
+                                )
+                            time.sleep(0.2)
+                        else:
+                            select_key(4)
+                            time.sleep(1)
+                            if np.random.rand() > 0.5:
+                                select_key(6)
+                            else:
+                                select_key(8)
+                            time.sleep(0.2)
 
-        if "L" in keys:
-            time.sleep(0.1)  # Wait for key release
-            if show_what_ai_sees:
-                cv2.destroyAllWindows()
-                show_what_ai_sees = False
+                        if show_current_control:
+                            var.set("T.E.D.D. 1104 Driving")
+                            text_label.config(fg="green")
+                            root.update()
+
             else:
-                show_what_ai_sees = True
+                if show_current_control:
+                    var.set("Manual Control")
+                    text_label.config(fg="red")
+                    root.update()
 
-        time_it: float = time.time() - last_time
-        print(
-            f"Recording at {screen_recorder.fps} FPS\n"
-            f"Actions per second {None if time_it==0 else 1/time_it}\n"
-            f"Reaction time: {round(key_push_time-init_copy_time,3) if key_push_time>0 else 0} secs\n"
-            f"Key predicted by nn: {key_press(int(model_prediction[0]))}\n"
-            f"Difference from img 1 to img 5 {None if not enable_evasion else score}\n"
-            f"Push QE to exit\n"
-            f"Push L to see the input images\n"
-            f"Push J to use to use manual control\n",
-            end="\r",
-        )
+                if control_mode == "controller":
+                    xbox_controller.set_controller_state(lx=0.0, lt=-1, rt=-1.0)
 
-        last_time = time.time()
+                key_push_time: float = 0.0
+
+            if show_what_ai_sees:
+
+                if enable_segmentation:
+                    img_seq = image_segformer.add_segmentation(images=img_seq)
+
+                cv2.imshow("window1", img_seq[0])
+                cv2.waitKey(1)
+                cv2.imshow("window2", img_seq[1])
+                cv2.waitKey(1)
+                cv2.imshow("window3", img_seq[2])
+                cv2.waitKey(1)
+                cv2.imshow("window4", img_seq[3])
+                cv2.waitKey(1)
+                cv2.imshow("window5", img_seq[4])
+                cv2.waitKey(1)
+
+            if "L" in keys:
+                time.sleep(0.1)  # Wait for key release
+                if show_what_ai_sees:
+                    cv2.destroyAllWindows()
+                    show_what_ai_sees = False
+                else:
+                    show_what_ai_sees = True
+
+            time_it: float = time.time() - last_time
+
+            if control_mode == "controller":
+                info_message = (
+                    f"LX: {int(model_prediction[0] * 100)}%"
+                    f"\n LT: {int(lt * 100)}%\n"
+                    f"RT: {int(rt * 100)}%"
+                )
+            else:
+
+                info_message = f"Predicted Key: {id_to_key(model_prediction)}"
+
+            print(
+                f"Recording at {img_sequencer.screen_recorder.fps} FPS\n"
+                f"Actions per second {None if time_it == 0 else 1 / time_it}\n"
+                f"Reaction time: {round(key_push_time - init_copy_time, 3) if key_push_time > 0 else 0} secs\n"
+                f"{info_message}\n"
+                f"Difference from img 1 to img 5 {None if not enable_evasion else score}\n"
+                f"Push Ctrl + C to exit\n"
+                f"Push L to see the input images\n"
+                f"Push J to use to use manual control\n",
+                end="\r",
+            )
+
+
+            last_time = time.time()
+
+        except KeyboardInterrupt:
+            print()
+            img_sequencer.stop()
+            if control_mode == "controller":
+                xbox_controller.stop()
+            close_app = True
 
 
 if __name__ == "__main__":
-
     parser = argparse.ArgumentParser()
 
     parser.add_argument(
-        "--model_dir",
+        "--checkpoint_path",
         type=str,
         required=True,
-        help="Directory where the model to use is stored",
+        help="Path to the model checkpoint",
     )
+    """
+    parser.add_argument(
+        "--hparams_path",
+        type=str,
+        default=None,
+        help="Path to the hparams.yalm file, if None we will attempt to automatically discover it",
+    )
+    """
+    parser.add_argument("--width", type=int, default=1600, help="Game window width")
+    parser.add_argument("--height", type=int, default=900, help="Game window height")
 
     parser.add_argument(
         "--enable_evasion",
@@ -252,10 +345,10 @@ if __name__ == "__main__":
         "--num_parallel_sequences",
         type=int,
         default=1,
-        help="num_parallel_sequences to record, is the number is larger the recorded sequence of images will be "
+        help="num_parallel_sequences to record, if the number is larger the recorded sequence of images will be "
         "updated faster and the model  will use more recent images as well as being able to do more iterations "
         "per second. However if num_parallel_sequences is too high it wont be able to update the sequences with "
-        "1/10 secs between images (default capturate to generate training examples). ",
+        "1/10 secs between images (default capturete to generate training examples). ",
     )
 
     parser.add_argument(
@@ -266,22 +359,44 @@ if __name__ == "__main__":
     )
 
     parser.add_argument(
+        "--control_mode",
+        type=str,
+        choices=["keyboard", "controller"],
+        default="keyboard",
+        help="Set if the dataset true values will be keyboard inputs (9 classes) "
+        "or Controller Inputs (2 continuous values)",
+    )
+
+    parser.add_argument(
+        "--full_screen",
+        action="store_true",
+        help="full_screen: If you are playing in full screen (no window border on top) set this flag",
+    )
+
+    parser.add_argument(
         "--enable_segmentation",
         action="store_true",
-        help="Image segmentation will be performed using a pretrained model. "
-        "Cars, persons, bikes.. will be highlighted to help the model to identify them. "
-        "Note: Segmentation will very significantly increase compuation time",
+        help="enable_segmentation: Perform image segmentation to the input sequences",
+    )
+
+    parser.add_argument(
+        "--fp16",
+        action="store_true",
+        help="Use FP16 for inference (bfloat16)",
     )
 
     args = parser.parse_args()
 
-    screen_recorder.initialize_global_variables()
-
     run_ted1104(
-        model_dir=args.model_dir,
+        checkpoint_path=args.checkpoint_path,
+        width=args.width,
+        height=args.height,
+        full_screen=args.full_screen,
         enable_evasion=args.enable_evasion,
         show_current_control=args.show_current_control,
         num_parallel_sequences=args.num_parallel_sequences,
         evasion_score=args.evasion_score,
+        control_mode=args.control_mode,
         enable_segmentation=args.enable_segmentation,
+        dtype=torch.float32 if not args.fp16 else torch.bfloat16,
     )

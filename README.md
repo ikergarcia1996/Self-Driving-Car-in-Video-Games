@@ -1,277 +1,278 @@
-# T.E.D.D. 1104
-A supervised deep neural network that learns to drive in video games. The main objective of this project is to 
-achieve a model that can drive in Grand Theft Auto V. The model is not expected to drive following traffic 
-regulations, but imitate how humans drive in this game: Drive at full speed through the city avoiding other 
-cars and occasionally humans and lampposts.
-A marker will be set in the game map, the model should be able to arrive to the marker driving trough the city. 
+<p align="center">
+    <br>
+    <img src="github_images/TEDD1104.png" width="900"/>
+    <br>
+    <a href="https://twitter.com/intent/tweet?text=Wow:&url=https%3A%2F%2Fgithub.com%2Fikergarcia1996%2FSelf-Driving-Car-in-Video-Games"><img alt="Twitter" src="https://img.shields.io/twitter/url?style=social&url=https%3A%2F%2Fgithub.com%2Fikergarcia1996%2FSelf-Driving-Car-in-Video-Games"></a>
+    <a href="https://github.com/ikergarcia1996/Self-Driving-Car-in-Video-Games/blob/master/LICENSE"><img alt="GitHub license" src="https://img.shields.io/github/license/ikergarcia1996/Self-Driving-Car-in-Video-Games"></a>
+    <a href="https://github.com/ikergarcia1996/Self-Driving-Car-in-Video-Games/stargazers"><img alt="GitHub stars" src="https://img.shields.io/github/stars/ikergarcia1996/Self-Driving-Car-in-Video-Games?color=yellow"></a>
+    <a href="https://github.com/ikergarcia1996/Self-Driving-Car-in-Video-Games/network"><img alt="GitHub forks" src="https://img.shields.io/github/forks/ikergarcia1996/Self-Driving-Car-in-Video-Games"></a>
+    <a href="https://github.com/ikergarcia1996/Self-Driving-Car-in-Video-Games/releases"><img alt="GitHub release" src="https://img.shields.io/badge/Release-5.0.0-green"></a>
+    <a href="https://ikergarcia1996.github.io/Iker-Garcia-Ferrero/"><img alt="Author" src="https://img.shields.io/badge/Autorh-Iker García Ferrero-ff69b4"></a>
+    <br>
+    <br>
+</p>
 
-The model is trained using human labeled data. We record the game and key inputs of humans while they play the game, this data
+A supervised deep neural network that learns how to drive in video games. The main objective of this project is to 
+achieve a model that can drive in Grand Theft Auto V. Given a waypoint, the model is expected to reach the destination as
+fast as possible avoiding other cars, humans and obstacles. 
+
+The model is trained using human labelled data. We record the game and key inputs of humans while they play the game, this data
 is used to train the model. 
 
 While we focus on self-driving cars and the video game Grand Theft Auto V this model can be adapted to play any existing
 video game. 
-    <table>
-    <tr>
-    <td> <img src="github_images/demo.gif" alt="gotta go fast!"/> </td>
-    <td> <img src="github_images/demo2.gif" alt="gotta go fast2!"/> </td>
-    </tr>
-    </table>
+
+<table>
+<tr>
+<td> <img src="github_images/demo.gif" alt="gotta go fast!"/> </td>
+<td> <img src="github_images/demo2.gif" alt="gotta go fast2!"/> </td>
+</tr>
+</table>
+
+# Pretrained T.E.D.D. 1104 models
+We provide pretrained T.E.D.D. 1104 models that you can use for real-time inference :)  
+The models are trained using 130 GB of human labelled data.  
+The model has been trained in first-person-view with a route to follow in the minimap.  
+The model has learned to drive a large variety of vehicles in different weather conditions (Sun, night, sunny, rain...). 
+
+### T.E.D.D. 1104 Base: 34.6M Parameters. 
+Download link: [See the Releases Tab](https://github.com/ikergarcia1996/Self-Driving-Car-in-Video-Games/releases)
+
+Accuracy in the test datasets:
+
+|         |              Time              |   Weather  | Micro-Acc K@1 | Micro-Acc k@3 | Macro-Acc K@1 |
+|---------|:------------------------------:|:----------:|:-------------:|:-------------:|:-------------:|
+| City    |         :sun_with_face:        |   :sunny:  |      49.8     |     83.8      |     44.1      |
+| City    |         :sun_with_face:        | :umbrella: |      52.1     |     84.7      |     46.1      |
+| City    | :first_quarter_moon_with_face: |   :sunny:  |      54.5     |     86.9      |     48.0      |
+| City    | :first_quarter_moon_with_face: | :umbrella: |      48.8     |     82.5      |     43.2      |
+| Highway |         :sun_with_face:        |   :sunny:  |      65.6     |     100.0     |     53.2      |
+| Highway |         :sun_with_face:        | :umbrella: |      70.6     |     98.0      |     54.2      |
+| Highway | :first_quarter_moon_with_face: |   :sunny:  |      71.3     |     100.0     |     52.3      |
+| Highway | :first_quarter_moon_with_face: | :umbrella: |      67.7     |     100.0     |     50.9      |
+
+### T.E.D.D. 1104 Large: 
+Coming Soon...
+###  T.E.D.D. 1104 Small:
+Coming Soon...
+
+# Datasets
+We provide train/dev/test datasets for training and evaluating T.E.D.D 1107 models:
+- Train Dataset (~130Gb): Coming soon... 
+- Dev Dataset (~495Mb): [Download Dev+Test datasets](https://drive.google.com/file/d/1SutVGsQKg0mDUkfGML1nBboLWi5e5_4E/view?usp=sharing).
+- Test Dataset (~539Mb): [Download Dev+Test datasets](https://drive.google.com/file/d/1SutVGsQKg0mDUkfGML1nBboLWi5e5_4E/view?usp=sharing).
 
 
-## Table of Contents
-  * [1) News](#1-news)
-    + [1.1) Planned Updates](#11-planned-updates)
-  * [2) Architecture](#2-architecture)
-  * [3) Software and HOW-TO](#3-software-and-how-to)
-    + [3.1) Requirements](#31-requirements)
-    + [3.2) Generate dataset](#32-generate-dataset)
-    + [3.3) Train the model](#33-train-the-model)
-      - [Improving the robustness of the model](#improving-the-robustness-of-the-model)
-    + [3.4) Run the model](#34-run-the-model)
-      - [Pretrained models](#pretrained-models)
-      - [Extra features](#extra-features)
-  * [4) Authors](#4-authors)
+##  Architecture
 
-
-## 1) News
-**NEW 25/10/2020** V3 released! This new version completely changes how the dataset is stored. The dataset now uses 
-around 10x less disk space (Yes, the previous version was terrible :S) and loading the data for training is much faster, 
-you can update your V2 dataset files to the V3 dataset format using the dataset_update/v2_to_v3.py script. I updated 
-the code to Pytorch 1.6+ to take advantage of the automated mixed-precision feature 
-(https://pytorch.org/docs/stable/notes/amp_examples.html) since the external amp module provided by Nvidia has been 
-merged into Pytorch 1.6 and is no longer maintained.  
-**NEW 29/04/2020** Youtube live streaming of T.E.D.D. 1104 driving different vehicles around the city!! Yo can see the 
-stream reuploaded here (Spanish) https://youtu.be/4NUdgSDSKSQ  
-**NEW 15/04/2020** First pretrained model released!!, [click here to download it](https://github.com/ikergarcia1996/Self-Driving-Car-in-Video-Games/releases/tag/0.2). For instructions on how to run the AI see the [Run the Model](#34-run-the-model) Section  
-**NEW 7/04/2020** Let's generate a huge training dataset together!! [Click here so see how to collaborate in the project (Spanish)](https://youtu.be/utQoMGLbCFc). 
-**We have reached 1,5Tb of training data (~150 hours of gameplay)!!!!**  
-
-## 1.1) Planned Updates
-The V3 update allowed me to train different models with up to 10x more training examples than before. Thanks to a new 24GB GPU I also was able to increase the number of parameters of the model. However, the quality of the model didn't improve. Fundamental changes in the architecture are necessary to continue improving the result, for the V4 update I plan to:
-* Switch from keyboard input to Xbox controller input. This way we will have continuous values for steering and brake/throttle instead of 1 or 0. 
-* Add to the sequence the info of the state of the controller for each image. This may or may not help the model but having this information in the dataset will allow testing different architectures. 
-* Add a speedometer: The model has problems with speed, it will brake even when the car is driving very slow when it approaches a curve causing the car to completely stop or even drive backwards. The model does not learn to infer the speed form the sequence of images, so I will explicitly provide it. 
-
-## 2) Architecture
-Most previous models that attempt to achieve self-driving in video games consists of a deep convolutional neural network 
-(usually Inception or Resnet). The models take as input a single image.
- Would you be able to know what to do if I give you this image?
- 
-<p align="center">
-  <img src="github_images/choices.png" alt="Make a choice"/>
-</p>
-
-You may think that the best choice is to brake to avoid the blue/gray car, but, 
-what if both cars are stopped waiting for you to cross the street? What if your car is 
-currently driving in reverse? Does your current speed and the speed of the other cars allow you to 
-cross the road without hitting them? A single image does not provide enough information to successfully 
-achieve a self-driving car. More information is needed, that is why our approach uses sequences of images. 
-5 images are captured with an interval of 1/10 seconds between them, this approach gives the model information 
-about the motion of other cars, environment and himself. 
-
-
-<p align="center">
-  <img src="github_images/sequence.png" alt="Sequences 4 the win"/>
-</p>
-
-T.E.D.D. 1104 follows the End-to-end (E2E) learning approach and it consists of a Deep Convolutional Neural Network (Resnet: K He et al. 2016) 
-followed by a Recurrent Neural Network (LSTM). The CNN receives as input a sequence of 5 images and generates for each one a 
-vector representation. These representations are fed into the RNN that generates a unique vector representation 
-for the entire sequence. Finally, a Feed-Forward Neural Network outputs the key to press in the keyboard based 
-on the vector representation for the sequence.
+T.E.D.D. 1104 is an End-To-End model. We approach the task as a classification task. 
+The input of the model is a sequence of 5 images, each image has been recorded with a 0.1s interval. 
+The outputs are the correct keys on the keyboard to press. Alternatively T.E.D.D. 1104 can also be trained with a regression objective using Xbox controller inputs. 
 
 <p align="center">
   <img src="github_images/network_architecture.png" alt="The brain!"/>
 </p>
 
-The model has been implemented using Pytorch: https://pytorch.org/
+The model consists of three modules:
+First, a **Convolutional Neural Network** that encodes each input image in a feature 
+vector. We use EfficientNet (https://arxiv.org/abs/1905.11946).
+We use a **transformer encoder** (https://arxiv.org/abs/1706.03762) to generate bidirectional joint distributions over the feature vector
+sequence. Finally, we use the [CLS] token to predict the key combination. 
 
-## 3) Software and HOW-TO
-This repository contains all the files need for generating the training data, training the model and use the model to 
-drive in the video game. The software has been written in Python 3. This model has only been tested in Windows 10 because
-is the only supported SO by most video games.  
+The model has been implemented using Pytorch: https://pytorch.org/ and PyTorch Lightning: https://www.pytorchlightning.ai/
 
-### 3.1) Requirements
+# Software and HOW-TO
+This repository contains all the files need for generating the training data, training the model and using the model to 
+drive in the video game (Real-Time Inference). The software has been written in Python 3. You can train a model in any OS. 
+Data generation and inference only work in Windows 10/11 which are the only OS supported by most video games. 
+## Requirements
 ```
-Python 3.7 or newer (3.8.3 tested)
-Pytorch 1.6.0 or newer (1.8.0 nightly with cuda 11.0 tested)
-Torchvision (0.8.0 tested)
+Python 3.7 or newer (3.9.7 tested)
+Pytorch 1.6.0 or newer (1.10 tested)
+Torchvision (0.11.0 tested)
+PyTorch Lightning (1.4.9 tested)
+torchmetrics
 numpy
-Pillow (7.2.0 tested)
+PIL/Pillow
 cv2 (opencv-python)
-tqdm
 json
-cupy (optional, highly recommended if you want to use the evasion manoeuvre feature)
-tensorboard (only for training a model)
+tkinter
+tabulate
 win32api (PythonWin) - Should be installed by default in newest Python versions for Windows 
+
+pygame - Only required if you wish to generate data using a Xbox Controller
+PYXInput - Only required if you wish to use a Vitual Xbox Controller as game controller instead of the keyboard. 
+           See controller\README.md for installation instructions. 
 ```
 
-### 3.2) Generate dataset 
-* File: generate_data.py
-* Usage example: 
+## Train your own model
+### Self Driving Model
+
+Use the *train.py* script to train a new model from scratch or continue training a model. 
+See "train.py -h" to get a description of all the available parameters. 
+
+Example command:
+```sh
+python3 train.py --train_new \
+  --train_dir dataset/train \
+  --val_dir  dataset/dev \
+  --output_dir runs/TEDD1104-base \
+  --encoder_type transformer \
+  --batch_size 16 \
+  --accumulation_steps 4 \
+  --max_epochs 12 \
+  --cnn_model_name efficientnet_b4 \
+  --num_layers_encoder 4 \
+  --mask_prob 0.2 \
+  --dropout_cnn_out 0.3 \
+  --dropout_encoder 0.1 \
+  --dropout_encoder_features 0.3 \
+  --control_mode keyboard \
+  --dataloader_num_workers 32 \
+  --val_check_interval 0.5 
 ```
-python generate_data.py --save_dir tedd1007\training_data
+
+You can continue training a model using the "--continue_training" flag 
+```sh
+python3 train.py --continue_training \
+  --checkpoint_path runs/TEDD1104-base/model.ckpt \
+  --train_dir dataset/train \
+  --val_dir  dataset/dev \
+  --output_dir runs/TEDD1104-base \
+  --batch_size 16 \
+  --accumulation_steps 4 \
+  --max_epochs 24 \
+  --cnn_model_name efficientnet_b4 \
+  --dataloader_num_workers 32 \
+  --val_check_interval 0.5 
 ```
-* How-to:
-  * Set your game in windowed mode
-  * Set your game to 1600x900 resolution
-  * Move the game window to the top left corner, there should be a blue line of 1 pixel in the left bezel of your
-         screen and the window top bar should start in the top bezel of your screen.
-  * Play the game! The program will capture your screen and generate the training examples. There will be saved
-         as files named "training_dataX.npz" (numpy compressed array). Don't worry if you re-launch this script,
-          the program will search for already existing dataset files in the directory and it won't overwrite them.
-          Currently the model captures the keys A W S D (including combinations of two keys pushed at the same time).
-          In the future, I consider implementing support for controllers. 
-  * At any moment push Q + E to stop the program.
-  
+
+#### Evaluate model:
+Use the eval.py script to evaluate a model in the test dataset.
+```sh
+python3 eval.py \
+  --checkpoint_path runs/TEDD1104-base/model.ckpt \
+  --batch_size 32 \
+  --test_dirs \
+   /data/gtaai_datasets/dev \
+   /data/gtaai_datasets/test/car_city_day_clear \
+   /data/gtaai_datasets/test/car_city_day_rain \
+   /data/gtaai_datasets/test/car_city_night_clear \
+   /data/gtaai_datasets/test/car_city_night_rain \
+   /data/gtaai_datasets/test/car_highway_day_clear \
+   /data/gtaai_datasets/test/car_highway_day_rain \
+   /data/gtaai_datasets/test/car_highway_night_clear \
+   /data/gtaai_datasets/test/car_highway_night_rain \
+  --output_path results/TEDD1104-base.tsv
+```
+
+### Image Reordering Model
+An experimental unsupervised pretraining objective. We shuffle the order of the input sequence and the model must 
+predict the correct order of the input images. See "train_reorder.py -h" to get a description of all the available parameters.
+This script is almost identical to the self-driving script, except it only supports transformer encoder models and doesn't
+have a 'control_mode' parameter. Refer to the [previous section](#self-driving-model) for training/eval details. 
+After training with the image reordering objective you can finetune the model in the Self-Driving objective. 
+
+```sh
+python3 train.py \
+--new_model \
+--checkpoint_path models/image_reordering.ckpt \
+...
+```
+
+Use the eval_reorder.py script to evaluate a image reordering model in the test dataset.
+
+
+## Run Inference 
+How to use a pretrained T.E.E.D. 1104 model to drive in GTAV
+
+### Configure the game
+You can run the game in "windowed mode" or "full screen" mode. 
+If you want to run the game in "windowed mode":
+- Run GTAV and set your game to windowed mode
+- Set the desired game resolution (i.e 1600x900 resolution)
+- Move the game window to the top left corner
+- Run the script with the "--width 1600" and "--height 900" parameters
+
 <p align="center">
   <img src="github_images/example_config.png" alt="Setup Example"/>
 </p>
   
 
+If you want to run the game in "full screen" mode:
+- Run GTAV **in your main screen** (The one labelled as screen nº1) and set your game to full-screen mode
+- Configure the game resolution with the resolution of your screen (i.e 2560x1440 resolution)
+- Run the script with the "--width 2560", "--height 1440" and "--full_screen"
 
-### 3.3) Train the model 
-* File: train.py
-* Usage example: 
-```
-python train.py --train_new 
---train_dir tedd1007\training_data\train 
---dev_dir tedd1007\training_data\dev 
---test_dir tedd1007\training_data\test 
---output_dir tedd1007\models\model1
---batch_size 10 
---num_epochs 5 
---fp16
-```
-* How-to:
-  Train a model using the default hyper parameters, to see a description of the network hyper parameters use 
-  "python train.py -h" or check the "train.py" and "model.py" files. train, dev and test directories should contain
-   as many files named "training_dataX.npz" as you want. The FP16 flag allows you to use Mixed Precision Training if
-   you have a modern Nvidia GPU with Tensor cores (RTX 2000, RTX Titan, Titan V, Tesla V100...), 
-   it uses the Nvidia Apex library: https://github.com/NVIDIA/apex.
-   The model is VERY memory demanding, as a
-   reference I use a batch size of 15 for a RTX 2080 (8GB VRAM) for FP16 training (half the Vram usage than FP32 training) 
-   using the default parameters. 
-   
- * If you want to continue training from a checkpoint use (Note: The checkpoint will automatically use the same 
- floating point precision (FP16 or FP32) used for training when it was created):
-   
- ```
-python train.py --continue_training
---train_dir tedd1007\training_data\train 
---dev_dir tedd1007\training_data\dev 
---test_dir tedd1007\training_data\test 
---output_dir tedd1007\models 
---batch_size 10 
---num_epochs 5 
---checkpoint_path tedd1007\models\model1\checkpoint.pt
-```
-
-#### Improving the robustness of the model
-As every other neural network, TEDD1104 tries to find the easiest way of replicating the training examples. 
-* TEDD1104 will tend to focus on the in-game minimap, this will result in a model that is very good following the roads in mini-map but ignores other cars or obstacles. To avoid that "--hide_map_prob" parameter sets a probability of removing (put a black square) the minimap from all the images of a training example.
-* Removing (black image) some of the images from an input sequence, especially the last one, can also help to improve 
- the robustness of the model. If one of the images of the sequence is removed, TEDD1104 will be forced to "imagine" that 
- image, improving the trajectory prediction capabilities of the model. It will also force the model to use the 
- information from all the images in the sequence instead of relying on the last one. We can set a probability for 
- removing each input image for a training example with the parameter --dropout_images_prob followed by 5 floats. 
- Using a bidirectional LSTM can also be useful. 
-* Scheduler:  --scheduler_patience allows setting a number of iterations. If the loss function does not decrease 
- after the specified number of iterations the learning rate is reduced (new_learning_rate = learning rate * 0.5). 
- This helps to further improve the model after the loss function stops decreasing. 
-* Gradient accumulation: TEDD1104 is very memory demanding. Using a  RTX 2080 (8GB VRAM) using FP16, I can only set a
- batch size between 10 and 20 which might be too low. To increase the batch size you can use gradient accumulation.
- Gradient accumulation allows increasing the batch size without increasing the VRAM usage. You can set the number of
- batches to accumulate with the parameter --gradient_accumulation_steps. The effective batch size will equal
- --batch_size * --gradient_accumulation_steps. 
-* Validation data: The best validation data (dev and test) are files of routes through the map driving different 
-vehicles and driving in different weather conditions (including day/night). DO NOT USE as dev or test set random examples taken from the training set because they will be part of a sequence of similar data, that is, a high dev and test accuracy
-will correspond to an overfitted model. Note that we save the model that achieves the highest accuracy in the dev test.
-
-This is an example of a command for training a small model taking into account all the described improvements.
-```
-python train.py --train_new 
---train_dir tedd1007\training_data\train 
---dev_dir tedd1007\training_data\dev 
---test_dir tedd1007\training_data\test 
---output_dir tedd1007\models\small+
---batch_size 20 
---gradient_accumulation_steps 4 
---num_epochs 5 
---num_load_files_training 5
---optimizer_name SGD 
---learning_rate 0.01 
---scheduler_patience 1000 
---bidirectional_lstm 
---dropout_lstm_out 0.2 
---dropout_images_prob 0.1 0.1 0.1 0.1 0.2 
---hide_map_prob 0.4
---fp16 
-```
-  
-During training you can use tensorboard to visualize the loss and accuracy:
-```
-tensorboard --logdir runs
-```
-
-### 3.4) Run the model
-
-* File: run_TEDD1104.py
-* Usage example: 
-```
-python run_TEDD1104.py --model_dir tedd1007\models\model1 --show_current_control --fp16
-```
-
-Use the FP16 flag if you have an Nvidia GPU with tensor cores (RTX 2000, RTX Titan, Titan V...) 
-for a nice speed up (~x2 speed up) and half the VRAM usage. 
-Requires the Nvidia Apex library: https://github.com/NVIDIA/apex
-
-
-* How-to:
-  * Set your game in windowed mode
-  * Set your game to 1600x900 resolution
-  * Move the game window to the top left corner, there should be a blue line of 1 pixel in the left bezel of your
-         screen and the window top bar should start in the top bezel of your screen.
-  * Let the AI play the game!
-  * Push Q + E to exit
-  * Push L to see the input images
-  * Push and hold J to use to use manual control
-          
 <p align="center">
-  <img src="github_images/example_config.png" alt="Setup Example"/>
+  <img src="github_images/example_config_full_screen.png" alt="Setup Example Full Screen"/>
 </p>
 
-#### Pretrained models:
-Pretrained models are available in the releases section: [Releases sections](https://github.com/ikergarcia1996/Self-Driving-Car-in-Video-Games/releases/)
+In addition, if you want to run the pretrained models that we provide you must:
+- Set the Settings>Camera>First person Vehicle Hood to "On"
+- Change the camera to first-person-view (Push "V")
+- Set a waypoint in the minimap
 
-#### Extra features 
-* By default, the model will record a sequence of images with an interval of 0,1secs between each image. 
-This means that the model will predict a key to push 10 times per second (every time the sequence is updated). 
-You can increase this value with the --num_parallel_sequences parameter. num_parallel_sequences=2 means that 20 
-sequences per second will be recorded (2 sequences will be recorded in parallel updating them every 0,05sec), 
-num_parallel_sequences=3 30... Recoding more sequences per second will reduce the latency (delay from the sequence that 
-TEDD1104 uses to calculate a prediction and the current state of the game) and can help TEDD1104 to drive better, 
-but a faster CPU and memory will be required to ensure a 0,1sec delay between each image in all the sequences. 
-A warning will be printed if the CPU is not able to update the sequences fast enough. 
-
-* The model may crash into a wall, car or other obstacle and be unable to return to the road.
- The model implements an "evasion manoeuvre", if the first and the last images in a sequence of 
- images are very similar (i.e car is stuck facing a wall) it will automatically drive backwards for 1 
- second and then randomly turn left or right for 0,2 seconds. To enable this feature use the --enable_evasion 
- flag and select the sensitivity to trigger the evasion manoeuvre (the difference between images calculated using 
- mean squared error) with the --evasion_score parameter (default 200). Note that this option requires to calculate 
- the mean squared error between two images each iteration, so it will increase the time the model needs to process 
- an input sequence. If you install cupy (https://docs.cupy.dev/en/stable/install.html) the mean squared error will
- be calculated using the GPU which is around 10x faster than using the CPU. 
+<p align="center">
+  <img src="github_images/additional_config.jpg" alt="Setup Example"/>
+</p>
 
 
-  
+### Run a Model
 
-## 4) Authors:
+Use the *run_TEDD1104.py* script to run a model for real-time inference. See "run_TEDD1104.py -h" to get a description of all the available parameters. 
+
 ```
-- Iker García
-  Personal Webpage: https://ikergarcia1996.github.io/Iker-Garcia-Ferrero/
+python run_TEDD1104.py \
+--checkpoint_path "models\TEDD1107_model.ckpt" \
+--width 1920 \
+--height 1080 \
+--num_parallel_sequences 5 \
+--control_mode keyboard
+```
+num_parallel_sequences: number of parallel sequences to record, if the number is higher the model will do more 
+iterations per second (will push keys more often) provided your GPU is fast enough. This improves the performance of the 
+model but increases the CPU and RAM usage. 
+
+control_mode: Choose between keyboard and controller (Xbox Controller). It doesn't matter how the model has been trained, 
+the output of the model will be converted to the desired control_mode. 
+
+If the model does not perform as expected (It doesn't seem to do anything or always chooses the same action) you can 
+push "L" while the script is running to verify the input images. 
+
+
+## Generate Data
+
+Use the *generate_data.py* script to generate new data for training. See Use "run_TEDD1104.py -h" to get a description of all the available parameters.
+Configure the game following [The Configure the game section](#configure-the-game). 
+```
+python generate_data.py \
+--save_dir "dataset/train" \
+--width 1920 \
+--height 1080 \
+--control_mode keyboard
 ```
 
-This repository is a greatly improved version of the model we published some years ago: https://github.com/ikergarcia1996/GTAV-Self-driving-car (by [Aiden Yerga](https://github.com/aidenyg)  and [Iker García](https://github.com/ikergarcia1996))
-  
+If control_mode is set to "keyboard" we will record the state of the "WASD" keys. If control_mode is set to "controller"
+we will record the state of the first Xbox Controller that Pygame can detect. 
+To avoid generating a huge unbalanced dataset the script will try to balance the data while recording. The more examples
+of a given class recorded the lower the probability of recording a new example of that class. If you want 
+to disable this behaviour use the "--save_everything" flag. 
+
+
+## Citation:
+```
+@misc{TEDD1104,
+  author = {"Garc{\'\i}a-Ferrero, Iker},
+  title = {TEDD1104: Self Driving Car in Video Games},
+  year = {2022},
+  publisher = {GitHub},
+  journal = {GitHub repository},
+  howpublished = {\url{https://github.com/ikergarcia1996/Self-Driving-Car-in-Video-Games}},
+}
+```
+
+Author: **Iker García-Ferrero**:  
+- [My Webpage](https://ikergarcia1996.github.io/Iker-Garcia-Ferrero/)  
+- [Twitter](https://twitter.com/iker_garciaf)
+

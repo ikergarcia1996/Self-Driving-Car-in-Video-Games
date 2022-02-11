@@ -1,7 +1,7 @@
 # direct inputs
 
 # Author: hodka (https://stackoverflow.com/users/3550306/hodka)
-# source to this solution and code:
+# Source to this solution and code:
 # http://stackoverflow.com/questions/14489013/simulate-python-keypresses-for-controlling-a-game
 # http://www.gamespp.com/directx/directInputKeyboardScanCodes.html
 
