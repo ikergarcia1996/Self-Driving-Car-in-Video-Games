@@ -3,7 +3,7 @@ python3 train.py --train_new \
   --val_dir  ../gtaai_datasets/dev \
   --output_dir models/tedd_1104_large \
   --encoder_type transformer \
-  --batch_size 64 \
+  --batch_size 8 \
   --accumulation_steps 1 \
   --max_epochs 12 \
   --cnn_model_name efficientnet_v2_l \
