@@ -94,6 +94,7 @@ Pytorch 1.6.0 or newer (1.10 tested)
 Torchvision (0.11.0 tested)
 PyTorch Lightning (1.4.9 tested)
 torchmetrics
+scikit-image
 numpy
 PIL/Pillow
 cv2 (opencv-python)
