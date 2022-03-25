@@ -24,8 +24,8 @@ https://github.com/ikergarcia1996/Self-Driving-Car-in-Video-Games
 from typing import List
 import torch
 import torch.nn as nn
+import torchvision
 import torchvision.models as models
-import torchvision.models.resnet
 import pytorch_lightning as pl
 import torchmetrics
 
@@ -36,7 +36,9 @@ class WeightedMseLoss(nn.Module):
     """
 
     def __init__(
-        self, weights: List[float] = None, reduction: str = "mean",
+        self,
+        weights: List[float] = None,
+        reduction: str = "mean",
     ):
         """
         INIT
@@ -60,7 +62,11 @@ class WeightedMseLoss(nn.Module):
 
         self.register_buffer("weights", weights)
 
-    def forward(self, predicted: torch.tensor, target: torch.tensor,) -> torch.tensor:
+    def forward(
+        self,
+        predicted: torch.tensor,
+        target: torch.tensor,
+    ) -> torch.tensor:
 
         """
         Forward pass
@@ -118,10 +124,16 @@ class CrossEntropyLoss(torch.nn.Module):
         self.register_buffer("weights", weights)
 
         self.CrossEntropyLoss = torch.nn.CrossEntropyLoss(
-            reduction=reduction, weight=weights, label_smoothing=label_smoothing,
+            reduction=reduction,
+            weight=weights,
+            label_smoothing=label_smoothing,
         )
 
-    def forward(self, predicted: torch.tensor, target: torch.tensor,) -> torch.tensor:
+    def forward(
+        self,
+        predicted: torch.tensor,
+        target: torch.tensor,
+    ) -> torch.tensor:
 
         """
         Forward pass
@@ -139,7 +151,8 @@ class CrossEntropyLossImageReorder(torch.nn.Module):
     """
 
     def __init__(
-        self, label_smoothing: float = 0.0,
+        self,
+        label_smoothing: float = 0.0,
     ):
         """
         INIT
@@ -153,7 +166,11 @@ class CrossEntropyLossImageReorder(torch.nn.Module):
             label_smoothing=label_smoothing
         )
 
-    def forward(self, predicted: torch.tensor, target: torch.tensor,) -> torch.tensor:
+    def forward(
+        self,
+        predicted: torch.tensor,
+        target: torch.tensor,
+    ) -> torch.tensor:
 
         """
         Forward pass
@@ -362,7 +379,10 @@ class PositionalEmbedding(nn.Module):
     """
 
     def __init__(
-        self, sequence_length: int, d_model: int, dropout: float = 0.1,
+        self,
+        sequence_length: int,
+        d_model: int,
+        dropout: float = 0.1,
     ):
         """
         INIT
@@ -931,7 +951,8 @@ class TEDD1104TransformerForImageReordering(nn.Module):
         )
 
         self.OutputLayer: OutputImageOrderingLayer = OutputImageOrderingLayer(
-            d_model=embedded_size, num_classes=self.sequence_size,
+            d_model=embedded_size,
+            num_classes=self.sequence_size,
         )
 
     def forward(self, x: torch.tensor) -> torch.tensor:
@@ -1186,7 +1207,8 @@ class Tedd1104ModelPL(pl.LightningModule):
         if self.control_mode == "keyboard":
             self.train_accuracy(outputs["preds"], outputs["y"])
             self.log(
-                "Train/acc_k@1_macro", self.train_accuracy,
+                "Train/acc_k@1_macro",
+                self.train_accuracy,
             )
 
     def validation_step(self, batch, batch_idx):
@@ -1214,17 +1236,21 @@ class Tedd1104ModelPL(pl.LightningModule):
         self.validation_accuracy_k3_macro(outputs["preds"], outputs["y"])
 
         self.log(
-            "Validation/acc_k@1_micro", self.validation_accuracy_k1_micro,
+            "Validation/acc_k@1_micro",
+            self.validation_accuracy_k1_micro,
         )
         self.log(
-            "Validation/acc_k@3_micro", self.validation_accuracy_k3_micro,
+            "Validation/acc_k@3_micro",
+            self.validation_accuracy_k3_micro,
         )
 
         self.log(
-            "Validation/acc_k@1_macro", self.validation_accuracy_k1_macro,
+            "Validation/acc_k@1_macro",
+            self.validation_accuracy_k1_macro,
         )
         self.log(
-            "Validation/acc_k@3_macro", self.validation_accuracy_k3_macro,
+            "Validation/acc_k@3_macro",
+            self.validation_accuracy_k3_macro,
         )
 
     def test_step(self, batch, batch_idx, dataset_idx: int = 0):
@@ -1252,17 +1278,21 @@ class Tedd1104ModelPL(pl.LightningModule):
         self.test_accuracy_k3_macro(outputs["preds"], outputs["y"])
 
         self.log(
-            "Test/acc_k@1_micro", self.test_accuracy_k1_micro,
+            "Test/acc_k@1_micro",
+            self.test_accuracy_k1_micro,
         )
         self.log(
-            "Test/acc_k@3_micro", self.test_accuracy_k3_micro,
+            "Test/acc_k@3_micro",
+            self.test_accuracy_k3_micro,
         )
 
         self.log(
-            "Test/acc_k@1_macro", self.test_accuracy_k1_macro,
+            "Test/acc_k@1_macro",
+            self.test_accuracy_k1_macro,
         )
         self.log(
-            "Test/acc_k@3_macro", self.test_accuracy_k3_macro,
+            "Test/acc_k@3_macro",
+            self.test_accuracy_k3_macro,
         )
 
     def configure_optimizers(self):
@@ -1412,7 +1442,8 @@ class Tedd1104ModelPLForImageReordering(pl.LightningModule):
         """
         self.train_accuracy(outputs["preds"], outputs["y"])
         self.log(
-            "Train/acc", self.train_accuracy,
+            "Train/acc",
+            self.train_accuracy,
         )
 
     def validation_step(self, batch, batch_idx):
@@ -1436,7 +1467,8 @@ class Tedd1104ModelPLForImageReordering(pl.LightningModule):
         """
         self.validation_accuracy(outputs["preds"], outputs["y"])
         self.log(
-            "Validation/acc", self.validation_accuracy,
+            "Validation/acc",
+            self.validation_accuracy,
         )
 
     def test_step(self, batch, batch_idx, dataset_idx: int = 0):
@@ -1461,7 +1493,8 @@ class Tedd1104ModelPLForImageReordering(pl.LightningModule):
         self.test_accuracy(outputs["preds"], outputs["y"])
 
         self.log(
-            "Test/acc", self.test_accuracy,
+            "Test/acc",
+            self.test_accuracy,
         )
 
     def configure_optimizers(self):
