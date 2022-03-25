@@ -20,6 +20,10 @@ def train(
     test_dir: str = None,
     val_check_interval: float = 0.25,
     dataloader_num_workers=os.cpu_count(),
+    devices: str = 1,
+    accelerator: str = "auto",
+    precision: str = "bf16",
+    strategy=None,
 ):
     """
     Train the model.
@@ -60,14 +64,15 @@ def train(
     checkpoint_callback.CHECKPOINT_NAME_LAST = "{epoch}-last"
 
     trainer = pl.Trainer(
-        precision=16,
-        gpus=1,
+        devices=devices,
+        accelerator=accelerator,
+        precision=precision,
+        strategy=strategy,
         val_check_interval=val_check_interval,
         accumulate_grad_batches=accumulation_steps,
         max_epochs=max_epochs,
         logger=tb_logger,
         callbacks=[checkpoint_callback, lr_monitor],
-        # accelerator="ddp",
         default_root_dir=os.path.join(output_dir, "trainer_checkpoint"),
         log_every_n_steps=10,
     )
@@ -86,6 +91,10 @@ def train_new_model(
     batch_size: int,
     max_epochs: int,
     cnn_model_name: str,
+    devices: str = 1,
+    accelerator: str = "auto",
+    precision: str = "bf16",
+    strategy=None,
     accumulation_steps: int = 1,
     hide_map_prob: float = 0.0,
     test_dir: str = None,
@@ -168,6 +177,10 @@ def train_new_model(
         dropout_images_prob=dropout_images_prob,
         val_check_interval=val_check_interval,
         dataloader_num_workers=dataloader_num_workers,
+        devices=devices,
+        accelerator=accelerator,
+        precision=precision,
+        strategy=strategy,
     )
 
 
@@ -179,6 +192,10 @@ def continue_training(
     max_epochs: int,
     output_dir,
     accumulation_steps,
+    devices: str = 1,
+    accelerator: str = "auto",
+    precision: str = "bf16",
+    strategy=None,
     test_dir: str = None,
     hparams_path: str = None,
     hide_map_prob: float = 0.0,
@@ -235,14 +252,15 @@ def continue_training(
     checkpoint_callback.CHECKPOINT_NAME_LAST = "{epoch}-last"
 
     trainer = pl.Trainer(
-        precision=16,
-        gpus=1,
+        devices=devices,
+        accelerator=accelerator,
+        precision=precision,
+        strategy=strategy,
         val_check_interval=val_check_interval,
         accumulate_grad_batches=accumulation_steps,
         max_epochs=max_epochs,
         logger=tb_logger,
         callbacks=[checkpoint_callback, lr_monitor],
-        # accelerator="ddp",
         default_root_dir=os.path.join(output_dir, "trainer_checkpoint"),
         log_every_n_steps=10,
     )
@@ -452,6 +470,38 @@ if __name__ == "__main__":
         "If continue_training is True, the path to the checkpoint to continue training from.",
     )
 
+    parser.add_argument(
+        "--devices",
+        type=int,
+        default=1,
+        help="Number of GPUs/TPUs to use. ",
+    )
+
+    parser.add_argument(
+        "--accelerator",
+        type=str,
+        default="auto",
+        choices=["auto", "tpu", "gpu", "cpu", "ipu"],
+        help="Accelerator to use. If 'auto', tries to automatically detect TPU, GPU, CPU or IPU system",
+    )
+
+    parser.add_argument(
+        "--precision",
+        type=str,
+        default="bf16",
+        choices=["bf16", "16", "32", "64"],
+        help=" Double precision (64), full precision (32), "
+        "half precision (16) or bfloat16 precision (bf16). "
+        "Can be used on CPU, GPU or TPUs.",
+    )
+
+    parser.add_argument(
+        "--strategy",
+        type=str,
+        default=None,
+        help="Supports passing different training strategies with aliases (ddp, ddp_spawn, etc)",
+    )
+
     args = parser.parse_args()
 
     if args.train_new:
@@ -480,6 +530,10 @@ if __name__ == "__main__":
             sequence_size=args.sequence_size,
             learning_rate=args.learning_rate,
             weight_decay=args.weight_decay,
+            devices=args.devices,
+            accelerator=args.accelerator,
+            precision=args.precision,
+            strategy=args.strategy,
         )
 
     else:
@@ -496,4 +550,8 @@ if __name__ == "__main__":
             hide_map_prob=args.hide_map_prob,
             dropout_images_prob=args.dropout_images_prob,
             dataloader_num_workers=args.dataloader_num_workers,
+            devices=args.devices,
+            accelerator=args.accelerator,
+            precision=args.precision,
+            strategy=args.strategy,
         )
