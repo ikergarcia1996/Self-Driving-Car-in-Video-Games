@@ -25,6 +25,7 @@ def train(
     precision: str = "bf16",
     strategy=None,
     dataloader_num_workers=os.cpu_count(),
+    report_to: str = "wandb",
 ):
 
     """
@@ -60,7 +61,25 @@ def train(
         num_workers=dataloader_num_workers,
     )
 
-    tb_logger = pl_loggers.TensorBoardLogger(output_dir)
+    experiment_name = os.path.basename(output_dir)
+    if report_to == "tensorboard":
+        logger = pl_loggers.TensorBoardLogger(
+            save_dir=output_dir,
+            name=experiment_name,
+        )
+    elif report_to == "wandb":
+        logger = pl_loggers.WandbLogger(
+            name=experiment_name,
+            id=experiment_name,
+            resume=None,
+            project="TEDD1104",
+            save_dir=output_dir,
+        )
+    else:
+        raise ValueError(
+            f"Unknown logger: {report_to}. Please use 'tensorboard' or 'wandb'."
+        )
+
     lr_monitor = pl.callbacks.LearningRateMonitor(logging_interval="step")
     checkpoint_callback = pl.callbacks.ModelCheckpoint(
         monitor="Validation/acc_k@1_macro", mode="max", save_last=True
@@ -75,7 +94,7 @@ def train(
         val_check_interval=val_check_interval,
         accumulate_grad_batches=accumulation_steps,
         max_epochs=max_epochs,
-        logger=tb_logger,
+        logger=logger,
         callbacks=[checkpoint_callback, lr_monitor],
         default_root_dir=os.path.join(output_dir, "trainer_checkpoint"),
         log_every_n_steps=10,
@@ -124,6 +143,7 @@ def train_new_model(
     weight_decay: float = 1e-3,
     checkpoint_path: str = None,
     label_smoothing: float = None,
+    report_to: str = "wandb",
 ):
 
     """
@@ -228,6 +248,7 @@ def train_new_model(
         accelerator=accelerator,
         precision=precision,
         strategy=strategy,
+        report_to=report_to,
     )
 
 
@@ -248,6 +269,7 @@ def continue_training(
     dropout_images_prob=None,
     dataloader_num_workers=os.cpu_count(),
     val_check_interval: float = 0.25,
+    report_to: str = "wandb",
 ):
 
     """
@@ -287,7 +309,25 @@ def continue_training(
         num_workers=dataloader_num_workers,
     )
 
-    tb_logger = pl_loggers.TensorBoardLogger(output_dir)
+    experiment_name = os.path.basename(output_dir)
+    if report_to == "tensorboard":
+        logger = pl_loggers.TensorBoardLogger(
+            save_dir=output_dir,
+            name=experiment_name,
+        )
+    elif report_to == "wandb":
+        logger = pl_loggers.WandbLogger(
+            name=experiment_name,
+            id=experiment_name,
+            resume="allow",
+            project="TEDD1104",
+            save_dir=output_dir,
+        )
+    else:
+        raise ValueError(
+            f"Unknown logger: {report_to}. Please use 'tensorboard' or 'wandb'."
+        )
+
     lr_monitor = pl.callbacks.LearningRateMonitor(logging_interval="step")
     checkpoint_callback = pl.callbacks.ModelCheckpoint(
         monitor="Validation/acc_k@1_macro", mode="max", save_last=True
@@ -302,7 +342,7 @@ def continue_training(
         val_check_interval=val_check_interval,
         accumulate_grad_batches=accumulation_steps,
         max_epochs=max_epochs,
-        logger=tb_logger,
+        logger=logger,
         callbacks=[checkpoint_callback, lr_monitor],
         default_root_dir=os.path.join(output_dir, "trainer_checkpoint"),
         log_every_n_steps=10,
@@ -594,6 +634,14 @@ if __name__ == "__main__":
         help="Supports passing different training strategies with aliases (ddp, ddp_spawn, etc)",
     )
 
+    parser.add_argument(
+        "--report_to",
+        type=str,
+        default="wandb",
+        choices=["wandb", "tensorboard"],
+        help="Report to wandb or tensorboard",
+    )
+
     args = parser.parse_args()
 
     if args.train_new:
@@ -633,6 +681,7 @@ if __name__ == "__main__":
             accelerator=args.accelerator,
             precision=args.precision,
             strategy=args.strategy,
+            report_to=args.report_to,
         )
 
     else:
@@ -652,4 +701,5 @@ if __name__ == "__main__":
             accelerator=args.accelerator,
             precision=args.precision,
             strategy=args.strategy,
+            report_to=args.report_to,
         )

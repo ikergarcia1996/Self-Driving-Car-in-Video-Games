@@ -101,6 +101,7 @@ cv2 (opencv-python)
 json
 tkinter
 tabulate
+wandb or tensorboard for training (Set "report_to" accordingly)
 win32api (PythonWin) - Should be installed by default in newest Python versions for Windows 
 
 pygame - Only required if you wish to generate data using a Xbox Controller
