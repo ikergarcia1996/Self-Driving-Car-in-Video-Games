@@ -139,3 +139,5 @@ debug/Test.ipynb
 *.slurm
 
 lightning_logs/
+
+models/
