@@ -5,8 +5,8 @@ python3 train.py --train_new \
   --encoder_type transformer \
   --batch_size 16 \
   --accumulation_steps 4 \
-  --max_epochs 12 \
-  --cnn_model_name efficientnet_v2_l \
+  --max_epochs 40 \
+  --cnn_model_name efficientnet_b7 \
   --num_layers_encoder 6 \
   --embedded_size 512 \
   --learning_rate 1e-5 \

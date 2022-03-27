@@ -5,9 +5,10 @@ python3 train.py --train_new \
   --val_dir  ../gtaai_datasets/dev \
   --output_dir models/tedd_1104_base \
   --encoder_type transformer \
+  --dataloader_num_workers 32 \
   --batch_size 8 \
   --accumulation_steps 1 \
-  --max_epochs 12 \
+  --max_epochs 40 \
   --cnn_model_name efficientnet_b4 \
   --num_layers_encoder 4 \
   --embedded_size 512 \
