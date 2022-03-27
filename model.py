@@ -142,7 +142,7 @@ class CrossEntropyLoss(torch.nn.Module):
         :param torch.tensor target: Target values [batch_size]
         :return: Loss [1] if reduction is "mean" else [9]
         """
-        return self.CrossEntropyLoss(predicted.view(-1, 9), target.view(-1).long())
+        return self.CrossEntropyLoss(predicted, target)
 
 
 class CrossEntropyLossImageReorder(torch.nn.Module):
@@ -994,6 +994,7 @@ class Tedd1104ModelPL(pl.LightningModule):
         learning_rate: float = 1e-5,
         weight_decay: float = 1e-3,
         label_smoothing: float = 0.0,
+        accelerator: str = None,
     ):
         """
         INIT
@@ -1052,6 +1053,7 @@ class Tedd1104ModelPL(pl.LightningModule):
         self.learning_rate = learning_rate
         self.weight_decay = weight_decay
         self.label_smoothing = label_smoothing
+        self.accelerator = accelerator
 
         if self.encoder_type == "transformer":
             self.model = TEDD1104Transformer(
@@ -1190,13 +1192,23 @@ class Tedd1104ModelPL(pl.LightningModule):
         preds = self.model(x)
         loss = self.criterion(preds, y)
         self.total_batches += 1
-        self.running_loss += loss.item()
-        self.log("Train/loss", loss, sync_dist=True)
-        self.log(
-            "Train/running_loss", self.running_loss / self.total_batches, sync_dist=True
-        )
+        if self.accelerator != "tpu":
+            self.running_loss += loss.item()
+            self.log("Train/loss", loss, sync_dist=True)
+            self.log(
+                "Train/running_loss",
+                self.running_loss / self.total_batches,
+                sync_dist=True,
+            )
+        else:
+            if self.total_batches % 200 == 0:
+                self.log("Train/loss", loss, sync_dist=True)
 
-        return {"preds": preds.detach(), "y": y, "loss": loss}
+        return (
+            {"preds": preds.detach(), "y": y, "loss": loss}
+            if self.accelerator != "tpu"
+            else {"loss": loss}
+        )
 
     def training_step_end(self, outputs):
         """
@@ -1204,7 +1216,7 @@ class Tedd1104ModelPL(pl.LightningModule):
 
         :param outputs: outputs of the training step
         """
-        if self.control_mode == "keyboard":
+        if self.accelerator != "tpu" and self.control_mode == "keyboard":
             self.train_accuracy(outputs["preds"], outputs["y"])
             self.log(
                 "Train/acc_k@1_macro",
@@ -1338,6 +1350,7 @@ class Tedd1104ModelPLForImageReordering(pl.LightningModule):
         learning_rate: float = 1e-5,
         weight_decay: float = 1e-3,
         encoder_type: str = "transformer",
+        accelerator: str = None,
     ):
 
         """
@@ -1376,6 +1389,7 @@ class Tedd1104ModelPLForImageReordering(pl.LightningModule):
         self.learning_rate = learning_rate
         self.weight_decay = weight_decay
         self.encoder_type = encoder_type
+        self.accelerator = accelerator
 
         self.model = TEDD1104TransformerForImageReordering(
             cnn_model_name=self.cnn_model_name,
@@ -1427,12 +1441,24 @@ class Tedd1104ModelPLForImageReordering(pl.LightningModule):
         preds = self.model(x)
         loss = self.criterion(preds, y)
         self.total_batches += 1
-        self.running_loss += loss.item()
-        self.log("Train/loss", loss, sync_dist=True)
-        self.log(
-            "Train/running_loss", self.running_loss / self.total_batches, sync_dist=True
+
+        if self.accelerator != "tpu":
+            self.running_loss += loss.item()
+            self.log("Train/loss", loss, sync_dist=True)
+            self.log(
+                "Train/running_loss",
+                self.running_loss / self.total_batches,
+                sync_dist=True,
+            )
+        else:
+            if self.total_batches % 200 == 0:
+                self.log("Train/loss", loss, sync_dist=True)
+
+        return (
+            {"preds": torch.argmax(preds.detach(), dim=-1), "y": y, "loss": loss}
+            if self.accelerator != "tpu"
+            else {"loss": loss}
         )
-        return {"preds": torch.argmax(preds.detach(), dim=-1), "y": y, "loss": loss}
 
     def training_step_end(self, outputs):
         """
@@ -1440,11 +1466,12 @@ class Tedd1104ModelPLForImageReordering(pl.LightningModule):
 
         :param outputs: outputs of the training step
         """
-        self.train_accuracy(outputs["preds"], outputs["y"])
-        self.log(
-            "Train/acc",
-            self.train_accuracy,
-        )
+        if self.accelerator != "tpu":
+            self.train_accuracy(outputs["preds"], outputs["y"])
+            self.log(
+                "Train/acc",
+                self.train_accuracy,
+            )
 
     def validation_step(self, batch, batch_idx):
         """

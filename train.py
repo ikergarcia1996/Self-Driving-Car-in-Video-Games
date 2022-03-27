@@ -86,10 +86,12 @@ def train(
     )
     checkpoint_callback.CHECKPOINT_NAME_LAST = "{epoch}-last"
 
+    model.accelerator = accelerator
+
     trainer = pl.Trainer(
         devices=devices,
         accelerator=accelerator,
-        precision=precision,
+        precision=precision if precision == "bf16" else int(precision),
         strategy=strategy,
         val_check_interval=val_check_interval,
         accumulate_grad_batches=accumulation_steps,
@@ -212,6 +214,7 @@ def train_new_model(
             weight_decay=weight_decay,
             weights=variable_weights,
             label_smoothing=label_smoothing,
+            accelerator=accelerator,
         )
 
     else:
@@ -334,10 +337,12 @@ def continue_training(
     )
     checkpoint_callback.CHECKPOINT_NAME_LAST = "{epoch}-last"
 
+    model.accelerator = accelerator
+
     trainer = pl.Trainer(
         devices=devices,
         accelerator=accelerator,
-        precision=precision,
+        precision=precision if precision == "bf16" else int(precision),
         strategy=strategy,
         val_check_interval=val_check_interval,
         accumulate_grad_batches=accumulation_steps,

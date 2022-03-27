@@ -21,6 +21,7 @@ python3 train.py --train_new \
   --val_check_interval 0.5 \
   --hide_map_prob 0.4 \
   --devices 8 \
-  --accelerator tpu
+  --accelerator tpu \
+  --report_to tensorboard
 
 
