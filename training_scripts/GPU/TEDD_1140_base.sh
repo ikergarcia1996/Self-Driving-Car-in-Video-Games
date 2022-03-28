@@ -16,7 +16,6 @@ python3 train.py --train_new \
   --dropout_encoder_features 0.3 \
   --control_mode keyboard \
   --val_check_interval 0.5 \
-  --hide_map_prob 0.4 \
   --devices 1
 
 
