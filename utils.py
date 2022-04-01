@@ -1,7 +1,8 @@
 import datetime
-from typing import Union, List
+from typing import Union
 import numpy as np
 import os
+import torch
 
 
 def print_message(message: str) -> None:
@@ -169,3 +170,29 @@ class IOHandler:
                 raise ValueError(
                     f"{output_type} output type not supported. Supported outputs: [keyboard,controller]"
                 )
+
+
+def get_mask(
+    train: bool,
+    mask_prob: float = 0.0,
+    sequence_length: int = 5,
+) -> torch.tensor:
+    if train:
+        bernolli_matrix = torch.cat(
+            (
+                torch.tensor([0]).float(),
+                (torch.tensor([mask_prob]).float()).repeat(sequence_length),
+            ),
+            0,
+        ).unsqueeze(0)
+        bernolli_distributor = torch.distributions.Bernoulli(bernolli_matrix)
+        sample = bernolli_distributor.sample()
+        mask = sample > 0
+    else:
+
+        mask = torch.zeros(
+            1,
+            sequence_length + 1,
+        )
+
+    return mask > 0
