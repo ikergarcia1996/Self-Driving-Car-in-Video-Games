@@ -270,6 +270,10 @@ def collate_fn(batch):
     return {"images": images, "attention_mask": attention_mask, "y": y}
 
 
+def set_worker_sharing_strategy(worker_id: int) -> None:
+    torch.multiprocessing.set_sharing_strategy("file_system")
+
+
 class Tedd1104Dataset(Dataset):
     """TEDD1104 dataset."""
 
@@ -523,6 +527,7 @@ class Tedd1104DataModule(pl.LightningDataModule):
             shuffle=True,
             persistent_workers=True,
             collate_fn=collate_fn,
+            worker_init_fn=set_worker_sharing_strategy,
         )
 
     def val_dataloader(self) -> DataLoader:
@@ -539,6 +544,7 @@ class Tedd1104DataModule(pl.LightningDataModule):
             shuffle=False,
             persistent_workers=True,
             collate_fn=collate_fn,
+            worker_init_fn=set_worker_sharing_strategy,
         )
 
     def test_dataloader(self) -> DataLoader:
@@ -555,4 +561,5 @@ class Tedd1104DataModule(pl.LightningDataModule):
             shuffle=False,
             persistent_workers=True,
             collate_fn=collate_fn,
+            worker_init_fn=set_worker_sharing_strategy,
         )
