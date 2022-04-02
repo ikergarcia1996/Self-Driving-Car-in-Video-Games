@@ -29,6 +29,7 @@ python3 train.py --train_new \
   --control_mode keyboard \
   --val_check_interval 0.5 \
   --precision "bf16" \
-  --devices 2
+  --devices 2 \
+  --strategy "ddp"
 
 
