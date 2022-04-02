@@ -464,8 +464,6 @@ class Tedd1104DataModule(pl.LightningDataModule):
 
         self.num_workers = num_workers
 
-        self.accelerator = accelerator
-
     def setup(self, stage: Optional[str] = None) -> None:
         """
         Sets up the dataset.
