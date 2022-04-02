@@ -5,7 +5,7 @@ from dataset import Tedd1104DataModule
 import os
 from pytorch_lightning import loggers as pl_loggers
 import pytorch_lightning as pl
-from pytorch_lightning.plugins import DDPPlugin
+
 
 try:
     import wandb
@@ -112,9 +112,6 @@ def train(
         callbacks=[checkpoint_callback, lr_monitor],
         default_root_dir=os.path.join(output_dir, "trainer_checkpoint"),
         log_every_n_steps=100,
-        plugins=None
-        if strategy != "ddp"
-        else [DDPPlugin(find_unused_parameters=False)],
     )
 
     trainer.fit(model, datamodule=data)
@@ -370,9 +367,6 @@ def continue_training(
         callbacks=[checkpoint_callback, lr_monitor],
         default_root_dir=os.path.join(output_dir, "trainer_checkpoint"),
         log_every_n_steps=10,
-        plugins=None
-        if strategy != "ddp"
-        else [DDPPlugin(find_unused_parameters=False)],
     )
 
     trainer.fit(

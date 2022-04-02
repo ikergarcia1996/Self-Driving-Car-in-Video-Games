@@ -31,6 +31,6 @@ python3 train.py --train_new \
   --val_check_interval 0.5 \
   --precision "bf16" \
   --devices 2 \
-  --strategy "ddp"
+  --strategy "ddp_find_unused_parameters_false"
 
 
