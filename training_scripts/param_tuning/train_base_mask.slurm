@@ -15,8 +15,8 @@ python3 train.py --train_new \
   --val_dir  ../gtaai_datasets/dev \
   --output_dir models/tedd_1104_base_mask \
   --encoder_type transformer \
-  --batch_size 64 \
-  --accumulation_steps 1 \
+  --batch_size 32 \
+  --accumulation_steps 2 \
   --max_epochs 5 \
   --cnn_model_name efficientnet_v2_m \
   --num_layers_encoder 4 \
