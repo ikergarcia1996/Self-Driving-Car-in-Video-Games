@@ -8,6 +8,7 @@
 
 source /ikerlariak/igarcia945/envs/pytorch-tximista/bin/activate
 
+cd ../../
 
 python3 train.py --train_new \
   --train_dir ../gtaai_datasets/train \
