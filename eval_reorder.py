@@ -14,6 +14,10 @@ def eval_model(
     batch_size: int,
     dataloader_num_workers: int = 16,
     output_path: str = None,
+    devices: str = 1,
+    accelerator: str = "auto",
+    precision: str = "bf16",
+    strategy=None,
 ):
     """
     Evaluates a trained model on a set of test data.
@@ -34,8 +38,10 @@ def eval_model(
     )
 
     trainer = pl.Trainer(
-        precision=16,
-        gpus=1,
+        devices=devices,
+        accelerator=accelerator,
+        precision=precision if precision == "bf16" else int(precision),
+        strategy=strategy,
         # accelerator="ddp",
         default_root_dir=os.path.join(
             os.path.dirname(os.path.abspath(checkpoint_path)), "trainer_checkpoint"
@@ -50,6 +56,11 @@ def eval_model(
                 dataset_dir=test_dir,
                 hide_map_prob=0.0,
                 dropout_images_prob=[0.0, 0.0, 0.0, 0.0, 0.0],
+                token_mask_prob=0.0,
+                train=False,
+                transformer_nheads=None
+                if model.encoder_type == "lstm"
+                else model.nhead,
             ),
             batch_size=batch_size,
             num_workers=dataloader_num_workers,
@@ -133,6 +144,38 @@ if __name__ == "__main__":
         help="Path to where the results should be saved.",
     )
 
+    parser.add_argument(
+        "--devices",
+        type=int,
+        default=1,
+        help="Number of GPUs/TPUs to use. ",
+    )
+
+    parser.add_argument(
+        "--accelerator",
+        type=str,
+        default="auto",
+        choices=["auto", "tpu", "gpu", "cpu", "ipu"],
+        help="Accelerator to use. If 'auto', tries to automatically detect TPU, GPU, CPU or IPU system",
+    )
+
+    parser.add_argument(
+        "--precision",
+        type=str,
+        default="bf16",
+        choices=["bf16", "16", "32", "64"],
+        help=" Double precision (64), full precision (32), "
+        "half precision (16) or bfloat16 precision (bf16). "
+        "Can be used on CPU, GPU or TPUs.",
+    )
+
+    parser.add_argument(
+        "--strategy",
+        type=str,
+        default=None,
+        help="Supports passing different training strategies with aliases (ddp, ddp_spawn, etc)",
+    )
+
     args = parser.parse_args()
 
     eval_model(
@@ -141,4 +184,8 @@ if __name__ == "__main__":
         batch_size=args.batch_size,
         dataloader_num_workers=args.dataloader_num_workers,
         output_path=args.output_path,
+        devices=args.devices,
+        accelerator=args.accelerator,
+        precision=args.precision,
+        strategy=args.strategy,
     )
