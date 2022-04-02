@@ -6,6 +6,13 @@ import os
 from pytorch_lightning import loggers as pl_loggers
 import pytorch_lightning as pl
 
+try:
+    import wandb
+
+    wandb.require("service")
+except ImportError:
+    wandb = None
+
 
 def train(
     model: Tedd1104ModelPL,
