@@ -15,6 +15,7 @@ python3 train.py --train_new \
   --val_dir  ../gtaai_datasets/dev \
   --output_dir models/tedd_1104_base_mask \
   --encoder_type transformer \
+  --dataloader_num_workers 16 \
   --batch_size 32 \
   --accumulation_steps 2 \
   --max_epochs 5 \

@@ -241,7 +241,6 @@ class Tedd1104ataModuleForImageReordering(pl.LightningDataModule):
         :param int sequence_length: Length of the image sequence
         :param bool hide_map_prob: Probability of hiding the minimap (0<=hide_map_prob<=1)
         :param float dropout_images_prob: Probability of dropping an image (0<=dropout_images_prob<=1)
-        :param str control_mode: Type of the user input: "keyboard" or "controller"
         :param int num_workers: Number of workers to use to load the dataset.
         """
 
@@ -258,7 +257,12 @@ class Tedd1104ataModuleForImageReordering(pl.LightningDataModule):
             dropout_images_prob if dropout_images_prob else [0.0, 0.0, 0.0, 0.0, 0.0]
         )
 
-        self.num_workers = num_workers
+        if num_workers > 32:
+            print(
+                "WARNING: num_workers is greater than 32, this may cause memory issues, we will set it to 32 "
+            )
+
+        self.num_workers = min(num_workers, 32)
 
     def setup(self, stage: Optional[str] = None) -> None:
         """
