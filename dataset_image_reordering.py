@@ -19,13 +19,6 @@ from dataset import (
 )
 import numpy as np
 
-try:
-    import torch_xla.distributed.parallel_loader.ParallelLoader as ploader
-    import torch_xla.core.xla_model as xm
-    _XLA_available=True
-except ImportError:
-    _XLA_available = False
-
 
 class ReOrderImages(object):
     """Reorders the image given a tensor of positions"""
@@ -235,7 +228,6 @@ class Tedd1104ataModuleForImageReordering(pl.LightningDataModule):
         hide_map_prob: float = 0.0,
         dropout_images_prob: List[float] = None,
         num_workers: int = os.cpu_count(),
-        accelerator: str = "gpu",
     ):
         """
         Initializes the Tedd1104DataModule.
@@ -267,15 +259,6 @@ class Tedd1104ataModuleForImageReordering(pl.LightningDataModule):
         )
 
         self.num_workers = num_workers
-
-        self.accelerator = accelerator
-
-        if self.accelerator == "tpu":
-            if not _XLA_available:
-                raise RuntimeError(
-                    f"Cannot use {self.accelerator} accelerator without XLA. Please install XLA."
-                )
-            self.xla_device = xm.xla_device()
 
     def setup(self, stage: Optional[str] = None) -> None:
         """
@@ -325,7 +308,7 @@ class Tedd1104ataModuleForImageReordering(pl.LightningDataModule):
 
         :return: DataLoader - Training dataloader.
         """
-        dataloader = DataLoader(
+        return DataLoader(
             self.train_dataset,
             batch_size=self.batch_size,
             num_workers=self.num_workers,
@@ -334,10 +317,6 @@ class Tedd1104ataModuleForImageReordering(pl.LightningDataModule):
             persistent_workers=True,
             collate_fn=collate_fn,
         )
-        if self.accelerator != "tpu":
-            return dataloader
-        else:
-            return ploader(dataloader, [self.xla_device])
 
     def val_dataloader(self) -> DataLoader:
         """
@@ -345,7 +324,7 @@ class Tedd1104ataModuleForImageReordering(pl.LightningDataModule):
 
         :return: DataLoader - Validation dataloader.
         """
-        dataloader = DataLoader(
+        return DataLoader(
             self.val_dataset,
             batch_size=self.batch_size,
             num_workers=self.num_workers,
@@ -354,10 +333,6 @@ class Tedd1104ataModuleForImageReordering(pl.LightningDataModule):
             persistent_workers=True,
             collate_fn=collate_fn,
         )
-        if self.accelerator != "tpu":
-            return dataloader
-        else:
-            return ploader(dataloader, [self.xla_device])
 
     def test_dataloader(self) -> DataLoader:
         """
@@ -365,7 +340,7 @@ class Tedd1104ataModuleForImageReordering(pl.LightningDataModule):
 
         :return: DataLoader - Test dataloader.
         """
-        dataloader = DataLoader(
+        return DataLoader(
             self.test_dataset,
             batch_size=self.batch_size,
             num_workers=self.num_workers,
@@ -374,7 +349,3 @@ class Tedd1104ataModuleForImageReordering(pl.LightningDataModule):
             persistent_workers=True,
             collate_fn=collate_fn,
         )
-        if self.accelerator != "tpu":
-            return dataloader
-        else:
-            return ploader(dataloader, [self.xla_device])

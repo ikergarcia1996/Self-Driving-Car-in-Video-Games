@@ -67,7 +67,6 @@ def train(
         dropout_images_prob=dropout_images_prob,
         control_mode=control_mode,
         num_workers=dataloader_num_workers,
-        accelerator=accelerator,
         token_mask_prob=mask_prob,
         transformer_nheads=None if model.encoder_type == "lstm" else model.nhead,
         sequence_length=model.sequence_size,

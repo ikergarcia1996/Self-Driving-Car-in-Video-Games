@@ -10,16 +10,6 @@ from typing import List, Optional, Dict
 from utils import IOHandler, get_mask
 import pytorch_lightning as pl
 
-try:
-    from torch_xla.distributed.parallel_loader import ParallelLoader
-    import torch_xla.core.xla_model as xm
-
-    _XLA_available = True
-except ImportError:
-    _XLA_available = False
-    ParallelLoader = None
-    xm = None
-
 
 class RemoveMinimap(object):
     """Remove minimap (black square) from all the images in the sequence"""
@@ -442,7 +432,6 @@ class Tedd1104DataModule(pl.LightningDataModule):
         dropout_images_prob: List[float] = None,
         control_mode: str = "keyboard",
         num_workers: int = os.cpu_count(),
-        accelerator: str = "gpu",
     ):
         """
         Initializes the Tedd1104DataModule.
@@ -476,13 +465,6 @@ class Tedd1104DataModule(pl.LightningDataModule):
         self.num_workers = num_workers
 
         self.accelerator = accelerator
-
-        if self.accelerator == "tpu":
-            if not _XLA_available:
-                raise RuntimeError(
-                    f"Cannot use {self.accelerator} accelerator without XLA. Please install XLA."
-                )
-            self.xla_device = xm.xla_device()
 
     def setup(self, stage: Optional[str] = None) -> None:
         """
@@ -535,7 +517,7 @@ class Tedd1104DataModule(pl.LightningDataModule):
 
         :return: DataLoader - Training dataloader.
         """
-        dataloader = DataLoader(
+        return DataLoader(
             self.train_dataset,
             batch_size=self.batch_size,
             num_workers=self.num_workers,
@@ -544,10 +526,6 @@ class Tedd1104DataModule(pl.LightningDataModule):
             persistent_workers=True,
             collate_fn=collate_fn,
         )
-        if self.accelerator != "tpu":
-            return dataloader
-        else:
-            return ParallelLoader(dataloader, [self.xla_device])
 
     def val_dataloader(self) -> DataLoader:
         """
@@ -555,7 +533,7 @@ class Tedd1104DataModule(pl.LightningDataModule):
 
         :return: DataLoader - Validation dataloader.
         """
-        dataloader = DataLoader(
+        return DataLoader(
             self.val_dataset,
             batch_size=self.batch_size,
             num_workers=self.num_workers,
@@ -564,10 +542,6 @@ class Tedd1104DataModule(pl.LightningDataModule):
             persistent_workers=True,
             collate_fn=collate_fn,
         )
-        if self.accelerator != "tpu":
-            return dataloader
-        else:
-            return ParallelLoader(dataloader, [self.xla_device])
 
     def test_dataloader(self) -> DataLoader:
         """
@@ -575,7 +549,7 @@ class Tedd1104DataModule(pl.LightningDataModule):
 
         :return: DataLoader - Test dataloader.
         """
-        dataloader = DataLoader(
+        return DataLoader(
             self.test_dataset,
             batch_size=self.batch_size,
             num_workers=self.num_workers,
@@ -584,8 +558,3 @@ class Tedd1104DataModule(pl.LightningDataModule):
             persistent_workers=True,
             collate_fn=collate_fn,
         )
-
-        if self.accelerator != "tpu":
-            return dataloader
-        else:
-            return ParallelLoader(dataloader, [self.xla_device])
