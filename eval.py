@@ -6,6 +6,7 @@ import pytorch_lightning as pl
 from typing import List, Union
 from torch.utils.data import DataLoader
 from tabulate import tabulate
+from pytorch_lightning.plugins import DDPPlugin
 
 
 def eval_model(
@@ -43,6 +44,9 @@ def eval_model(
         default_root_dir=os.path.join(
             os.path.dirname(os.path.abspath(checkpoint_path)), "trainer_checkpoint"
         ),
+        plugins=None
+        if strategy != "ddp"
+        else [DDPPlugin(find_unused_parameters=False)],
     )
 
     results: List[List[Union[str, float]]] = []
