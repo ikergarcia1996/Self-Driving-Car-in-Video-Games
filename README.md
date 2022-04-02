@@ -91,8 +91,8 @@ Data generation and inference only work in Windows 10/11 which are the only OS s
 ```
 Python 3.7 or newer (3.9.7 tested)
 Pytorch 1.6.0 or newer (1.10 tested)
-Torchvision (0.11.0 tested)
-PyTorch Lightning (1.4.9 tested)
+Torchvision (0.13.0 or newer, currently a nightly build)
+PyTorch Lightning (1.6.0 or newer)
 torchmetrics
 scikit-image
 numpy
