@@ -18,6 +18,7 @@ def train(
     hide_map_prob: float,
     dropout_images_prob: List[float],
     test_dir: str = None,
+    mask_prob: float = 0.2,
     val_check_interval: float = 0.25,
     dataloader_num_workers=os.cpu_count(),
     devices: str = 1,
@@ -55,6 +56,9 @@ def train(
         hide_map_prob=hide_map_prob,
         dropout_images_prob=dropout_images_prob,
         num_workers=dataloader_num_workers,
+        token_mask_prob=mask_prob,
+        transformer_nheads=None if model.encoder_type == "lstm" else model.nhead,
+        sequence_length=model.sequence_size,
     )
 
     experiment_name = os.path.basename(output_dir)
@@ -177,7 +181,6 @@ def train_new_model(
         positional_embeddings_dropout=positional_embeddings_dropout,
         dropout_encoder=dropout_encoder,
         dropout_encoder_features=dropout_encoder_features,
-        mask_prob=mask_prob,
         sequence_size=sequence_size,
         learning_rate=learning_rate,
         weight_decay=weight_decay,
@@ -193,6 +196,7 @@ def train_new_model(
         batch_size=batch_size,
         accumulation_steps=accumulation_steps,
         max_epochs=max_epochs,
+        mask_prob=mask_prob,
         hide_map_prob=hide_map_prob,
         dropout_images_prob=dropout_images_prob,
         val_check_interval=val_check_interval,
@@ -219,6 +223,7 @@ def continue_training(
     strategy=None,
     test_dir: str = None,
     hparams_path: str = None,
+    mask_prob: float = 0.2,
     hide_map_prob: float = 0.0,
     dropout_images_prob=None,
     dataloader_num_workers=os.cpu_count(),
@@ -262,6 +267,9 @@ def continue_training(
         hide_map_prob=hide_map_prob,
         dropout_images_prob=dropout_images_prob,
         num_workers=dataloader_num_workers,
+        token_mask_prob=mask_prob,
+        transformer_nheads=None if model.encoder_type == "lstm" else model.nhead,
+        sequence_length=model.sequence_size,
     )
 
     print(f"Restoring checkpoint: {checkpoint_path}. hparams: {hparams_path}")
@@ -598,6 +606,7 @@ if __name__ == "__main__":
             batch_size=args.batch_size,
             accumulation_steps=args.accumulation_steps,
             max_epochs=args.max_epochs,
+            mask_prob=args.mask_prob,
             hide_map_prob=args.hide_map_prob,
             dropout_images_prob=args.dropout_images_prob,
             dataloader_num_workers=args.dataloader_num_workers,

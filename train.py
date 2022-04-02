@@ -18,6 +18,7 @@ def train(
     hide_map_prob: float,
     dropout_images_prob: List[float],
     test_dir: str = None,
+    mask_prob: float = 0.2,
     control_mode: str = "keyboard",
     val_check_interval: float = 0.25,
     devices: str = 1,
@@ -59,6 +60,10 @@ def train(
         dropout_images_prob=dropout_images_prob,
         control_mode=control_mode,
         num_workers=dataloader_num_workers,
+        accelerator=accelerator,
+        token_mask_prob=mask_prob,
+        transformer_nheads=None if model.encoder_type == "lstm" else model.nhead,
+        sequence_length=model.sequence_size,
     )
 
     experiment_name = os.path.basename(output_dir)
@@ -205,7 +210,6 @@ def train_new_model(
             positional_embeddings_dropout=positional_embeddings_dropout,
             dropout_encoder=dropout_encoder,
             dropout_encoder_features=dropout_encoder_features,
-            mask_prob=mask_prob,
             control_mode=control_mode,
             sequence_size=sequence_size,
             encoder_type=encoder_type,
@@ -242,6 +246,7 @@ def train_new_model(
         batch_size=batch_size,
         accumulation_steps=accumulation_steps,
         max_epochs=max_epochs,
+        mask_prob=mask_prob,
         hide_map_prob=hide_map_prob,
         dropout_images_prob=dropout_images_prob,
         control_mode=control_mode,
@@ -268,6 +273,7 @@ def continue_training(
     precision: str = "bf16",
     strategy=None,
     test_dir: str = None,
+    mask_prob: float = 0.0,
     hide_map_prob: float = 0.0,
     dropout_images_prob=None,
     dataloader_num_workers=os.cpu_count(),
@@ -310,6 +316,9 @@ def continue_training(
         dropout_images_prob=dropout_images_prob,
         control_mode=model.control_mode,
         num_workers=dataloader_num_workers,
+        token_mask_prob=mask_prob,
+        transformer_nheads=None if model.encoder_type == "lstm" else model.nhead,
+        sequence_length=model.sequence_size,
     )
 
     experiment_name = os.path.basename(output_dir)
@@ -572,7 +581,7 @@ if __name__ == "__main__":
         "--mask_prob",
         type=float,
         default=0.2,
-        help="[NEW MODEL Transformers] Probability of masking each input vector in the transformer encoder",
+        help="[TRANSFORMER] Probability of masking each input vector in the transformer encoder",
     )
 
     parser.add_argument(
@@ -699,6 +708,7 @@ if __name__ == "__main__":
             batch_size=args.batch_size,
             accumulation_steps=args.accumulation_steps,
             max_epochs=args.max_epochs,
+            mask_prob=args.mask_prob,
             hide_map_prob=args.hide_map_prob,
             dropout_images_prob=args.dropout_images_prob,
             dataloader_num_workers=args.dataloader_num_workers,

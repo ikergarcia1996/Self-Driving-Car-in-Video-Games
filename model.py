@@ -429,7 +429,6 @@ class EncoderTransformer(nn.Module):
         d_model: int = 512,
         nhead: int = 8,
         num_layers: int = 1,
-        mask_prob: float = 0.2,
         dropout: float = 0.1,
         sequence_length: int = 5,
     ):
@@ -439,7 +438,6 @@ class EncoderTransformer(nn.Module):
         :param int d_model: Size of the input feature vectors
         :param int nhead: Number of heads in the multi-head attention
         :param int num_layers: number of transformer layers in the encoder
-        :param float mask_prob: probability of masking each input vector
         :param float dropout: dropout probability of transformer layers in the encoder
         :param int sequence_length: Length of the input sequence
 
@@ -448,7 +446,6 @@ class EncoderTransformer(nn.Module):
         self.d_model = d_model
         self.nhead = nhead
         self.num_layers = num_layers
-        self.mask_prob = mask_prob
         self.dropout = dropout
         self.sequence_length = sequence_length
 
@@ -466,6 +463,8 @@ class EncoderTransformer(nn.Module):
             nhead=self.nhead,
             dim_feedforward=self.d_model * 4,
             dropout=dropout,
+            activation="gelu",
+            batch_first=True,
         )
 
         self.transformer_encoder = torch.nn.TransformerEncoder(
@@ -475,47 +474,24 @@ class EncoderTransformer(nn.Module):
         for parameter in self.transformer_encoder.parameters():
             parameter.requires_grad = True
 
-    def forward(self, features: torch.tensor):
+    def forward(
+        self, features: torch.tensor, attention_mask: torch.tensor = None
+    ) -> torch.tensor:
         """
         Forward pass
 
         :param torch.tensor features: Input features [batch_size, sequence_length, embedded_size]
+        :param torch.tensor attention_mask: Mask for the input features
+                                            [batch_size*heads, sequence_length, sequence_length]
+                                            1 for masked positions and 0 for unmasked positions
         :return: Output features [batch_size, d_model]
         """
-        if self.training:
-            bernolli_matrix = (
-                torch.cat(
-                    (
-                        torch.tensor([1]).float(),
-                        (torch.tensor([self.mask_prob]).float()).repeat(
-                            self.sequence_length
-                        ),
-                    ),
-                    0,
-                )
-                .unsqueeze(0)
-                .repeat([features.size(0) * self.nhead, 1])
-            )
-            bernolli_distributor = torch.distributions.Bernoulli(bernolli_matrix)
-            sample = bernolli_distributor.sample()
-            mask = (sample > 0).unsqueeze(1).repeat(1, sample.size(1), 1)
-        else:
 
-            mask = torch.ones(
-                features.size(0) * self.nhead,
-                self.sequence_length + 1,
-                self.sequence_length + 1,
-            )
-
-        mask = mask.type_as(features)
         features = torch.cat(
             (self.clsToken.repeat(features.size(0), 1, 1), features), dim=1
         )
         features = self.pe(features)
-        # print(f"x.size(): {x.size()}. mask.size(): {mask.size()}")
-        features = self.transformer_encoder(
-            features.transpose(0, 1), mask=mask
-        ).transpose(0, 1)
+        features = self.transformer_encoder(features, attention_mask)
         return features
 
 
@@ -794,7 +770,6 @@ class TEDD1104Transformer(nn.Module):
         positional_embeddings_dropout: float,
         dropout_transformer: float,
         dropout_encoder_features: float,
-        mask_prob: float,
         control_mode: str = "keyboard",
         sequence_size: int = 5,
     ):
@@ -808,7 +783,6 @@ class TEDD1104Transformer(nn.Module):
         :param int embedded_size: Size of the input feature vectors
         :param int nhead: Number of heads in the multi-head attention
         :param int num_layers_transformer: number of transformer layers in the encoder
-        :param float mask_prob: probability of masking each input vector
         :param float positional_embeddings_dropout: Dropout rate for the positional embeddings
         :param float dropout_transformer: dropout probability of transformer layers in the encoder
         :param int sequence_size: Length of the input sequence
@@ -827,7 +801,6 @@ class TEDD1104Transformer(nn.Module):
         self.dropout_cnn_out: float = dropout_cnn_out
         self.positional_embeddings_dropout: float = positional_embeddings_dropout
         self.dropout_transformer: float = dropout_transformer
-        self.mask_prob = mask_prob
         self.control_mode = control_mode
         self.dropout_encoder_features = dropout_encoder_features
 
@@ -849,7 +822,6 @@ class TEDD1104Transformer(nn.Module):
             d_model=embedded_size,
             nhead=nhead,
             num_layers=num_layers_transformer,
-            mask_prob=self.mask_prob,
             dropout=self.dropout_transformer,
         )
 
@@ -860,16 +832,21 @@ class TEDD1104Transformer(nn.Module):
             from_transformer=True,
         )
 
-    def forward(self, x: torch.tensor) -> torch.tensor:
+    def forward(
+        self, x: torch.tensor, attention_mask: torch.tensor = None
+    ) -> torch.tensor:
         """
         Forward pass
 
         :param torch.tensor x: Input tensor of shape [batch_size * sequence_size, 3, 270, 480]
+        :param torch.tensor attention_mask: Mask for the input features
+                                            [batch_size*heads, sequence_length, sequence_length]
+                                            1 for masked positions and 0 for unmasked positions
         :return: Output tensor of shape [9] if control_mode == "keyboard" or [2] if control_mode == "controller"
         """
         x = self.EncoderCNN(x)
         x = self.PositionalEncoding(x)
-        x = self.EncoderTransformer(x)
+        x = self.EncoderTransformer(x, attention_mask=attention_mask)
         return self.OutputLayer(x)
 
 
@@ -892,7 +869,6 @@ class TEDD1104TransformerForImageReordering(nn.Module):
         positional_embeddings_dropout: float,
         dropout_transformer: float,
         dropout_encoder_features: float,
-        mask_prob: float,
         sequence_size: int = 5,
     ):
         """
@@ -905,7 +881,6 @@ class TEDD1104TransformerForImageReordering(nn.Module):
         :param int embedded_size: Size of the input feature vectors
         :param int nhead: Number of heads in the multi-head attention
         :param int num_layers_transformer: number of transformer layers in the encoder
-        :param float mask_prob: probability of masking each input vector
         :param float positional_embeddings_dropout: Dropout rate for the positional embeddings
         :param float dropout_transformer: dropout probability of transformer layers in the encoder
         :param int sequence_size: Length of the input sequence
@@ -925,7 +900,6 @@ class TEDD1104TransformerForImageReordering(nn.Module):
         self.dropout_cnn_out: float = dropout_cnn_out
         self.positional_embeddings_dropout: float = positional_embeddings_dropout
         self.dropout_transformer: float = dropout_transformer
-        self.mask_prob = mask_prob
         self.dropout_encoder_features = dropout_encoder_features
 
         self.EncoderCNN: EncoderCNN = EncoderCNN(
@@ -946,7 +920,6 @@ class TEDD1104TransformerForImageReordering(nn.Module):
             d_model=embedded_size,
             nhead=nhead,
             num_layers=num_layers_transformer,
-            mask_prob=self.mask_prob,
             dropout=self.dropout_transformer,
         )
 
@@ -955,16 +928,21 @@ class TEDD1104TransformerForImageReordering(nn.Module):
             num_classes=self.sequence_size,
         )
 
-    def forward(self, x: torch.tensor) -> torch.tensor:
+    def forward(
+        self, x: torch.tensor, attention_mask: torch.tensor = None
+    ) -> torch.tensor:
         """
         Forward pass
 
         :param torch.tensor x: Input tensor of shape [batch_size * sequence_size, 3, 270, 480]
+        :param torch.tensor attention_mask: Mask for the input features
+                                            [batch_size*heads, sequence_length, sequence_length]
+                                            1 for masked positions and 0 for unmasked positions
         :return: Output tensor of shape [9] if control_mode == "keyboard" or [2] if control_mode == "controller"
         """
         x = self.EncoderCNN(x)
         x = self.PositionalEncoding(x)
-        x = self.EncoderTransformer(x)
+        x = self.EncoderTransformer(x, attention_mask=attention_mask)
         return self.OutputLayer(x)
 
 
@@ -984,7 +962,6 @@ class Tedd1104ModelPL(pl.LightningModule):
         dropout_cnn_out: float,
         positional_embeddings_dropout: float,
         dropout_encoder: float,
-        mask_prob: float,
         dropout_encoder_features: float = 0.8,
         control_mode: str = "keyboard",
         sequence_size: int = 5,
@@ -1006,7 +983,6 @@ class Tedd1104ModelPL(pl.LightningModule):
         :param int embedded_size: Size of the input feature vectors
         :param int nhead: Number of heads in the multi-head attention
         :param int num_layers_encoder: number of transformer layers in the encoder
-        :param float mask_prob: probability of masking each input vector
         :param float positional_embeddings_dropout: Dropout rate for the positional embeddings
         :param int sequence_size: Length of the input sequence
         :param float dropout_encoder: Dropout rate for the encoder
@@ -1046,7 +1022,6 @@ class Tedd1104ModelPL(pl.LightningModule):
         self.positional_embeddings_dropout: float = positional_embeddings_dropout
         self.dropout_encoder: float = dropout_encoder
         self.dropout_encoder_features = dropout_encoder_features
-        self.mask_prob = mask_prob
         self.bidirectional_lstm = bidirectional_lstm
         self.lstm_hidden_size = lstm_hidden_size
         self.weights = weights
@@ -1065,7 +1040,6 @@ class Tedd1104ModelPL(pl.LightningModule):
                 dropout_cnn_out=self.dropout_cnn_out,
                 positional_embeddings_dropout=self.positional_embeddings_dropout,
                 dropout_transformer=self.dropout_encoder,
-                mask_prob=self.mask_prob,
                 control_mode=self.control_mode,
                 sequence_size=self.sequence_size,
                 dropout_encoder_features=self.dropout_encoder_features,
@@ -1187,8 +1161,8 @@ class Tedd1104ModelPL(pl.LightningModule):
         :param batch: batch of data
         :param batch_idx: batch index
         """
-        x, y = batch["images"], batch["y"]
-        x = torch.flatten(x, start_dim=0, end_dim=1)
+        x, attention_mask, y = batch["images"], batch["attention_mask"], batch["y"]
+        # x = torch.flatten(x, start_dim=0, end_dim=1)
         preds = self.model(x)
         loss = self.criterion(preds, y)
         self.total_batches += 1
@@ -1231,7 +1205,7 @@ class Tedd1104ModelPL(pl.LightningModule):
         :param batch_idx: batch index
         """
         x, y = batch["images"], batch["y"]
-        x = torch.flatten(x, start_dim=0, end_dim=1)
+        # x = torch.flatten(x, start_dim=0, end_dim=1)
         preds = self.forward(x, output_mode="keyboard", return_best=False)
 
         return {"preds": preds, "y": y}  # "loss":loss}
@@ -1273,7 +1247,7 @@ class Tedd1104ModelPL(pl.LightningModule):
         :param batch_idx: batch index
         """
         x, y = batch["images"], batch["y"]
-        x = torch.flatten(x, start_dim=0, end_dim=1)
+        # x = torch.flatten(x, start_dim=0, end_dim=1)
         preds = self.forward(x, output_mode="keyboard", return_best=False)
 
         return {"preds": preds, "y": y}  # "loss":loss}
@@ -1344,7 +1318,6 @@ class Tedd1104ModelPLForImageReordering(pl.LightningModule):
         dropout_cnn_out: float,
         positional_embeddings_dropout: float,
         dropout_encoder: float,
-        mask_prob: float,
         dropout_encoder_features: float = 0.8,
         sequence_size: int = 5,
         learning_rate: float = 1e-5,
@@ -1363,7 +1336,6 @@ class Tedd1104ModelPLForImageReordering(pl.LightningModule):
         :param int embedded_size: Size of the input feature vectors
         :param int nhead: Number of heads in the multi-head attention
         :param int num_layers_encoder: number of transformer layers in the encoder
-        :param float mask_prob: probability of masking each input vector
         :param float positional_embeddings_dropout: Dropout rate for the positional embeddings
         :param int sequence_size: Length of the input sequence
         :param float dropout_encoder: Dropout rate for the encoder
@@ -1385,7 +1357,6 @@ class Tedd1104ModelPLForImageReordering(pl.LightningModule):
         self.positional_embeddings_dropout: float = positional_embeddings_dropout
         self.dropout_encoder: float = dropout_encoder
         self.dropout_encoder_features = dropout_encoder_features
-        self.mask_prob = mask_prob
         self.learning_rate = learning_rate
         self.weight_decay = weight_decay
         self.encoder_type = encoder_type
@@ -1400,7 +1371,6 @@ class Tedd1104ModelPLForImageReordering(pl.LightningModule):
             dropout_cnn_out=self.dropout_cnn_out,
             positional_embeddings_dropout=self.positional_embeddings_dropout,
             dropout_transformer=self.dropout_encoder,
-            mask_prob=self.mask_prob,
             sequence_size=self.sequence_size,
             dropout_encoder_features=self.dropout_encoder_features,
         )
@@ -1437,7 +1407,7 @@ class Tedd1104ModelPLForImageReordering(pl.LightningModule):
         :param batch_idx: batch index
         """
         x, y = batch["images"], batch["y"]
-        x = torch.flatten(x, start_dim=0, end_dim=1)
+        # x = torch.flatten(x, start_dim=0, end_dim=1)
         preds = self.model(x)
         loss = self.criterion(preds, y)
         self.total_batches += 1
@@ -1481,7 +1451,7 @@ class Tedd1104ModelPLForImageReordering(pl.LightningModule):
         :param batch_idx: batch index
         """
         x, y = batch["images"], batch["y"]
-        x = torch.flatten(x, start_dim=0, end_dim=1)
+        # x = torch.flatten(x, start_dim=0, end_dim=1)
         preds = self.forward(x, return_best=True)
 
         return {"preds": preds, "y": y}
@@ -1506,7 +1476,7 @@ class Tedd1104ModelPLForImageReordering(pl.LightningModule):
         :param batch_idx: batch index
         """
         x, y = batch["images"], batch["y"]
-        x = torch.flatten(x, start_dim=0, end_dim=1)
+        # x = torch.flatten(x, start_dim=0, end_dim=1)
         preds = self.forward(x, return_best=True)
 
         return {"preds": preds, "y": y}

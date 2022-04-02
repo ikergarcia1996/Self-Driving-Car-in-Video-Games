@@ -7,8 +7,16 @@ from torch.utils.data import Dataset, DataLoader
 from torchvision import transforms
 import glob
 from typing import List, Optional, Dict
-from utils import IOHandler
+from utils import IOHandler, get_mask
 import pytorch_lightning as pl
+
+try:
+    import torch_xla.distributed.parallel_loader.ParallelLoader as ploader
+    import torch_xla.core.xla_model as xm
+
+    _XLA_available = True
+except ImportError:
+    _XLA_available = False
 
 
 class RemoveMinimap(object):
@@ -255,6 +263,21 @@ class Normalize(object):
         }
 
 
+def collate_fn(batch):
+    """
+    Collate function for the dataloader.
+
+    :param batch: List of samples
+    :return: Dict[str, torch.tensor]- Transformed sequence of images
+    """
+    images = torch.cat([b["images"] for b in batch], dim=0)
+    attention_mask = torch.cat([b["attention_mask"] for b in batch], dim=0)
+    y = torch.stack([b["y"] for b in batch])
+    attention_mask.requires_grad = False
+    y.requires_grad = False
+    return {"images": images, "attention_mask": attention_mask, "y": y}
+
+
 class Tedd1104Dataset(Dataset):
     """TEDD1104 dataset."""
 
@@ -262,7 +285,10 @@ class Tedd1104Dataset(Dataset):
         self,
         dataset_dir: str,
         hide_map_prob: float,
-        dropout_images_prob: List[float],
+        token_mask_prob: float,
+        transformer_nheads: int = None,
+        dropout_images_prob: List[float] = 0.0,
+        sequence_length: int = 5,
         control_mode: str = "keyboard",
         train: bool = False,
     ):
@@ -272,7 +298,10 @@ class Tedd1104Dataset(Dataset):
 
         :param str dataset_dir: The directory of the dataset.
         :param bool hide_map_prob: Probability of hiding the minimap (0<=hide_map_prob<=1)
+        :param bool token_mask_prob: Probability of masking a token in the transformer model (0<=token_mask_prob<=1)
+        :param int transformer_nheads: Number of heads in the transformer model, None if LSTM is used
         :param List[float] dropout_images_prob: Probability of dropping an image (0<=dropout_images_prob<=1)
+        :param int sequence_length: Length of the image sequence
         :param str control_mode: Type of the user input: "keyboard" or "controller"
         :param bool train: If True, the dataset is used for training.
         """
@@ -281,6 +310,10 @@ class Tedd1104Dataset(Dataset):
         self.hide_map_prob = hide_map_prob
         self.dropout_images_prob = dropout_images_prob
         self.control_mode = control_mode.lower()
+        self.sequence_length = sequence_length
+        self.token_mask_prob = token_mask_prob
+        self.transformer_nheads = transformer_nheads
+        self.train = train
 
         assert self.control_mode in [
             "keyboard",
@@ -298,10 +331,15 @@ class Tedd1104Dataset(Dataset):
         )
 
         for dropout_image_prob in dropout_images_prob:
-            assert 0 <= dropout_image_prob <= 1.0, (
-                f"All probabilities in dropout_image_prob must be in the range 0 <= dropout_image_prob <= 1.0. "
+            assert 0 <= dropout_image_prob < 1.0, (
+                f"All probabilities in dropout_image_prob must be in the range 0 <= dropout_image_prob < 1.0. "
                 f"dropout_images_prob: {dropout_images_prob}"
             )
+
+        assert 0 <= token_mask_prob < 1.0, (
+            f"token_mask_prob not in 0 <= token_mask_prob < 1.0 range. "
+            f"token_mask_prob: {token_mask_prob}"
+        )
 
         if train:
             self.transform = transforms.Compose(
@@ -372,8 +410,16 @@ class Tedd1104Dataset(Dataset):
         )
 
         sample = {"image": image, "y": y}
+        sample = self.transform(sample)
+        if self.transformer_nheads is not None:
+            sample["attention_mask"] = get_mask(
+                train=self.train,
+                nheads=self.transformer_nheads,
+                mask_prob=self.token_mask_prob,
+                sequence_length=self.sequence_length,
+            )
 
-        return self.transform(sample)
+        return sample
 
 
 class Tedd1104DataModule(pl.LightningDataModule):
@@ -387,10 +433,14 @@ class Tedd1104DataModule(pl.LightningDataModule):
         train_dir: str = None,
         val_dir: str = None,
         test_dir: str = None,
+        token_mask_prob: float = 0.0,
+        transformer_nheads: int = None,
+        sequence_length: int = 5,
         hide_map_prob: float = 0.0,
         dropout_images_prob: List[float] = None,
         control_mode: str = "keyboard",
         num_workers: int = os.cpu_count(),
+        accelerator: str = "gpu",
     ):
         """
         Initializes the Tedd1104DataModule.
@@ -399,6 +449,9 @@ class Tedd1104DataModule(pl.LightningDataModule):
         :param str train_dir: Directory containing the training dataset.
         :param str val_dir: Directory containing the validation dataset.
         :param str test_dir: Directory containing the test dataset.
+        :param bool token_mask_prob: Probability of masking a token in the transformer model (0<=token_mask_prob<=1)
+        :param int transformer_nheads: Number of heads in the transformer model, None if LSTM is used
+        :param int sequence_length: Length of the image sequence
         :param bool hide_map_prob: Probability of hiding the minimap (0<=hide_map_prob<=1)
         :param float dropout_images_prob: Probability of dropping an image (0<=dropout_images_prob<=1)
         :param str control_mode: Record the input from the "keyboard" or "controller"
@@ -409,7 +462,9 @@ class Tedd1104DataModule(pl.LightningDataModule):
         self.val_dir = val_dir
         self.test_dir = test_dir
         self.batch_size = batch_size
-
+        self.token_mask_prob = token_mask_prob
+        self.transformer_nheads = transformer_nheads
+        self.sequence_length = sequence_length
         self.hide_map_prob = hide_map_prob
         self.dropout_images_prob = (
             dropout_images_prob if dropout_images_prob else [0.0, 0.0, 0.0, 0.0, 0.0]
@@ -417,6 +472,15 @@ class Tedd1104DataModule(pl.LightningDataModule):
         self.control_mode = control_mode
 
         self.num_workers = num_workers
+
+        self.accelerator = accelerator
+
+        if self.accelerator == "tpu":
+            if not _XLA_available:
+                raise RuntimeError(
+                    f"Cannot use {self.accelerator} accelerator without XLA. Please install XLA."
+                )
+            self.xla_device = xm.xla_device()
 
     def setup(self, stage: Optional[str] = None) -> None:
         """
@@ -431,6 +495,9 @@ class Tedd1104DataModule(pl.LightningDataModule):
                 dropout_images_prob=self.dropout_images_prob,
                 control_mode=self.control_mode,
                 train=True,
+                token_mask_prob=self.token_mask_prob,
+                transformer_nheads=self.transformer_nheads,
+                sequence_length=self.sequence_length,
             )
 
             print(f"Total training samples: {len(self.train_dataset)}.")
@@ -440,6 +507,9 @@ class Tedd1104DataModule(pl.LightningDataModule):
                 hide_map_prob=0.0,
                 dropout_images_prob=[0.0, 0.0, 0.0, 0.0, 0.0],
                 control_mode="keyboard",
+                token_mask_prob=0.0,
+                transformer_nheads=self.transformer_nheads,
+                sequence_length=self.sequence_length,
             )
 
             print(f"Total validation samples: {len(self.val_dataset)}.")
@@ -450,6 +520,9 @@ class Tedd1104DataModule(pl.LightningDataModule):
                 hide_map_prob=0.0,
                 dropout_images_prob=[0.0, 0.0, 0.0, 0.0, 0.0],
                 control_mode="keyboard",
+                token_mask_prob=0.0,
+                transformer_nheads=self.transformer_nheads,
+                sequence_length=self.sequence_length,
             )
 
             print(f"Total test samples: {len(self.test_dataset)}.")
@@ -460,14 +533,19 @@ class Tedd1104DataModule(pl.LightningDataModule):
 
         :return: DataLoader - Training dataloader.
         """
-        return DataLoader(
+        dataloader = DataLoader(
             self.train_dataset,
             batch_size=self.batch_size,
             num_workers=self.num_workers,
             pin_memory=True,
             shuffle=True,
             persistent_workers=True,
+            collate_fn=collate_fn,
         )
+        if self.accelerator != "tpu":
+            return dataloader
+        else:
+            return ploader(dataloader, [self.xla_device])
 
     def val_dataloader(self) -> DataLoader:
         """
@@ -475,14 +553,19 @@ class Tedd1104DataModule(pl.LightningDataModule):
 
         :return: DataLoader - Validation dataloader.
         """
-        return DataLoader(
+        dataloader = DataLoader(
             self.val_dataset,
             batch_size=self.batch_size,
             num_workers=self.num_workers,
             pin_memory=True,
             shuffle=False,
             persistent_workers=True,
+            collate_fn=collate_fn,
         )
+        if self.accelerator != "tpu":
+            return dataloader
+        else:
+            return ploader(dataloader, [self.xla_device])
 
     def test_dataloader(self) -> DataLoader:
         """
@@ -490,11 +573,17 @@ class Tedd1104DataModule(pl.LightningDataModule):
 
         :return: DataLoader - Test dataloader.
         """
-        return DataLoader(
+        dataloader = DataLoader(
             self.test_dataset,
             batch_size=self.batch_size,
             num_workers=self.num_workers,
             pin_memory=True,
             shuffle=False,
             persistent_workers=True,
+            collate_fn=collate_fn,
         )
+
+        if self.accelerator != "tpu":
+            return dataloader
+        else:
+            return ploader(dataloader, [self.xla_device])

@@ -174,6 +174,7 @@ class IOHandler:
 
 def get_mask(
     train: bool,
+    nheads: int,
     mask_prob: float = 0.0,
     sequence_length: int = 5,
 ) -> torch.tensor:
@@ -184,15 +185,14 @@ def get_mask(
                 (torch.tensor([mask_prob]).float()).repeat(sequence_length),
             ),
             0,
-        ).unsqueeze(0)
+        )
         bernolli_distributor = torch.distributions.Bernoulli(bernolli_matrix)
         sample = bernolli_distributor.sample()
         mask = sample > 0
     else:
 
-        mask = torch.zeros(
-            1,
-            sequence_length + 1,
-        )
+        mask = torch.zeros(sequence_length + 1, dtype=torch.bool)
 
-    return mask > 0
+    mask = mask.repeat(nheads, sequence_length + 1, 1)
+    mask.requires_grad = False
+    return mask
