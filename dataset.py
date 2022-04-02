@@ -11,12 +11,14 @@ from utils import IOHandler, get_mask
 import pytorch_lightning as pl
 
 try:
-    import torch_xla.distributed.parallel_loader.ParallelLoader as ploader
+    from torch_xla.distributed.parallel_loader import ParallelLoader
     import torch_xla.core.xla_model as xm
 
     _XLA_available = True
 except ImportError:
     _XLA_available = False
+    ParallelLoader = None
+    xm = None
 
 
 class RemoveMinimap(object):
@@ -545,7 +547,7 @@ class Tedd1104DataModule(pl.LightningDataModule):
         if self.accelerator != "tpu":
             return dataloader
         else:
-            return ploader(dataloader, [self.xla_device])
+            return ParallelLoader(dataloader, [self.xla_device])
 
     def val_dataloader(self) -> DataLoader:
         """
@@ -565,7 +567,7 @@ class Tedd1104DataModule(pl.LightningDataModule):
         if self.accelerator != "tpu":
             return dataloader
         else:
-            return ploader(dataloader, [self.xla_device])
+            return ParallelLoader(dataloader, [self.xla_device])
 
     def test_dataloader(self) -> DataLoader:
         """
@@ -586,4 +588,4 @@ class Tedd1104DataModule(pl.LightningDataModule):
         if self.accelerator != "tpu":
             return dataloader
         else:
-            return ploader(dataloader, [self.xla_device])
+            return ParallelLoader(dataloader, [self.xla_device])

@@ -22,6 +22,7 @@ try:
     _controller_available = True
 except ImportError:
     _controller_available = False
+    XboxControllerEmulator = None
     print(
         f"[WARNING!] Controller emulation unavailable, see controller/setup.md for more info. "
         f"You can ignore this warning if you will use the keyboard as controller for TEDD1104."
