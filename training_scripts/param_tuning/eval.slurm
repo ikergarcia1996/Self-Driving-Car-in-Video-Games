@@ -12,7 +12,7 @@ cd ../../
 
 python3 eval.py \
   --checkpoint_path models/tedd_1104_base_NOmask/TEDD1104/tedd_1104_base_mask/checkpoints/epoch=0-step=19854.ckpt \
-  --batch_size 32 \
+  --batch_size 8 \
   --test_dirs \
    /data/gtaai_datasets/dev \
    /data/gtaai_datasets/test/car_city_day_clear \
@@ -28,7 +28,7 @@ python3 eval.py \
 
   python3 eval.py \
   --checkpoint_path models/tedd_1104_base_NOmask/TEDD1104/tedd_1104_base_NOmask/checkpoints/epoch=4-step=89347.ckpt \
-  --batch_size 32 \
+  --batch_size 8 \
   --test_dirs \
    /data/gtaai_datasets/dev \
    /data/gtaai_datasets/test/car_city_day_clear \
