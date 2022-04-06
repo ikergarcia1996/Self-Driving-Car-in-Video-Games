@@ -1,7 +1,7 @@
 #!/bin/bash
 #SBATCH --job-name=eval
 #SBATCH --cpus-per-task=32
-#SBATCH --gres=gpu:2
+#SBATCH --gres=gpu:1
 #SBATCH --mem=256G
 #SBATCH --output=eval.out
 #SBATCH --error=eval.err
