@@ -8,6 +8,10 @@
 
 source /ikerlariak/igarcia945/envs/pytorch-tximista/bin/activate
 
+export LC_ALL=en_US.UTF-8
+export LANG=en_US.UTF-8
+export LANGUAGE=en_US.UTF-8
+
 cd ../../
 
 python3 train.py --train_new \
