@@ -6,6 +6,7 @@ import pytorch_lightning as pl
 from typing import List, Union
 from torch.utils.data import DataLoader
 from tabulate import tabulate
+from dataset import collate_fn, set_worker_sharing_strategy
 
 
 def eval_model(
@@ -64,6 +65,9 @@ def eval_model(
             num_workers=dataloader_num_workers,
             pin_memory=True,
             shuffle=False,
+            persistent_workers=True,
+            collate_fn=collate_fn,
+            worker_init_fn=set_worker_sharing_strategy,
         )
         print(f"Testing dataset: {os.path.basename(test_dir)}: ")
         print()

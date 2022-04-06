@@ -16,6 +16,7 @@ from dataset import (
     Normalize,
     SequenceColorJitter,
     collate_fn,
+    set_worker_sharing_strategy,
 )
 import numpy as np
 
@@ -320,6 +321,7 @@ class Tedd1104ataModuleForImageReordering(pl.LightningDataModule):
             shuffle=True,
             persistent_workers=True,
             collate_fn=collate_fn,
+            worker_init_fn=set_worker_sharing_strategy,
         )
 
     def val_dataloader(self) -> DataLoader:
@@ -336,6 +338,7 @@ class Tedd1104ataModuleForImageReordering(pl.LightningDataModule):
             shuffle=False,
             persistent_workers=True,
             collate_fn=collate_fn,
+            worker_init_fn=set_worker_sharing_strategy,
         )
 
     def test_dataloader(self) -> DataLoader:
@@ -352,4 +355,5 @@ class Tedd1104ataModuleForImageReordering(pl.LightningDataModule):
             shuffle=False,
             persistent_workers=True,
             collate_fn=collate_fn,
+            worker_init_fn=set_worker_sharing_strategy,
         )
