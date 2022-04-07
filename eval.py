@@ -72,7 +72,10 @@ def eval_model(
         print(f"Testing dataset: {os.path.basename(test_dir)}: ")
         print()
         out = trainer.test(
-            ckpt_path=checkpoint_path, model=model, dataloaders=[dataloader]
+            ckpt_path=checkpoint_path,
+            model=model,
+            dataloaders=[dataloader],
+            verbose=False,
         )[0]
 
         results.append(

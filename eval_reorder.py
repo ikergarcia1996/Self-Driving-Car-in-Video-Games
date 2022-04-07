@@ -8,6 +8,7 @@ from torch.utils.data import DataLoader
 from tabulate import tabulate
 from dataset import collate_fn, set_worker_sharing_strategy
 
+
 def eval_model(
     checkpoint_path: str,
     test_dirs: List[str],
@@ -73,7 +74,10 @@ def eval_model(
         print(f"Testing dataset: {os.path.basename(test_dir)}: ")
         print()
         out = trainer.test(
-            ckpt_path=checkpoint_path, model=model, dataloaders=[dataloader]
+            ckpt_path=checkpoint_path,
+            model=model,
+            dataloaders=[dataloader],
+            verbose=False,
         )[0]
 
         results.append(
