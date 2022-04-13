@@ -1,10 +1,10 @@
 #!/bin/bash
-#SBATCH --job-name=model_cnn
+#SBATCH --job-name=arqmax
 #SBATCH --cpus-per-task=32
 #SBATCH --gres=gpu:2
-#SBATCH --mem=256G
-#SBATCH --output=model_cnn.out
-#SBATCH --error=model_cnn.err
+#SBATCH --mem=96G
+#SBATCH --output=arqmax.out
+#SBATCH --error=arqmax.err
 
 source /ikerlariak/igarcia945/envs/pytorch-tximista/bin/activate
 
@@ -13,7 +13,7 @@ export LANG=en_US.UTF-8
 export LANGUAGE=en_US.UTF-8
 
 cd ../../
-for model_name in efficientnet_v2_m efficientnet_v2_l convnext_large vit_l_32
+for model_name in efficientnet_v2_m efficientnet_v2_l efficientnet_b7 efficientnet_b4 convnext_large vit_l_32
 do
 python3 train.py --train_new \
   --train_dir ../gtaai_datasets/train \
