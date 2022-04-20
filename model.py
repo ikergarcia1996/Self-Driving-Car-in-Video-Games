@@ -115,11 +115,9 @@ class CrossEntropyLoss(torch.nn.Module):
         super(CrossEntropyLoss, self).__init__()
 
         self.reduction = reduction
-        if not weights:
-            weights = [1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0]
-
-        weights = torch.tensor(weights)
-        weights.requires_grad = False
+        if weights:
+            weights = torch.tensor(weights)
+            weights.requires_grad = False
 
         self.register_buffer("weights", weights)
 

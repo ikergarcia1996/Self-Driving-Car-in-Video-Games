@@ -646,7 +646,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--label_smoothing",
         type=float,
-        default=0.0,
+        default=0.1,
         help="[NEW MODEL] Label smoothing in the CrossEntropyLoss "
         "if we are in the classification task (control_mode == 'keyboard')",
     )
