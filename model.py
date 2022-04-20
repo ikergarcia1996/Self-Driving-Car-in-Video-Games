@@ -1176,24 +1176,7 @@ class Tedd1104ModelPL(pl.LightningModule):
             if self.total_batches % 200 == 0:
                 self.log("Train/loss", loss, sync_dist=True)
 
-        return (
-            {"preds": preds.detach(), "y": y, "loss": loss}
-            if self.accelerator != "tpu"
-            else {"loss": loss}
-        )
-
-    def training_step_end(self, outputs):
-        """
-        Training step end.
-
-        :param outputs: outputs of the training step
-        """
-        if self.accelerator != "tpu" and self.control_mode == "keyboard":
-            self.train_accuracy(outputs["preds"], outputs["y"])
-            self.log(
-                "Train/acc_k@1_macro",
-                self.train_accuracy,
-            )
+        return {"loss": loss}
 
     def validation_step(self, batch, batch_idx):
         """
@@ -1422,24 +1405,7 @@ class Tedd1104ModelPLForImageReordering(pl.LightningModule):
             if self.total_batches % 200 == 0:
                 self.log("Train/loss", loss, sync_dist=True)
 
-        return (
-            {"preds": torch.argmax(preds.detach(), dim=-1), "y": y, "loss": loss}
-            if self.accelerator != "tpu"
-            else {"loss": loss}
-        )
-
-    def training_step_end(self, outputs):
-        """
-        Training step end.
-
-        :param outputs: outputs of the training step
-        """
-        if self.accelerator != "tpu":
-            self.train_accuracy(outputs["preds"], outputs["y"])
-            self.log(
-                "Train/acc",
-                self.train_accuracy,
-            )
+        return {"loss": loss}
 
     def validation_step(self, batch, batch_idx):
         """
