@@ -21,7 +21,7 @@ python3 train.py --train_new \
   --encoder_type transformer \
   --dataloader_num_workers 32 \
   --batch_size 16 \
-  --accumulation_steps 4 \
+  --accumulation_steps 2 \
   --max_epochs 10 \
   --cnn_model_name efficientnet_v2_s \
   --num_layers_encoder 1 \

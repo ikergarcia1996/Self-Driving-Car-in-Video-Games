@@ -1,8 +1,8 @@
 #!/bin/bash
 #SBATCH --job-name=large
 #SBATCH --cpus-per-task=96
-#SBATCH --gres=gpu:8
-#SBATCH --mem=512G
+#SBATCH --gres=gpu:4
+#SBATCH --mem=300G
 #SBATCH --output=large.out
 #SBATCH --error=large.err
 
@@ -34,7 +34,7 @@ python3 train.py --train_new \
   --control_mode keyboard \
   --val_check_interval 0.25 \
   --precision "bf16" \
-  --devices 8 \
+  --devices 4 \
   --strategy "ddp_find_unused_parameters_false"
 
 
