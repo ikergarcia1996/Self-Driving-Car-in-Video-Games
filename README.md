@@ -87,28 +87,31 @@ The model has been implemented using Pytorch: https://pytorch.org/ and PyTorch L
 This repository contains all the files need for generating the training data, training the model and using the model to 
 drive in the video game (Real-Time Inference). The software has been written in Python 3. You can train a model in any OS. 
 Data generation and inference only work in Windows 10/11 which are the only OS supported by most video games. 
+
 ## Requirements
+You can train and evaluate models on any Operating System (We use Linux for training).  
+Running real time inference (Let TEDD1104 drive in GTAV) requires Windows 10/11.
 ```
 Python 3.7 or newer (3.9.7 tested)
-Pytorch 1.6.0 or newer (1.10 tested)
-Torchvision (0.13.0 or newer, currently a nightly build)
+Pytorch 1.6.0 or newer (1.12 nightly build tested)
+Torchvision (0.13.0 or newer, currently a nightly build, required for using the efficientnet_v2 models)
 PyTorch Lightning (1.6.0 or newer)
 torchmetrics
 scikit-image
 numpy
 PIL/Pillow
 cv2 (opencv-python)
-json
 tkinter
 tabulate
 wandb or tensorboard for training (Set "report_to" accordingly)
-win32api (PythonWin) - Should be installed by default in newest Python versions for Windows 
+win32api (PythonWin) - Only required for running real time inference (Let TEDD play the game)
+                       Should be installed by default in newest Python versions for Windows. 
+
 
 pygame - Only required if you wish to generate data using a Xbox Controller
 PYXInput - Only required if you wish to use a Vitual Xbox Controller as game controller instead of the keyboard. 
            See controller\README.md for installation instructions. 
 ```
-
 
 ## Run Inference 
 How to use a pretrained T.E.E.D. 1104 model to drive in GTAV
