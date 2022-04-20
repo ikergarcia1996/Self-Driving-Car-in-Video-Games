@@ -12,6 +12,8 @@ export LC_ALL=en_US.UTF-8
 export LANG=en_US.UTF-8
 export LANGUAGE=en_US.UTF-8
 
+cd ../../
+
 python3 eval.py \
   --checkpoint_path models/convnext_large/TEDD1104/33puavzl/checkpoints/epoch=0-step=19854.ckpt \
   --batch_size 32 \
