@@ -52,7 +52,14 @@ def train(
     :param str test_dir: The directory containing the test data.
     :param str control_mode: Model output format: keyboard (Classification task: 9 classes) or controller (Regression task: 2 variables)
     :param float val_check_interval: The interval to check the validation accuracy.
+    :param str devices: Number of devices to use.
+    :param str accelerator: Accelerator to use. If 'auto', tries to automatically detect TPU, GPU, CPU or IPU system.
+    :param str precision: Precision to use. Double precision (64), full precision (32), half precision (16) or bfloat16
+                          precision (bf16). Can be used on CPU, GPU or TPUs.
+    :param str strategy: Strategy to use for data parallelism. "None" for no data parallelism,
+                         ddp_find_unused_parameters_false for DDP.
     :param int dataloader_num_workers: The number of workers to use for the dataloader.
+    :param str report_to: Where to report the results. "tensorboard" for TensorBoard, "wandb" for W&B.
     """
 
     if not os.path.exists(output_dir):
@@ -96,7 +103,10 @@ def train(
 
     lr_monitor = pl.callbacks.LearningRateMonitor(logging_interval="step")
     checkpoint_callback = pl.callbacks.ModelCheckpoint(
-        monitor="Validation/acc_k@1_macro", mode="max", save_last=True
+        dirpath=output_dir,
+        monitor="Validation/acc_k@1_macro",
+        mode="max",
+        save_last=True,
     )
     checkpoint_callback.CHECKPOINT_NAME_LAST = "{epoch}-last"
 
@@ -112,7 +122,7 @@ def train(
         max_epochs=max_epochs,
         logger=logger,
         callbacks=[checkpoint_callback, lr_monitor],
-        default_root_dir=os.path.join(output_dir, "trainer_checkpoint"),
+        # default_root_dir=os.path.join(output_dir, "trainer_checkpoint"),
         log_every_n_steps=100,
     )
 
@@ -175,11 +185,18 @@ def train_new_model(
     :param float dropout_images_prob: Probability of dropping an image (0<=dropout_images_prob<=1)
     :param str test_dir: The directory containing the test data.
     :param str control_mode: Model output format: keyboard (Classification task: 9 classes) or controller (Regression task: 2 variables)
-    :param float val_check_interval: The interval to check the validation accuracy.
     :param int dataloader_num_workers: The number of workers to use for the dataloader.
     :param int embedded_size: Size of the output embedding
     :param float dropout_cnn_out: Dropout rate for the output of the CNN
     :param str cnn_model_name: Name of the CNN model from torchvision.models
+    :param float val_check_interval: The interval to check the validation accuracy.
+    :param str devices: Number of devices to use.
+    :param str accelerator: Accelerator to use. If 'auto', tries to automatically detect TPU, GPU, CPU or IPU system.
+    :param str precision: Precision to use. Double precision (64), full precision (32), half precision (16) or bfloat16
+                          precision (bf16). Can be used on CPU, GPU or TPUs.
+    :param str strategy: Strategy to use for data parallelism. "None" for no data parallelism,
+                         ddp_find_unused_parameters_false for DDP.
+    :param str report_to: Where to report the results. "tensorboard" for TensorBoard, "wandb" for W&B.
     :param bool pretrained_cnn: If True, the model will be loaded with pretrained weights
     :param int embedded_size: Size of the input feature vectors
     :param int nhead: Number of heads in the multi-head attention
@@ -299,6 +316,13 @@ def continue_training(
     :param str output_dir: The directory to save the model to.
     :param int batch_size: The batch size.
     :param int accumulation_steps: The number of steps to accumulate gradients.
+    :param str devices: Number of devices to use.
+    :param str accelerator: Accelerator to use. If 'auto', tries to automatically detect TPU, GPU, CPU or IPU system.
+    :param str precision: Precision to use. Double precision (64), full precision (32), half precision (16) or bfloat16
+                          precision (bf16). Can be used on CPU, GPU or TPUs.
+    :param str strategy: Strategy to use for data parallelism. "None" for no data parallelism,
+                         ddp_find_unused_parameters_false for DDP.
+    :param str report_to: Where to report the results. "tensorboard" for TensorBoard, "wandb" for W&B.
     :param int max_epochs: The maximum number of epochs to train for.
     :param bool hide_map_prob: Probability of hiding the minimap (0<=hide_map_prob<=1)
     :param float dropout_images_prob: Probability of dropping an image (0<=dropout_images_prob<=1)

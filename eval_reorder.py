@@ -7,6 +7,7 @@ from typing import List, Union
 from torch.utils.data import DataLoader
 from tabulate import tabulate
 from dataset import collate_fn, set_worker_sharing_strategy
+from pytorch_lightning import loggers as pl_loggers
 
 
 def eval_model(
@@ -19,6 +20,8 @@ def eval_model(
     accelerator: str = "auto",
     precision: str = "bf16",
     strategy=None,
+    report_to: str = "none",
+    experiment_name: str = "test",
 ):
     """
     Evaluates a trained model on a set of test data.
@@ -28,6 +31,14 @@ def eval_model(
     :param int batch_size: Batch size for the dataloader.
     :param int dataloader_num_workers: Number of workers for the dataloader.
     :param str output_path: Path to where the results should be saved.
+    :param str devices: Number of devices to use.
+    :param str accelerator: Accelerator to use. If 'auto', tries to automatically detect TPU, GPU, CPU or IPU system.
+    :param str precision: Precision to use. Double precision (64), full precision (32), half precision (16) or bfloat16
+                          precision (bf16). Can be used on CPU, GPU or TPUs.
+    :param str strategy: Strategy to use for data parallelism. "None" for no data parallelism,
+                         ddp_find_unused_parameters_false for DDP.
+    :param str report_to: Where to report the results. "none" for no reporting, "tensorboard" for TensorBoard,
+                          "wandb" for W&B.
     """
 
     if not os.path.exists(os.path.dirname(output_path)):
@@ -38,15 +49,35 @@ def eval_model(
         checkpoint_path=checkpoint_path
     )
 
+    if report_to == "tensorboard":
+        logger = pl_loggers.TensorBoardLogger(
+            save_dir=os.path.dirname(checkpoint_path),
+            name=experiment_name,
+        )
+    elif report_to == "wandb":
+        logger = pl_loggers.WandbLogger(
+            name=experiment_name,
+            id=experiment_name,
+            resume=None,
+            project="TEDD1104",
+            save_dir=os.path.dirname(checkpoint_path),
+        )
+    elif report_to == "none":
+        logger = None
+    else:
+        raise ValueError(
+            f"Unknown logger: {report_to}. Please use 'tensorboard' or 'wandb'."
+        )
+
     trainer = pl.Trainer(
         devices=devices,
         accelerator=accelerator,
         precision=precision if precision == "bf16" else int(precision),
         strategy=strategy,
         # accelerator="ddp",
-        default_root_dir=os.path.join(
-            os.path.dirname(os.path.abspath(checkpoint_path)), "trainer_checkpoint"
-        ),
+        # default_root_dir=os.path.join(
+        #    os.path.dirname(os.path.abspath(checkpoint_path)), "trainer_checkpoint"
+        # ),
     )
 
     results: List[List[Union[str, float]]] = []
@@ -86,7 +117,14 @@ def eval_model(
                 round(out["Test/acc"] * 100, 1),
             ]
         )
-        # print(out)
+
+        if logger is not None:
+            log_metric_dict = {}
+            for metric_name, metric_value in out.items():
+                log_metric_dict[
+                    f"{os.path.basename(test_dir)}/{metric_name.split('/')[-1]}"
+                ] = metric_value
+            logger.log_metrics(log_metric_dict, step=0)
 
     print(
         tabulate(
@@ -183,6 +221,22 @@ if __name__ == "__main__":
         help="Supports passing different training strategies with aliases (ddp, ddp_spawn, etc)",
     )
 
+    parser.add_argument(
+        "--report_to",
+        type=str,
+        default="wandb",
+        choices=["wandb", "tensorboard", "none"],
+        help="Report to wandb or tensorboard",
+    )
+
+    parser.add_argument(
+        "--experiment_name",
+        type=str,
+        default="wandb",
+        choices=["wandb", "tensorboard", "none"],
+        help="Report to wandb or tensorboard",
+    )
+
     args = parser.parse_args()
 
     eval_model(
@@ -195,4 +249,6 @@ if __name__ == "__main__":
         accelerator=args.accelerator,
         precision=args.precision,
         strategy=args.strategy,
+        report_to=args.report_to,
+        experiment_name=args.experiment_name,
     )
