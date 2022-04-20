@@ -1,10 +1,10 @@
 #!/bin/bash
-#SBATCH --job-name=base
+#SBATCH --job-name=small
 #SBATCH --cpus-per-task=32
 #SBATCH --gres=gpu:4
 #SBATCH --mem=96G
-#SBATCH --output=base.out
-#SBATCH --error=base.err
+#SBATCH --output=small.out
+#SBATCH --error=small.err
 
 source /ikerlariak/igarcia945/envs/pytorch-tximista/bin/activate
 
@@ -17,15 +17,15 @@ cd ../../
 python3 train.py --train_new \
   --train_dir ../gtaai_datasets/train \
   --val_dir  ../gtaai_datasets/dev \
-  --output_dir models/tedd_1104_base \
+  --output_dir models/tedd_1104_small \
   --encoder_type transformer \
   --dataloader_num_workers 32 \
   --batch_size 16 \
   --accumulation_steps 1 \
   --max_epochs 20 \
-  --cnn_model_name efficientnet_v2_m \
-  --num_layers_encoder 4 \
-  --embedded_size 512 \
+  --cnn_model_name efficientnet_v2_s \
+  --num_layers_encoder 1 \
+  --embedded_size 384 \
   --learning_rate 5e-5 \
   --mask_prob 0.2 \
   --dropout_cnn_out 0.3 \

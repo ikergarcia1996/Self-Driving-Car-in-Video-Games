@@ -1,12 +1,29 @@
+#!/bin/bash
+#SBATCH --job-name=large
+#SBATCH --cpus-per-task=32
+#SBATCH --gres=gpu:4
+#SBATCH --mem=96G
+#SBATCH --output=large.out
+#SBATCH --error=large.err
+
+source /ikerlariak/igarcia945/envs/pytorch-tximista/bin/activate
+
+export LC_ALL=en_US.UTF-8
+export LANG=en_US.UTF-8
+export LANGUAGE=en_US.UTF-8
+
+cd ../../
+
 python3 train.py --train_new \
   --train_dir ../gtaai_datasets/train \
   --val_dir  ../gtaai_datasets/dev \
   --output_dir models/tedd_1104_large \
   --encoder_type transformer \
+  --dataloader_num_workers 32 \
   --batch_size 16 \
-  --accumulation_steps 4 \
-  --max_epochs 40 \
-  --cnn_model_name convnext_large \
+  --accumulation_steps 1 \
+  --max_epochs 20 \
+  --cnn_model_name efficientnet_v2_l \
   --num_layers_encoder 6 \
   --embedded_size 512 \
   --learning_rate 5e-5 \
@@ -17,6 +34,7 @@ python3 train.py --train_new \
   --control_mode keyboard \
   --val_check_interval 0.5 \
   --precision "bf16" \
-  --devices 1
+  --devices 4 \
+  --strategy "ddp_find_unused_parameters_false"
 
 
