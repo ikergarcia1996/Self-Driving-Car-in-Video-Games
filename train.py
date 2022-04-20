@@ -73,7 +73,9 @@ def train(
         sequence_length=model.sequence_size,
     )
 
-    experiment_name = os.path.basename(output_dir)
+    experiment_name = os.path.basename(
+        output_dir if output_dir[-1] != "/" else output_dir[:-1]
+    )
     if report_to == "tensorboard":
         logger = pl_loggers.TensorBoardLogger(
             save_dir=output_dir,
@@ -328,7 +330,9 @@ def continue_training(
         sequence_length=model.sequence_size,
     )
 
-    experiment_name = os.path.basename(output_dir)
+    experiment_name = os.path.basename(
+        output_dir if output_dir[-1] != "/" else output_dir[:-1]
+    )
     if report_to == "tensorboard":
         logger = pl_loggers.TensorBoardLogger(
             save_dir=output_dir,
