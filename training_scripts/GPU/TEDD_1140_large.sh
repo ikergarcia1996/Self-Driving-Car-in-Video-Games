@@ -1,6 +1,6 @@
 #!/bin/bash
 #SBATCH --job-name=large
-#SBATCH --cpus-per-task=32
+#SBATCH --cpus-per-task=64
 #SBATCH --gres=gpu:8
 #SBATCH --mem=128G
 #SBATCH --output=large.out
@@ -19,7 +19,7 @@ python3 train.py --train_new \
   --val_dir  ../gtaai_datasets/dev \
   --output_dir models/tedd_1104_large \
   --encoder_type transformer \
-  --dataloader_num_workers 32 \
+  --dataloader_num_workers 64 \
   --batch_size 16 \
   --accumulation_steps 1 \
   --max_epochs 20 \
