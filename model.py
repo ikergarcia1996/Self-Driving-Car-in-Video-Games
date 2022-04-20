@@ -1294,7 +1294,7 @@ class Tedd1104ModelPL(pl.LightningModule):
             "optimizer": optimizer,
             "lr_scheduler": {
                 "scheduler": torch.optim.lr_scheduler.ReduceLROnPlateau(
-                    optimizer, "max", patience=5, verbose=True
+                    optimizer, mode="max", patience=2, verbose=True
                 ),
                 "monitor": "Validation/acc_k@1_macro",
             },
@@ -1507,7 +1507,7 @@ class Tedd1104ModelPLForImageReordering(pl.LightningModule):
             "optimizer": optimizer,
             "lr_scheduler": {
                 "scheduler": torch.optim.lr_scheduler.ReduceLROnPlateau(
-                    optimizer, "min", patience=5, verbose=True
+                    optimizer, "min", patience=2, verbose=True
                 ),
                 "monitor": "Validation/acc",
             },
