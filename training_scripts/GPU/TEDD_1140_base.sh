@@ -22,7 +22,7 @@ python3 train.py --train_new \
   --dataloader_num_workers 32 \
   --batch_size 16 \
   --accumulation_steps 1 \
-  --max_epochs 20 \
+  --max_epochs 10 \
   --cnn_model_name efficientnet_v2_m \
   --num_layers_encoder 4 \
   --embedded_size 512 \
