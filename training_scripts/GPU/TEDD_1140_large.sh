@@ -1,8 +1,8 @@
 #!/bin/bash
 #SBATCH --job-name=large
 #SBATCH --cpus-per-task=32
-#SBATCH --gres=gpu:4
-#SBATCH --mem=96G
+#SBATCH --gres=gpu:8
+#SBATCH --mem=128G
 #SBATCH --output=large.out
 #SBATCH --error=large.err
 
@@ -22,7 +22,7 @@ python3 train.py --train_new \
   --dataloader_num_workers 32 \
   --batch_size 16 \
   --accumulation_steps 1 \
-  --max_epochs 10 \
+  --max_epochs 20 \
   --cnn_model_name efficientnet_v2_l \
   --num_layers_encoder 6 \
   --embedded_size 512 \
@@ -32,9 +32,9 @@ python3 train.py --train_new \
   --dropout_encoder 0.1 \
   --dropout_encoder_features 0.3 \
   --control_mode keyboard \
-  --val_check_interval 0.5 \
+  --val_check_interval 0.25 \
   --precision "bf16" \
-  --devices 4 \
+  --devices 8 \
   --strategy "ddp_find_unused_parameters_false"
 
 
