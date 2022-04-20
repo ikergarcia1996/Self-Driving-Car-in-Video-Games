@@ -20,7 +20,7 @@ python3 train.py --train_new \
   --output_dir models/tedd_1104_base \
   --encoder_type transformer \
   --dataloader_num_workers 64 \
-  --batch_size 16 \
+  --batch_size 32 \
   --accumulation_steps 1 \
   --max_epochs 20 \
   --cnn_model_name efficientnet_v2_m \
