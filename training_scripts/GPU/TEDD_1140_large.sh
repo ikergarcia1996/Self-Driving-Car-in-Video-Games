@@ -1,8 +1,8 @@
 #!/bin/bash
 #SBATCH --job-name=large
-#SBATCH --cpus-per-task=64
+#SBATCH --cpus-per-task=96
 #SBATCH --gres=gpu:8
-#SBATCH --mem=128G
+#SBATCH --mem=512G
 #SBATCH --output=large.out
 #SBATCH --error=large.err
 

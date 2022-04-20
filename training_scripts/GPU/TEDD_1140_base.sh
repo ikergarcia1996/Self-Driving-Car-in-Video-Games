@@ -1,8 +1,8 @@
 #!/bin/bash
 #SBATCH --job-name=base
-#SBATCH --cpus-per-task=32
+#SBATCH --cpus-per-task=40
 #SBATCH --gres=gpu:4
-#SBATCH --mem=96G
+#SBATCH --mem=256G
 #SBATCH --output=base.out
 #SBATCH --error=base.err
 

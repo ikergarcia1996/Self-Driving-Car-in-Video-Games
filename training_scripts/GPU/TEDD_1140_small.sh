@@ -1,6 +1,6 @@
 #!/bin/bash
 #SBATCH --job-name=small
-#SBATCH --cpus-per-task=32
+#SBATCH --cpus-per-task=40
 #SBATCH --gres=gpu:2
 #SBATCH --mem=96G
 #SBATCH --output=small.out
