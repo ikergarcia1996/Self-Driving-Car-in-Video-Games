@@ -1,8 +1,8 @@
 #!/bin/bash
 #SBATCH --job-name=base
-#SBATCH --cpus-per-task=40
+#SBATCH --cpus-per-task=96
 #SBATCH --gres=gpu:4
-#SBATCH --mem=256G
+#SBATCH --mem=300G
 #SBATCH --output=base.out
 #SBATCH --error=base.err
 
@@ -19,7 +19,7 @@ python3 train.py --train_new \
   --val_dir  ../gtaai_datasets/dev \
   --output_dir models/tedd_1104_base \
   --encoder_type transformer \
-  --dataloader_num_workers 32 \
+  --dataloader_num_workers 64 \
   --batch_size 16 \
   --accumulation_steps 1 \
   --max_epochs 20 \
