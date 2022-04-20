@@ -468,10 +468,11 @@ class Tedd1104DataModule(pl.LightningDataModule):
 
         if num_workers > 32:
             print(
-                "WARNING: num_workers is greater than 32, this may cause memory issues, we will set it to 32 "
+                "WARNING: num_workers is greater than 32, this may cause memory issues, consider using a smaller value."
+                "Go ahead if you have a lot of RAM."
             )
 
-        self.num_workers = min(num_workers, 32)
+        self.num_workers = num_workers
 
     def setup(self, stage: Optional[str] = None) -> None:
         """
