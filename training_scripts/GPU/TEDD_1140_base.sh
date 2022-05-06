@@ -33,7 +33,7 @@ python3 train.py --train_new \
   --dropout_encoder_features 0.3 \
   --control_mode keyboard \
   --val_check_interval 0.25 \
-  --precision "bf16" \
+  --precision "16" \
   --devices 4 \
   --strategy "ddp_find_unused_parameters_false"
 
