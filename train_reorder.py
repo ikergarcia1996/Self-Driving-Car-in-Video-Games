@@ -79,8 +79,8 @@ def train(
     elif report_to == "wandb":
         logger = pl_loggers.WandbLogger(
             name=experiment_name,
-            id=experiment_name,
-            resume=None,
+            # id=experiment_name,
+            # resume=None,
             project="TEDD1104_reorder",
             save_dir=output_dir,
         )
@@ -104,7 +104,7 @@ def train(
         max_epochs=max_epochs,
         logger=logger,
         callbacks=[checkpoint_callback, lr_monitor],
-        #default_root_dir=os.path.join(output_dir, "trainer_checkpoint"),
+        # default_root_dir=os.path.join(output_dir, "trainer_checkpoint"),
         log_every_n_steps=10,
     )
 
@@ -307,8 +307,8 @@ def continue_training(
         )
     elif report_to == "wandb":
         logger = pl_loggers.WandbLogger(
-            name=experiment_name,
-            id=experiment_name,
+            # name=experiment_name,
+            # id=experiment_name,
             resume="allow",
             project="TEDD1104_reorder",
             save_dir=output_dir,

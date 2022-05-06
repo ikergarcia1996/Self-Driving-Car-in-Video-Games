@@ -91,8 +91,8 @@ def train(
     elif report_to == "wandb":
         logger = pl_loggers.WandbLogger(
             name=experiment_name,
-            id=experiment_name,
-            resume=None,
+            # id=experiment_name,
+            # resume=None,
             project="TEDD1104",
             save_dir=output_dir,
         )
@@ -365,8 +365,8 @@ def continue_training(
     elif report_to == "wandb":
         logger = pl_loggers.WandbLogger(
             name=experiment_name,
-            id=experiment_name,
-            resume="allow",
+            # id=experiment_name,
+            # resume="allow",
             project="TEDD1104",
             save_dir=output_dir,
         )

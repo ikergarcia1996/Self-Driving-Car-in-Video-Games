@@ -57,8 +57,8 @@ def eval_model(
     elif report_to == "wandb":
         logger = pl_loggers.WandbLogger(
             name=experiment_name,
-            id=experiment_name,
-            resume=None,
+            # id=experiment_name,
+            # resume=None,
             project="TEDD1104",
             save_dir=os.path.dirname(checkpoint_path),
         )
