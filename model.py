@@ -490,8 +490,9 @@ class EncoderTransformer(nn.Module):
         )
         features = self.pe(features)
         print(f"Features dtype: {features.dtype}")
-        print(f"Attention mask dtype: {attention_mask.dtype}")
         print(f"EncoderTransformer dtype: {self.transformer_encoder.dtype}")
+        print(f"Attention mask: {attention_mask}")
+
         features = self.transformer_encoder(features, attention_mask)
         return features
 
