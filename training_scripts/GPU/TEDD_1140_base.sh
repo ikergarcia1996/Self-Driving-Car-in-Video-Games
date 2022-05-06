@@ -1,6 +1,6 @@
 #!/bin/bash
 #SBATCH --job-name=base
-#SBATCH --cpus-per-task=96
+#SBATCH --cpus-per-task=40
 #SBATCH --gres=gpu:4
 #SBATCH --mem=300G
 #SBATCH --output=base.out
@@ -14,14 +14,14 @@ export LANGUAGE=en_US.UTF-8
 
 cd ../../
 
-python3 train.py --train_new \
+python3.8 train.py --train_new \
   --train_dir ../gtaai_datasets/train \
   --val_dir  ../gtaai_datasets/dev \
   --output_dir models/tedd_1104_base \
   --encoder_type transformer \
   --dataloader_num_workers 64 \
-  --batch_size 32 \
-  --accumulation_steps 1 \
+  --batch_size 8 \
+  --accumulation_steps 2 \
   --max_epochs 20 \
   --cnn_model_name efficientnet_v2_m \
   --num_layers_encoder 4 \
