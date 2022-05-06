@@ -14,7 +14,7 @@ export LANGUAGE=en_US.UTF-8
 
 cd ../../
 
-python3.8 train.py --train_new \
+python3 train.py --train_new \
   --train_dir ../gtaai_datasets/train \
   --val_dir  ../gtaai_datasets/dev \
   --output_dir models/tedd_1104_base \

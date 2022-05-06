@@ -489,6 +489,9 @@ class EncoderTransformer(nn.Module):
             (self.clsToken.repeat(features.size(0), 1, 1), features), dim=1
         )
         features = self.pe(features)
+        print(f"Features dtype: {features.dtype}")
+        print(f"Attention mask dtype: {attention_mask.dtype}")
+        print(f"EncoderTransformer dtype: {self.transformer_encoder.dtype}")
         features = self.transformer_encoder(features, attention_mask)
         return features
 
