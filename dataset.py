@@ -267,7 +267,7 @@ def collate_fn(batch):
     y = torch.stack([b["y"] for b in batch])
     attention_mask.requires_grad = False
     y.requires_grad = False
-    return {"images": images.half(), "attention_mask": attention_mask, "y": y}
+    return {"images": images, "attention_mask": attention_mask, "y": y}
 
 
 def set_worker_sharing_strategy(worker_id: int) -> None:
