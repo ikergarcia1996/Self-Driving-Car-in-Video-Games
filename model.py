@@ -488,10 +488,7 @@ class EncoderTransformer(nn.Module):
         features = torch.cat(
             (self.clsToken.repeat(features.size(0), 1, 1), features), dim=1
         )
-        print(f"Features dtype: {features.dtype}")
         features = self.pe(features)
-        print(f"Features dtype: {features.dtype}")
-
         features = self.transformer_encoder(features, attention_mask)
         return features
 
