@@ -1123,7 +1123,7 @@ class Tedd1104ModelPL(pl.LightningModule):
         """
         x = self.model(x)
         if self.control_mode == "keyboard":
-            x = torch.functional.F.softmax(x, dim=1)
+            x = torch.nn.functional.softmax(x, dim=1)
             if output_mode == "keyboard":
                 if return_best:
                     return torch.argmax(x, dim=1)
