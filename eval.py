@@ -8,7 +8,6 @@ from torch.utils.data import DataLoader
 from tabulate import tabulate
 from dataset import collate_fn, set_worker_sharing_strategy
 from pytorch_lightning import loggers as pl_loggers
-from pytorch_lightning.callbacks import StochasticWeightAveraging
 
 
 def eval_model(
@@ -74,7 +73,6 @@ def eval_model(
         accelerator=accelerator,
         precision=precision if precision == "bf16" else int(precision),
         strategy=strategy,
-        callbacks=[StochasticWeightAveraging(swa_lrs=1e-2)]
         # default_root_dir=os.path.join(
         #    os.path.dirname(os.path.abspath(checkpoint_path)), "trainer_checkpoint"
         # ),
