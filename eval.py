@@ -213,7 +213,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--precision",
         type=str,
-        default="bf16",
+        default="16",
         choices=["bf16", "16", "32", "64"],
         help=" Double precision (64), full precision (32), "
         "half precision (16) or bfloat16 precision (bf16). "

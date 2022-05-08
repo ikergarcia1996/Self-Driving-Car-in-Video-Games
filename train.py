@@ -31,7 +31,7 @@ def train(
     val_check_interval: float = 0.25,
     devices: str = 1,
     accelerator: str = "auto",
-    precision: str = "bf16",
+    precision: str = "16",
     strategy=None,
     dataloader_num_workers=os.cpu_count(),
     report_to: str = "wandb",
@@ -296,7 +296,7 @@ def continue_training(
     accumulation_steps,
     devices: str = 1,
     accelerator: str = "auto",
-    precision: str = "bf16",
+    precision: str = "16",
     strategy=None,
     test_dir: str = None,
     mask_prob: float = 0.0,
@@ -669,7 +669,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--precision",
         type=str,
-        default="bf16",
+        default="16",
         choices=["bf16", "16", "32", "64"],
         help=" Double precision (64), full precision (32), "
         "half precision (16) or bfloat16 precision (bf16). "
