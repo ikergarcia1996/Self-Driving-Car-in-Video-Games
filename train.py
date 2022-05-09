@@ -131,7 +131,7 @@ def train(
         auto_lr_find=True,
     )
 
-    trainer.tune(model)
+    trainer.tune(model, datamodule=data)
     trainer.fit(model, datamodule=data)
 
     print(f"Best model path: {checkpoint_callback.best_model_path}")
