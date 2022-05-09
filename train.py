@@ -128,6 +128,7 @@ def train(
         ],
         gradient_clip_val=1.0,
         log_every_n_steps=50,
+        auto_lr_find=True,
     )
 
     trainer.fit(model, datamodule=data)
