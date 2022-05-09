@@ -473,7 +473,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--learning_rate",
         type=float,
-        default=1e-5,
+        default=3e-5,
         help="[NEW MODEL] The learning rate for the optimizer.",
     )
 
