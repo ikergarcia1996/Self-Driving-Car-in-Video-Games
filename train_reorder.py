@@ -103,9 +103,13 @@ def train(
         accumulate_grad_batches=accumulation_steps,
         max_epochs=max_epochs,
         logger=logger,
-        callbacks=[checkpoint_callback, lr_monitor],
-        # default_root_dir=os.path.join(output_dir, "trainer_checkpoint"),
-        log_every_n_steps=10,
+        callbacks=[
+            pl.callbacks.StochasticWeightAveraging(swa_lrs=1e-2),
+            checkpoint_callback,
+            lr_monitor,
+        ],
+        gradient_clip_val=1.0,
+        log_every_n_steps=50,
     )
 
     trainer.fit(model, datamodule=data)
@@ -320,7 +324,7 @@ def continue_training(
 
     lr_monitor = pl.callbacks.LearningRateMonitor(logging_interval="step")
     checkpoint_callback = pl.callbacks.ModelCheckpoint(
-        monitor="Validation/acc", mode="max", save_last=True
+        dirpath=output_dir, monitor="Validation/acc", mode="max", save_last=True
     )
     checkpoint_callback.CHECKPOINT_NAME_LAST = "{epoch}-last"
 
@@ -335,9 +339,13 @@ def continue_training(
         accumulate_grad_batches=accumulation_steps,
         max_epochs=max_epochs,
         logger=logger,
-        callbacks=[checkpoint_callback, lr_monitor],
-        default_root_dir=os.path.join(output_dir, "trainer_checkpoint"),
-        log_every_n_steps=10,
+        callbacks=[
+            pl.callbacks.StochasticWeightAveraging(swa_lrs=1e-2),
+            checkpoint_callback,
+            lr_monitor,
+        ],
+        gradient_clip_val=1.0,
+        log_every_n_steps=50,
     )
 
     trainer.fit(
