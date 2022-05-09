@@ -1268,7 +1268,7 @@ class Tedd1104ModelPL(pl.LightningModule):
         """
         optimizer = torch.optim.AdamW(
             self.parameters(),
-            lr=self.learning_rate,
+            lr=(self.lr or self.learning_rate),
             weight_decay=self.weight_decay,
             eps=1e-4,
         )
