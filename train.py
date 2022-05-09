@@ -135,7 +135,6 @@ def train(
         auto_lr_find=True,
     )
 
-    # trainer.tune(model, datamodule=data)
     if find_lr:
         print(f"We will try to find the optimal learning rate.")
         lr_finder = trainer.tuner.lr_find(model, datamodule=data)
@@ -554,7 +553,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--learning_rate",
         type=float,
-        default=1e-5,
+        default=3e-5,
         help="[NEW MODEL] The learning rate for the optimizer.",
     )
 

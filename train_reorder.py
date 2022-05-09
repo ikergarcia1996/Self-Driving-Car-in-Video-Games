@@ -26,6 +26,7 @@ def train(
     precision: str = "16",
     strategy=None,
     report_to: str = "wandb",
+    find_lr: bool = False,
 ):
     """
     Train the model.
@@ -49,6 +50,8 @@ def train(
                          ddp_find_unused_parameters_false for DDP.
     :param int dataloader_num_workers: The number of workers to use for the dataloader.
     :param str report_to: Where to report the results. "tensorboard" for TensorBoard, "wandb" for W&B.
+    :param bool find_lr: Whether to find the learning rate. We will use PytorchLightning's find_lr function.
+                     See: https://pytorch-lightning.readthedocs.io/en/latest/advanced/training_tricks.html#learning-rate-finder
     """
 
     if not os.path.exists(output_dir):
@@ -112,6 +115,16 @@ def train(
         log_every_n_steps=50,
     )
 
+    if find_lr:
+        print(f"We will try to find the optimal learning rate.")
+        lr_finder = trainer.tuner.lr_find(model, datamodule=data)
+        print(lr_finder.results)
+        fig = lr_finder.plot(suggest=True)
+        fig.savefig(os.path.join(output_dir, "lr_finder.png"))
+        new_lr = lr_finder.suggestion()
+        print(f"We will train with the suggested learning rate: {new_lr}")
+        model.hparams.learning_rate = new_lr
+
     trainer.fit(model, datamodule=data)
 
     print(f"Best model path: {checkpoint_callback.best_model_path}")
@@ -149,6 +162,7 @@ def train_new_model(
     learning_rate: float = 1e-5,
     weight_decay: float = 1e-3,
     report_to: str = "wandb",
+    find_lr: bool = False,
 ):
 
     """
@@ -186,6 +200,8 @@ def train_new_model(
     :param float dropout_encoder_features: Dropout probability of the encoder output
     :param float learning_rate: Learning rate
     :param float weight_decay: Weight decay
+    :param bool find_lr: Whether to find the learning rate. We will use PytorchLightning's find_lr function.
+                     See: https://pytorch-lightning.readthedocs.io/en/latest/advanced/training_tricks.html#learning-rate-finder
     """
 
     if dropout_images_prob is None:
@@ -593,6 +609,14 @@ if __name__ == "__main__":
         help="Report to wandb or tensorboard",
     )
 
+    parser.add_argument(
+        "--find_lr",
+        action="store_true",
+        help="Find the optimal learning rate for the model. We will use Pytorch Lightning's find_lr function. "
+        "See: "
+        "https://pytorch-lightning.readthedocs.io/en/latest/advanced/training_tricks.html#learning-rate-finder",
+    )
+
     args = parser.parse_args()
 
     if args.train_new:
@@ -626,6 +650,7 @@ if __name__ == "__main__":
             precision=args.precision,
             strategy=args.strategy,
             report_to=args.report_to,
+            find_lr=args.find_lr,
         )
 
     else:
