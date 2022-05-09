@@ -35,6 +35,7 @@ def train(
     strategy=None,
     dataloader_num_workers=os.cpu_count(),
     report_to: str = "wandb",
+    find_lr: bool = False,
 ):
 
     """
@@ -50,6 +51,7 @@ def train(
     :param bool hide_map_prob: Probability of hiding the minimap (0<=hide_map_prob<=1)
     :param float dropout_images_prob: Probability of dropping an image (0<=dropout_images_prob<=1)
     :param str test_dir: The directory containing the test data.
+    :param float mask_prob: Probability of masking each image in the transformer (0<=mask_prob<1)
     :param str control_mode: Model output format: keyboard (Classification task: 9 classes) or controller (Regression task: 2 variables)
     :param float val_check_interval: The interval to check the validation accuracy.
     :param str devices: Number of devices to use.
@@ -60,6 +62,8 @@ def train(
                          ddp_find_unused_parameters_false for DDP.
     :param int dataloader_num_workers: The number of workers to use for the dataloader.
     :param str report_to: Where to report the results. "tensorboard" for TensorBoard, "wandb" for W&B.
+    :param bool find_lr: Whether to find the learning rate. We will use PytorchLightning's find_lr function.
+                         See: https://pytorch-lightning.readthedocs.io/en/latest/advanced/training_tricks.html#learning-rate-finder
     """
 
     if not os.path.exists(output_dir):
@@ -131,7 +135,17 @@ def train(
         auto_lr_find=True,
     )
 
-    trainer.tune(model, datamodule=data)
+    # trainer.tune(model, datamodule=data)
+    if find_lr:
+        print(f"We will try to find the optimal learning rate.")
+        lr_finder = trainer.tuner.lr_find(model, datamodule=data)
+        print(lr_finder.results)
+        fig = lr_finder.plot(suggest=True)
+        fig.savefig(os.path.join(output_dir, "lr_finder.png"))
+        new_lr = lr_finder.suggestion()
+        print(f"We will train with the suggested learning rate: {new_lr}")
+        model.hparams.learning_rate = new_lr
+
     trainer.fit(model, datamodule=data)
 
     print(f"Best model path: {checkpoint_callback.best_model_path}")
@@ -176,6 +190,7 @@ def train_new_model(
     checkpoint_path: str = None,
     label_smoothing: float = None,
     report_to: str = "wandb",
+    find_lr: bool = False,
 ):
 
     """
@@ -220,6 +235,8 @@ def train_new_model(
     :param str encoder_type: Encoder type: transformer or lstm
     :param float label_smoothing: Label smoothing for the classification task
     :param str checkpoint_path: Path to a checkpoint to load the model from (Useful if you want to load a model pretrained in the Image Reordering Task)
+    :param bool find_lr: Whether to find the learning rate. We will use PytorchLightning's find_lr function.
+                         See: https://pytorch-lightning.readthedocs.io/en/latest/advanced/training_tricks.html#learning-rate-finder
     """
 
     assert control_mode.lower() in [
@@ -289,6 +306,7 @@ def train_new_model(
         precision=precision,
         strategy=strategy,
         report_to=report_to,
+        find_lr=find_lr,
     )
 
 
@@ -702,6 +720,14 @@ if __name__ == "__main__":
         help="Report to wandb or tensorboard",
     )
 
+    parser.add_argument(
+        "--find_lr",
+        action="store_true",
+        help="Find the optimal learning rate for the model. We will use Pytorch Lightning's find_lr function. "
+        "See: "
+        "https://pytorch-lightning.readthedocs.io/en/latest/advanced/training_tricks.html#learning-rate-finder",
+    )
+
     args = parser.parse_args()
 
     if args.train_new:
@@ -742,6 +768,7 @@ if __name__ == "__main__":
             precision=args.precision,
             strategy=args.strategy,
             report_to=args.report_to,
+            find_lr=args.find_lr,
         )
 
     else:
