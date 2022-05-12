@@ -27,7 +27,7 @@ python3 train.py --train_new \
   --num_layers_encoder 6 \
   --embedded_size 512 \
   --learning_rate 3e-5 \
-  --mask_prob 0.9 \
+  --mask_prob 0.999 \
   --hide_map_prob 0.0 \
   --dropout_cnn_out 0.3 \
   --dropout_encoder 0.1 \
