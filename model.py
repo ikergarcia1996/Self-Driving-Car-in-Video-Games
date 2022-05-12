@@ -1161,7 +1161,7 @@ class Tedd1104ModelPL(pl.LightningModule):
         """
         x, attention_mask, y = batch["images"], batch["attention_mask"], batch["y"]
         # x = torch.flatten(x, start_dim=0, end_dim=1)
-        preds = self.model(x)
+        preds = self.model(x, attention_mask)
         loss = self.criterion(preds, y)
         self.total_batches += 1
         if self.accelerator != "tpu":
