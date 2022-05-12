@@ -737,11 +737,14 @@ class TEDD1104LSTM(nn.Module):
             from_transformer=False,
         )
 
-    def forward(self, x: torch.tensor) -> torch.tensor:
+    def forward(
+        self, x: torch.tensor, attention_mask: torch.tensor = None
+    ) -> torch.tensor:
         """
         Forward pass
 
         :param torch.tensor x: Input tensor of shape [batch_size * sequence_size, 3, 270, 480]
+        :param torch.tensor attention_mask: For compatibility with the Transformer model, this is not used
         :return: Output tensor of shape [9] if control_mode == "keyboard" or [2] if control_mode == "controller"
         """
         x = self.EncoderCNN(x)
@@ -842,6 +845,7 @@ class TEDD1104Transformer(nn.Module):
                                             1 for masked positions and 0 for unmasked positions
         :return: Output tensor of shape [9] if control_mode == "keyboard" or [2] if control_mode == "controller"
         """
+
         x = self.EncoderCNN(x)
         x = self.PositionalEncoding(x)
         x = self.EncoderTransformer(x, attention_mask=attention_mask)
