@@ -1315,13 +1315,15 @@ class Tedd1104ModelPL(pl.LightningModule):
                 f"Unsupported scheduler {self.scheduler_name.lower()}. Choose from plateau and linear."
             )
 
-        return {
-            "optimizer": optimizer,
-            "lr_scheduler": {
+        return [optimizer], [
+            {
                 "scheduler": scheduler,
                 "monitor": "Validation/acc_k@1_macro",
-            },
-        }
+                "interval": "epoch",
+            }
+            if self.scheduler_name.lower() == "plateau"
+            else {"scheduler": scheduler, "interval": "step", "frequency": 1}
+        ]
 
 
 class Tedd1104ModelPLForImageReordering(pl.LightningModule):
@@ -1544,10 +1546,12 @@ class Tedd1104ModelPLForImageReordering(pl.LightningModule):
                 f"Unsupported scheduler {self.scheduler_name.lower()}. Choose from plateau and linear."
             )
 
-        return {
-            "optimizer": optimizer,
-            "lr_scheduler": {
+        return [optimizer], [
+            {
                 "scheduler": scheduler,
-                "monitor": "Validation/acc",
-            },
-        }
+                "monitor": "Validation/acc_k@1_macro",
+                "interval": "epoch",
+            }
+            if self.scheduler_name.lower() == "plateau"
+            else {"scheduler": scheduler, "interval": "step", "frequency": 1}
+        ]
