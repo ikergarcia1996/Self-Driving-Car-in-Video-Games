@@ -217,7 +217,6 @@ def continue_training(
     precision: str = "16",
     strategy=None,
     test_dir: str = None,
-    hparams_path: str = None,
     mask_prob: float = 0.2,
     hide_map_prob: float = 0.0,
     dropout_images_prob=None,
@@ -244,6 +243,7 @@ def continue_training(
     :param str report_to: Where to report the results. "tensorboard" for TensorBoard, "wandb" for W&B.
     :param int max_epochs: The maximum number of epochs to train for.
     :param bool hide_map_prob: Probability of hiding the minimap (0<=hide_map_prob<=1)
+    :param float mask_prob: probability of masking each input vector in the transformer
     :param float dropout_images_prob: Probability of dropping an image (0<=dropout_images_prob<=1)
     :param str test_dir: The directory containing the test data.
     :param int dataloader_num_workers: The number of workers to use for the dataloaders.
@@ -274,7 +274,7 @@ def continue_training(
         sequence_length=model.sequence_size,
     )
 
-    print(f"Restoring checkpoint: {checkpoint_path}. hparams: {hparams_path}")
+    print(f"Restoring checkpoint: {checkpoint_path}")
 
     experiment_name = os.path.basename(
         output_dir if output_dir[-1] != "/" else output_dir[:-1]
