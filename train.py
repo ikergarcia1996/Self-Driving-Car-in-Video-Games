@@ -5,7 +5,8 @@ from dataset import Tedd1104DataModule
 import os
 from pytorch_lightning import loggers as pl_loggers
 import pytorch_lightning as pl
-
+from dataset import count_examples
+import math
 
 try:
     import wandb
@@ -15,33 +16,52 @@ except ImportError:
     wandb = None
 
 
-def train(
-    model: Tedd1104ModelPL,
+def train_new_model(
     train_dir: str,
     val_dir: str,
     output_dir: str,
     batch_size: int,
-    accumulation_steps: int,
     max_epochs: int,
-    hide_map_prob: float,
-    dropout_images_prob: List[float],
-    test_dir: str = None,
-    mask_prob: float = 0.2,
-    control_mode: str = "keyboard",
-    val_check_interval: float = 0.25,
+    cnn_model_name: str,
     devices: str = 1,
     accelerator: str = "auto",
-    precision: str = "16",
+    precision: str = "bf16",
     strategy=None,
+    accumulation_steps: int = 1,
+    hide_map_prob: float = 0.0,
+    test_dir: str = None,
+    dropout_images_prob=None,
+    variable_weights: List[float] = None,
+    control_mode: str = "keyboard",
+    val_check_interval: float = 0.25,
     dataloader_num_workers=os.cpu_count(),
+    pretrained_cnn: bool = True,
+    embedded_size: int = 512,
+    nhead: int = 8,
+    num_layers_encoder: int = 1,
+    lstm_hidden_size: int = 512,
+    dropout_cnn_out: float = 0.1,
+    positional_embeddings_dropout: float = 0.1,
+    dropout_encoder: float = 0.1,
+    dropout_encoder_features: float = 0.8,
+    mask_prob: float = 0.0,
+    sequence_size: int = 5,
+    encoder_type: str = "transformer",
+    bidirectional_lstm=True,
+    checkpoint_path: str = None,
+    label_smoothing: float = None,
     report_to: str = "wandb",
     find_lr: bool = False,
+    optimizer_name: str = "adamw",
+    scheduler_name: str = "linear",
+    learning_rate: float = 1e-5,
+    weight_decay: float = 1e-3,
+    warmup_factor: float = 0.05,
 ):
 
     """
-    Train the model.
+    Train a new model.
 
-    :param Tedd1104ModelPL model: The model to train.
     :param str train_dir: The directory containing the training data.
     :param str val_dir: The directory containing the validation data.
     :param str output_dir: The directory to save the model to.
@@ -51,8 +71,11 @@ def train(
     :param bool hide_map_prob: Probability of hiding the minimap (0<=hide_map_prob<=1)
     :param float dropout_images_prob: Probability of dropping an image (0<=dropout_images_prob<=1)
     :param str test_dir: The directory containing the test data.
-    :param float mask_prob: Probability of masking each image in the transformer (0<=mask_prob<1)
     :param str control_mode: Model output format: keyboard (Classification task: 9 classes) or controller (Regression task: 2 variables)
+    :param int dataloader_num_workers: The number of workers to use for the dataloader.
+    :param int embedded_size: Size of the output embedding
+    :param float dropout_cnn_out: Dropout rate for the output of the CNN
+    :param str cnn_model_name: Name of the CNN model from torchvision.models
     :param float val_check_interval: The interval to check the validation accuracy.
     :param str devices: Number of devices to use.
     :param str accelerator: Accelerator to use. If 'auto', tries to automatically detect TPU, GPU, CPU or IPU system.
@@ -60,11 +83,105 @@ def train(
                           precision (bf16). Can be used on CPU, GPU or TPUs.
     :param str strategy: Strategy to use for data parallelism. "None" for no data parallelism,
                          ddp_find_unused_parameters_false for DDP.
-    :param int dataloader_num_workers: The number of workers to use for the dataloader.
     :param str report_to: Where to report the results. "tensorboard" for TensorBoard, "wandb" for W&B.
+    :param bool pretrained_cnn: If True, the model will be loaded with pretrained weights
+    :param int embedded_size: Size of the input feature vectors
+    :param int nhead: Number of heads in the multi-head attention
+    :param int num_layers_encoder: number of transformer layers in the encoder
+    :param float mask_prob: probability of masking each input vector in the transformer
+    :param float positional_embeddings_dropout: Dropout rate for the positional embeddings
+    :param int sequence_size: Length of the input sequence
+    :param float dropout_encoder: Dropout rate for the encoder
+    :param float dropout_encoder_features: Dropout probability of the encoder output
+    :param int lstm_hidden_size: LSTM hidden size
+    :param bool bidirectional_lstm: forward or bidirectional LSTM
+    :param List[float] variable_weights: List of weights for the loss function [9] if control_mode == "keyboard" or [2] if control_mode == "controller"
+    :param str encoder_type: Encoder type: transformer or lstm
+    :param float label_smoothing: Label smoothing for the classification task
+    :param str checkpoint_path: Path to a checkpoint to load the model from (Useful if you want to load a model pretrained in the Image Reordering Task)
     :param bool find_lr: Whether to find the learning rate. We will use PytorchLightning's find_lr function.
                          See: https://pytorch-lightning.readthedocs.io/en/latest/advanced/training_tricks.html#learning-rate-finder
+    :param str optimizer_name: Optimizer to use: adamw or adafactor
+    :param str scheduler_name: Scheduler to use: linear or plateau
+    :param float learning_rate: Learning rate
+    :param float weight_decay: Weight decay
+    :param float warmup_factor: Percentage of the total training steps to perform warmup
     """
+
+    assert control_mode.lower() in [
+        "keyboard",
+        "controller",
+    ], f"{control_mode.lower()} control mode not supported. Supported dataset types: [keyboard, controller].  "
+
+    if dropout_images_prob is None:
+        dropout_images_prob = [0.0, 0.0, 0.0, 0.0, 0.0]
+
+    num_examples = count_examples(dataset_dir=train_dir)
+    num_update_steps_per_epoch = math.ceil(
+        math.ceil(num_examples / batch_size) / accumulation_steps
+    )
+    max_train_steps = max_epochs * num_update_steps_per_epoch
+    num_warmup_steps = int(max_train_steps * warmup_factor)
+
+    print(
+        f"\n*** Training info ***\n"
+        f"Number of training examples: {num_examples}\n"
+        f"Number of update steps per epoch: {num_update_steps_per_epoch}\n"
+        f"Max training steps: {max_train_steps}\n"
+        f"Number of warmup steps: {num_warmup_steps}\n"
+        f"Optimizer: {optimizer_name}\n"
+        f"Scheduler: {scheduler_name}\n"
+        f"Learning rate: {learning_rate}\n"
+    )
+
+    if not checkpoint_path:
+        model: Tedd1104ModelPL = Tedd1104ModelPL(
+            cnn_model_name=cnn_model_name,
+            pretrained_cnn=pretrained_cnn,
+            embedded_size=embedded_size,
+            nhead=nhead,
+            num_layers_encoder=num_layers_encoder,
+            lstm_hidden_size=lstm_hidden_size,
+            dropout_cnn_out=dropout_cnn_out,
+            positional_embeddings_dropout=positional_embeddings_dropout,
+            dropout_encoder=dropout_encoder,
+            dropout_encoder_features=dropout_encoder_features,
+            control_mode=control_mode,
+            sequence_size=sequence_size,
+            encoder_type=encoder_type,
+            bidirectional_lstm=bidirectional_lstm,
+            weights=variable_weights,
+            label_smoothing=label_smoothing,
+            accelerator=accelerator,
+            learning_rate=learning_rate,
+            weight_decay=weight_decay,
+            optimizer_name=optimizer_name,
+            scheduler_name=scheduler_name,
+            num_warmup_steps=num_warmup_steps,
+            num_training_steps=max_train_steps,
+        )
+
+    else:
+
+        print(f"Restoring model from {checkpoint_path}.")
+        model = Tedd1104ModelPL.load_from_checkpoint(
+            checkpoint_path=checkpoint_path,
+            dropout_cnn_out=dropout_cnn_out,
+            positional_embeddings_dropout=positional_embeddings_dropout,
+            dropout_encoder=dropout_encoder,
+            dropout_encoder_features=dropout_encoder_features,
+            mask_prob=mask_prob,
+            control_mode=control_mode,
+            lstm_hidden_size=lstm_hidden_size,
+            bidirectional_lstm=bidirectional_lstm,
+            strict=False,
+            learning_rate=learning_rate,
+            weight_decay=weight_decay,
+            optimizer_name=optimizer_name,
+            scheduler_name=scheduler_name,
+            num_warmup_steps=num_warmup_steps,
+            num_training_steps=max_train_steps,
+        )
 
     if not os.path.exists(output_dir):
         print(f"{output_dir} does not exits. We will create it.")
@@ -150,163 +267,6 @@ def train(
     print(f"Best model path: {checkpoint_callback.best_model_path}")
     if test_dir:
         trainer.test(datamodule=data, ckpt_path="best")
-
-
-def train_new_model(
-    train_dir: str,
-    val_dir: str,
-    output_dir: str,
-    batch_size: int,
-    max_epochs: int,
-    cnn_model_name: str,
-    devices: str = 1,
-    accelerator: str = "auto",
-    precision: str = "bf16",
-    strategy=None,
-    accumulation_steps: int = 1,
-    hide_map_prob: float = 0.0,
-    test_dir: str = None,
-    dropout_images_prob=None,
-    variable_weights: List[float] = None,
-    control_mode: str = "keyboard",
-    val_check_interval: float = 0.25,
-    dataloader_num_workers=os.cpu_count(),
-    pretrained_cnn: bool = True,
-    embedded_size: int = 512,
-    nhead: int = 8,
-    num_layers_encoder: int = 1,
-    lstm_hidden_size: int = 512,
-    dropout_cnn_out: float = 0.1,
-    positional_embeddings_dropout: float = 0.1,
-    dropout_encoder: float = 0.1,
-    dropout_encoder_features: float = 0.8,
-    mask_prob: float = 0.0,
-    sequence_size: int = 5,
-    encoder_type: str = "transformer",
-    bidirectional_lstm=True,
-    learning_rate: float = 1e-5,
-    weight_decay: float = 1e-3,
-    checkpoint_path: str = None,
-    label_smoothing: float = None,
-    report_to: str = "wandb",
-    find_lr: bool = False,
-):
-
-    """
-    Train a new model.
-
-    :param str train_dir: The directory containing the training data.
-    :param str val_dir: The directory containing the validation data.
-    :param str output_dir: The directory to save the model to.
-    :param int batch_size: The batch size.
-    :param int accumulation_steps: The number of steps to accumulate gradients.
-    :param int max_epochs: The maximum number of epochs to train for.
-    :param bool hide_map_prob: Probability of hiding the minimap (0<=hide_map_prob<=1)
-    :param float dropout_images_prob: Probability of dropping an image (0<=dropout_images_prob<=1)
-    :param str test_dir: The directory containing the test data.
-    :param str control_mode: Model output format: keyboard (Classification task: 9 classes) or controller (Regression task: 2 variables)
-    :param int dataloader_num_workers: The number of workers to use for the dataloader.
-    :param int embedded_size: Size of the output embedding
-    :param float dropout_cnn_out: Dropout rate for the output of the CNN
-    :param str cnn_model_name: Name of the CNN model from torchvision.models
-    :param float val_check_interval: The interval to check the validation accuracy.
-    :param str devices: Number of devices to use.
-    :param str accelerator: Accelerator to use. If 'auto', tries to automatically detect TPU, GPU, CPU or IPU system.
-    :param str precision: Precision to use. Double precision (64), full precision (32), half precision (16) or bfloat16
-                          precision (bf16). Can be used on CPU, GPU or TPUs.
-    :param str strategy: Strategy to use for data parallelism. "None" for no data parallelism,
-                         ddp_find_unused_parameters_false for DDP.
-    :param str report_to: Where to report the results. "tensorboard" for TensorBoard, "wandb" for W&B.
-    :param bool pretrained_cnn: If True, the model will be loaded with pretrained weights
-    :param int embedded_size: Size of the input feature vectors
-    :param int nhead: Number of heads in the multi-head attention
-    :param int num_layers_encoder: number of transformer layers in the encoder
-    :param float mask_prob: probability of masking each input vector in the transformer
-    :param float positional_embeddings_dropout: Dropout rate for the positional embeddings
-    :param int sequence_size: Length of the input sequence
-    :param float dropout_encoder: Dropout rate for the encoder
-    :param float dropout_encoder_features: Dropout probability of the encoder output
-    :param int lstm_hidden_size: LSTM hidden size
-    :param bool bidirectional_lstm: forward or bidirectional LSTM
-    :param List[float] variable_weights: List of weights for the loss function [9] if control_mode == "keyboard" or [2] if control_mode == "controller"
-    :param float learning_rate: Learning rate
-    :param float weight_decay: Weight decay
-    :param str encoder_type: Encoder type: transformer or lstm
-    :param float label_smoothing: Label smoothing for the classification task
-    :param str checkpoint_path: Path to a checkpoint to load the model from (Useful if you want to load a model pretrained in the Image Reordering Task)
-    :param bool find_lr: Whether to find the learning rate. We will use PytorchLightning's find_lr function.
-                         See: https://pytorch-lightning.readthedocs.io/en/latest/advanced/training_tricks.html#learning-rate-finder
-    """
-
-    assert control_mode.lower() in [
-        "keyboard",
-        "controller",
-    ], f"{control_mode.lower()} control mode not supported. Supported dataset types: [keyboard, controller].  "
-
-    if dropout_images_prob is None:
-        dropout_images_prob = [0.0, 0.0, 0.0, 0.0, 0.0]
-
-    if not checkpoint_path:
-        model: Tedd1104ModelPL = Tedd1104ModelPL(
-            cnn_model_name=cnn_model_name,
-            pretrained_cnn=pretrained_cnn,
-            embedded_size=embedded_size,
-            nhead=nhead,
-            num_layers_encoder=num_layers_encoder,
-            lstm_hidden_size=lstm_hidden_size,
-            dropout_cnn_out=dropout_cnn_out,
-            positional_embeddings_dropout=positional_embeddings_dropout,
-            dropout_encoder=dropout_encoder,
-            dropout_encoder_features=dropout_encoder_features,
-            control_mode=control_mode,
-            sequence_size=sequence_size,
-            encoder_type=encoder_type,
-            bidirectional_lstm=bidirectional_lstm,
-            learning_rate=learning_rate,
-            weight_decay=weight_decay,
-            weights=variable_weights,
-            label_smoothing=label_smoothing,
-            accelerator=accelerator,
-        )
-
-    else:
-
-        print(f"Restoring model from {checkpoint_path}.")
-        model = Tedd1104ModelPL.load_from_checkpoint(
-            checkpoint_path=checkpoint_path,
-            dropout_cnn_out=dropout_cnn_out,
-            positional_embeddings_dropout=positional_embeddings_dropout,
-            dropout_encoder=dropout_encoder,
-            dropout_encoder_features=dropout_encoder_features,
-            mask_prob=mask_prob,
-            control_mode=control_mode,
-            lstm_hidden_size=lstm_hidden_size,
-            bidirectional_lstm=bidirectional_lstm,
-            strict=False,
-        )
-
-    train(
-        model=model,
-        train_dir=train_dir,
-        val_dir=val_dir,
-        test_dir=test_dir,
-        output_dir=output_dir,
-        batch_size=batch_size,
-        accumulation_steps=accumulation_steps,
-        max_epochs=max_epochs,
-        mask_prob=mask_prob,
-        hide_map_prob=hide_map_prob,
-        dropout_images_prob=dropout_images_prob,
-        control_mode=control_mode,
-        val_check_interval=val_check_interval,
-        dataloader_num_workers=dataloader_num_workers,
-        devices=devices,
-        accelerator=accelerator,
-        precision=precision,
-        strategy=strategy,
-        report_to=report_to,
-        find_lr=find_lr,
-    )
 
 
 def continue_training(
@@ -560,8 +520,32 @@ if __name__ == "__main__":
     parser.add_argument(
         "--weight_decay",
         type=float,
-        default=1e-3,
+        default=1e-4,
         help="[NEW MODEL]] AdamW Weight Decay",
+    )
+
+    parser.add_argument(
+        "--optimizer_name",
+        type=str,
+        default="adamw",
+        choices=["adamw", "adafactor"],
+        help="[NEW MODEL] The optimizer to use: adamw or adafactor. Adafactor requires fairseq to be installed. "
+        "pip install fairseq",
+    )
+
+    parser.add_argument(
+        "--scheduler_name",
+        type=str,
+        default="linear",
+        choices=["linear", "plateau"],
+        help="[NEW MODEL] The scheduler to use: linear or plateau.",
+    )
+
+    parser.add_argument(
+        "--warnup_factor",
+        type=float,
+        default=0.05,
+        help="[NEW MODEL] Percentage of the total training steps that we will use for the warmup (0<=warmup_factor<=1)",
     )
 
     parser.add_argument(
@@ -758,8 +742,6 @@ if __name__ == "__main__":
             sequence_size=args.sequence_size,
             encoder_type=args.encoder_type,
             bidirectional_lstm=args.bidirectional_lstm,
-            learning_rate=args.learning_rate,
-            weight_decay=args.weight_decay,
             checkpoint_path=args.checkpoint_path,
             label_smoothing=args.label_smoothing,
             devices=args.devices,
@@ -768,6 +750,11 @@ if __name__ == "__main__":
             strategy=args.strategy,
             report_to=args.report_to,
             find_lr=args.find_lr,
+            learning_rate=args.learning_rate,
+            weight_decay=args.weight_decay,
+            optimizer_name=args.optimizer_name,
+            scheduler_name=args.scheduler_name,
+            warmup_factor=args.warmup_factor,
         )
 
     else:

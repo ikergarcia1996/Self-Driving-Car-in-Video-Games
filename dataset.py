@@ -11,6 +11,10 @@ from utils import IOHandler, get_mask
 import pytorch_lightning as pl
 
 
+def count_examples(dataset_dir: str) -> int:
+    return len(glob.glob(os.path.join(dataset_dir, "*.jpeg")))
+
+
 class RemoveMinimap(object):
     """Remove minimap (black square) from all the images in the sequence"""
 

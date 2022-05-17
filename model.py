@@ -28,6 +28,8 @@ import torchvision
 import torchvision.models as models
 import pytorch_lightning as pl
 import torchmetrics
+from optimizers.optimizer import get_adafactor, get_adamw
+from optimizers.scheduler import get_reducelronplateau, get_linear_schedule_with_warmup
 
 
 class WeightedMseLoss(nn.Module):
@@ -970,10 +972,14 @@ class Tedd1104ModelPL(pl.LightningModule):
         encoder_type: str = "transformer",
         bidirectional_lstm=True,
         weights: List[float] = None,
-        learning_rate: float = 1e-5,
-        weight_decay: float = 1e-3,
         label_smoothing: float = 0.0,
         accelerator: str = None,
+        optimizer_name: str = "adamw",
+        scheduler_name: str = "linear",
+        learning_rate: float = 1e-5,
+        weight_decay: float = 1e-3,
+        num_warmup_steps: int = 0,
+        num_training_steps: int = 0,
     ):
         """
         INIT
@@ -992,11 +998,15 @@ class Tedd1104ModelPL(pl.LightningModule):
         :param int lstm_hidden_size: LSTM hidden size
         :param bool bidirectional_lstm: forward or bidirectional LSTM
         :param List[float] weights: List of weights for the loss function [9] if control_mode == "keyboard" or [2] if control_mode == "controller"
-        :param float learning_rate: Learning rate
-        :param float weight_decay: Weight decay
         :param str control_mode: Model output format: keyboard (Classification task: 9 classes) or controller (Regression task: 2 variables)
         :param str encoder_type: Encoder type: transformer or lstm
         :param float label_smoothing: Label smoothing for the classification task
+        :param str optimizer_name: Optimizer to use: adamw or adafactor
+        :param str scheduler_name: Scheduler to use: linear or plateau
+        :param float learning_rate: Learning rate
+        :param float weight_decay: Weight decay
+        :param int num_warmup_steps: Number of warmup steps for the scheduler
+        :param int num_training_steps: Number of training steps
         """
 
         super(Tedd1104ModelPL, self).__init__()
@@ -1027,10 +1037,14 @@ class Tedd1104ModelPL(pl.LightningModule):
         self.bidirectional_lstm = bidirectional_lstm
         self.lstm_hidden_size = lstm_hidden_size
         self.weights = weights
-        self.learning_rate = learning_rate
-        self.weight_decay = weight_decay
         self.label_smoothing = label_smoothing
         self.accelerator = accelerator
+        self.learning_rate = learning_rate
+        self.weight_decay = weight_decay
+        self.optimizer_name = optimizer_name
+        self.scheduler_name = scheduler_name
+        self.num_warmup_steps = num_warmup_steps
+        self.num_training_steps = num_training_steps
 
         if self.encoder_type == "transformer":
             self.model = TEDD1104Transformer(
@@ -1270,19 +1284,40 @@ class Tedd1104ModelPL(pl.LightningModule):
         """
         Configure optimizers.
         """
-        optimizer = torch.optim.AdamW(
-            self.parameters(),
-            lr=self.learning_rate,
-            weight_decay=self.weight_decay,
-            eps=1e-4,
-        )
+        if self.optimizer_name.lower() == "adamw":
+            optimizer = get_adamw(
+                parameters=self.parameters(),
+                learning_rate=self.learning_rate,
+                weight_decay=self.weight_decay,
+            )
+        elif self.optimizer_name.lower() == "adafactor":
+            optimizer = get_adafactor(
+                parameters=self.parameters(),
+                learning_rate=self.learning_rate,
+                weight_decay=self.weight_decay,
+            )
+        else:
+            raise ValueError(
+                f"Unsupported optimizer {self.optimizer_name.lower()}. Choose from adamw and adafactor."
+            )
+
+        if self.scheduler_name.lower() == "plateau":
+            scheduler = get_reducelronplateau(optimizer=optimizer)
+        elif self.scheduler_name.lower() == "linear":
+            scheduler = get_linear_schedule_with_warmup(
+                optimizer=optimizer,
+                num_warmup_steps=self.num_warmup_steps,
+                num_training_steps=self.num_training_steps,
+            )
+        else:
+            raise ValueError(
+                f"Unsupported scheduler {self.scheduler_name.lower()}. Choose from plateau and linear."
+            )
 
         return {
             "optimizer": optimizer,
             "lr_scheduler": {
-                "scheduler": torch.optim.lr_scheduler.ReduceLROnPlateau(
-                    optimizer, mode="max", patience=2, verbose=True
-                ),
+                "scheduler": scheduler,
                 "monitor": "Validation/acc_k@1_macro",
             },
         }
@@ -1305,10 +1340,14 @@ class Tedd1104ModelPLForImageReordering(pl.LightningModule):
         dropout_encoder: float,
         dropout_encoder_features: float = 0.8,
         sequence_size: int = 5,
-        learning_rate: float = 1e-5,
-        weight_decay: float = 1e-3,
         encoder_type: str = "transformer",
         accelerator: str = None,
+        optimizer_name: str = "adamw",
+        scheduler_name: str = "linear",
+        learning_rate: float = 1e-5,
+        weight_decay: float = 1e-3,
+        num_warmup_steps: int = 0,
+        num_training_steps: int = 0,
     ):
 
         """
@@ -1325,9 +1364,13 @@ class Tedd1104ModelPLForImageReordering(pl.LightningModule):
         :param int sequence_size: Length of the input sequence
         :param float dropout_encoder: Dropout rate for the encoder
         :param float dropout_encoder_features: Dropout probability of the encoder output
+        :param str encoder_type: Encoder type: transformer or lstm
+        :param str optimizer_name: Optimizer to use: adamw or adafactor
+        :param str scheduler_name: Scheduler to use: linear or plateau
         :param float learning_rate: Learning rate
         :param float weight_decay: Weight decay
-        :param str encoder_type: Encoder type: transformer or lstm
+        :param int num_warmup_steps: Number of warmup steps for the scheduler
+        :param int num_training_steps: Number of training steps
         """
 
         super(Tedd1104ModelPLForImageReordering, self).__init__()
@@ -1342,10 +1385,14 @@ class Tedd1104ModelPLForImageReordering(pl.LightningModule):
         self.positional_embeddings_dropout: float = positional_embeddings_dropout
         self.dropout_encoder: float = dropout_encoder
         self.dropout_encoder_features = dropout_encoder_features
-        self.learning_rate = learning_rate
-        self.weight_decay = weight_decay
         self.encoder_type = encoder_type
         self.accelerator = accelerator
+        self.learning_rate = learning_rate
+        self.weight_decay = weight_decay
+        self.optimizer_name = optimizer_name
+        self.scheduler_name = scheduler_name
+        self.num_warmup_steps = num_warmup_steps
+        self.num_training_steps = num_training_steps
 
         self.model = TEDD1104TransformerForImageReordering(
             cnn_model_name=self.cnn_model_name,
@@ -1466,19 +1513,40 @@ class Tedd1104ModelPLForImageReordering(pl.LightningModule):
         """
         Configure optimizers.
         """
-        optimizer = torch.optim.AdamW(
-            self.parameters(),
-            lr=self.learning_rate,
-            weight_decay=self.weight_decay,
-            eps=1e-4,
-        )
+        if self.optimizer_name.lower() == "adamw":
+            optimizer = get_adamw(
+                parameters=self.parameters(),
+                learning_rate=self.learning_rate,
+                weight_decay=self.weight_decay,
+            )
+        elif self.optimizer_name.lower() == "adafactor":
+            optimizer = get_adafactor(
+                parameters=self.parameters(),
+                learning_rate=self.learning_rate,
+                weight_decay=self.weight_decay,
+            )
+        else:
+            raise ValueError(
+                f"Unsupported optimizer {self.optimizer_name.lower()}. Choose from adamw and adafactor."
+            )
+
+        if self.scheduler_name.lower() == "plateau":
+            scheduler = get_reducelronplateau(optimizer=optimizer)
+        elif self.scheduler_name.lower() == "linear":
+            scheduler = get_linear_schedule_with_warmup(
+                optimizer=optimizer,
+                num_warmup_steps=self.num_warmup_steps,
+                num_training_steps=self.num_training_steps,
+            )
+        else:
+            raise ValueError(
+                f"Unsupported scheduler {self.scheduler_name.lower()}. Choose from plateau and linear."
+            )
 
         return {
             "optimizer": optimizer,
             "lr_scheduler": {
-                "scheduler": torch.optim.lr_scheduler.ReduceLROnPlateau(
-                    optimizer, "min", patience=2, verbose=True
-                ),
+                "scheduler": scheduler,
                 "monitor": "Validation/acc",
             },
         }
