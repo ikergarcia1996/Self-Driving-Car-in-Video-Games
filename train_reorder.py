@@ -183,7 +183,7 @@ def train_new_model(
             checkpoint_callback,
             lr_monitor,
         ],
-        gradient_clip_val=1.0,
+        gradient_clip_val=1.0 if optimizer_name.lower() != "adafactor" else 0.0,
         log_every_n_steps=50,
     )
 
@@ -461,7 +461,7 @@ if __name__ == "__main__":
     )
 
     parser.add_argument(
-        "--warnup_factor",
+        "--warmup_factor",
         type=float,
         default=0.05,
         help="[NEW MODEL] Percentage of the total training steps that we will use for the warmup (0<=warmup_factor<=1)",

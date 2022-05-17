@@ -13,7 +13,7 @@ python3 train.py --train_new \
   --learning_rate 3e-5 \
   --optimizer_name adamw \
   --scheduler_name linear \
-  --warnup_factor 0.05 \
+  --warmup_factor 0.05 \
   --mask_prob 0.2 \
   --hide_map_prob 0.0 \
   --dropout_cnn_out 0.3 \
@@ -42,7 +42,7 @@ python3 train.py --train_new \
   --learning_rate 1e-3 \
   --optimizer_name adafactor \
   --scheduler_name linear \
-  --warnup_factor 0.05 \
+  --warmup_factor 0.05 \
   --mask_prob 0.2 \
   --hide_map_prob 0.0 \
   --dropout_cnn_out 0.3 \
