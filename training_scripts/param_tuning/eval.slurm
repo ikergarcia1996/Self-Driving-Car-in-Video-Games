@@ -23,7 +23,8 @@ python3 eval.py \
    /ikerlariak/igarcia945/gtaai_datasets/test/car_highway_day_rain \
    /ikerlariak/igarcia945/gtaai_datasets/test/car_highway_night_clear \
    /ikerlariak/igarcia945/gtaai_datasets/test/car_highway_night_rain \
-  --output_path models/large_optim_mask_best/results.tsv
+  --output_path models/large_optim_mask_best/results.tsv \
+  --experiment_name large_optim_mask_best
 
 
 python3 eval.py \
@@ -39,4 +40,5 @@ python3 eval.py \
    /ikerlariak/igarcia945/gtaai_datasets/test/car_highway_day_rain \
    /ikerlariak/igarcia945/gtaai_datasets/test/car_highway_night_clear \
    /ikerlariak/igarcia945/gtaai_datasets/test/car_highway_night_rain \
-  --output_path models/large_optim_mask_last/results.tsv
+  --output_path models/large_optim_mask_last/results.tsv \
+  --experiment_name large_optim_mask_last
