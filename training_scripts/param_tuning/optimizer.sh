@@ -3,7 +3,7 @@ python3 train.py --train_new \
   --val_dir  ../gtaai_datasets/dev \
   --output_dir models/tedd_1104_large_adamw \
   --encoder_type transformer \
-  --dataloader_num_workers 32 \
+  --dataloader_num_workers 20 \
   --batch_size 8 \
   --accumulation_steps 2 \
   --max_epochs 20 \
@@ -32,7 +32,7 @@ python3 train.py --train_new \
   --val_dir  ../gtaai_datasets/dev \
   --output_dir models/tedd_1104_large_adafactor \
   --encoder_type transformer \
-  --dataloader_num_workers 32 \
+  --dataloader_num_workers 20 \
   --batch_size 8 \
   --accumulation_steps 2 \
   --max_epochs 20 \
