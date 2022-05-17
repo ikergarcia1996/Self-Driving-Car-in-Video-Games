@@ -248,7 +248,7 @@ def train_new_model(
             lr_monitor,
         ],
         gradient_clip_val=1.0 if optimizer_name.lower() != "adafactor" else 0.0,
-        log_every_n_steps=50,
+        log_every_n_steps=100,
         auto_lr_find=True,
     )
 
@@ -383,7 +383,7 @@ def continue_training(
             lr_monitor,
         ],
         gradient_clip_val=1.0,
-        log_every_n_steps=50,
+        log_every_n_steps=100,
     )
 
     trainer.fit(
