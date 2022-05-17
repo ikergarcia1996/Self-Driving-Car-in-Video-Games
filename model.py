@@ -1194,7 +1194,6 @@ class Tedd1104ModelPL(pl.LightningModule):
             if self.total_batches % 200 == 0:
                 self.log("Train/loss", loss, sync_dist=True)
 
-        print(self.optimizers())
         return {"loss": loss}
 
     def validation_step(self, batch, batch_idx):

@@ -43,9 +43,6 @@ def get_linear_schedule_with_warmup(
 
     def lr_lambda(current_step: int):
         if current_step < num_warmup_steps:
-            print(
-                f"Lr_lambda: current_step: {current_step}. num_warmup_steps: {num_warmup_steps}. LR: {float(current_step) / float(max(1, num_warmup_steps))}"
-            )
             return float(current_step) / float(max(1, num_warmup_steps))
         return max(
             0.0,
