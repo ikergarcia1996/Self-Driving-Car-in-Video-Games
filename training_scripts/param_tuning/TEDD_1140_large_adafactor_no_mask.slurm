@@ -26,7 +26,7 @@ python3 train.py --train_new \
   --cnn_model_name efficientnet_v2_l \
   --num_layers_encoder 6 \
   --embedded_size 512 \
-  --learning_rate 1e-3 \
+  --learning_rate 3e-5 \
   --optimizer_name adafactor \
   --scheduler_name linear \
   --warmup_factor 0.05 \
