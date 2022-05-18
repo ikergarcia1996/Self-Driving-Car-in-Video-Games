@@ -1,5 +1,4 @@
 from torch.optim import AdamW
-from fairseq.optim.adafactor import Adafactor
 
 
 def get_adamw(parameters, learning_rate: float, weight_decay: float):
@@ -27,6 +26,13 @@ def get_adafactor(parameters, learning_rate, weight_decay):
     :param float weight_decay: The weight decay.
     :return:  fairseq.optim.adafactor.Adafactor. The Adafactor optimizer.
     """
+    try:
+        from fairseq.optim.adafactor import Adafactor
+    except ImportError:
+        raise ImportError(
+            "You need to install fairseq to use Adafactor optimizer."
+            "Run `pip install fairseq`."
+        )
     optimizer = Adafactor(
         params=parameters,
         scale_parameter=False,
