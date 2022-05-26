@@ -315,7 +315,7 @@ def continue_training(
         max_epochs=max_epochs,
         logger=logger,
         callbacks=[
-            pl.callbacks.StochasticWeightAveraging(swa_lrs=1e-2),
+            # pl.callbacks.StochasticWeightAveraging(swa_lrs=1e-2),
             checkpoint_callback,
             lr_monitor,
         ],

@@ -102,7 +102,7 @@ def train_new_model(
     :param bool find_lr: Whether to find the learning rate. We will use PytorchLightning's find_lr function.
                          See: https://pytorch-lightning.readthedocs.io/en/latest/advanced/training_tricks.html#learning-rate-finder
     :param str optimizer_name: Optimizer to use: adamw or adafactor
-    :param str scheduler_name: Scheduler to use: linear or plateau
+    :param str scheduler_name: Scheduler to use: linear, polynomial, cosine, plateau
     :param float learning_rate: Learning rate
     :param float weight_decay: Weight decay
     :param float warmup_factor: Percentage of the total training steps to perform warmup
@@ -243,7 +243,7 @@ def train_new_model(
         max_epochs=max_epochs,
         logger=logger,
         callbacks=[
-            pl.callbacks.StochasticWeightAveraging(swa_lrs=1e-2),
+            # pl.callbacks.StochasticWeightAveraging(swa_lrs=1e-2),
             checkpoint_callback,
             lr_monitor,
         ],
@@ -538,8 +538,8 @@ if __name__ == "__main__":
         "--scheduler_name",
         type=str,
         default="linear",
-        choices=["linear", "plateau"],
-        help="[NEW MODEL] The scheduler to use: linear or plateau.",
+        choices=["linear", "plateau", "polynomial", "cosine"],
+        help="[NEW MODEL] The scheduler to use: linear, polynomial, cosine, plateau.",
     )
 
     parser.add_argument(

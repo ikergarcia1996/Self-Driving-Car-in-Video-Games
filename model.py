@@ -29,7 +29,12 @@ import torchvision.models as models
 import pytorch_lightning as pl
 import torchmetrics
 from optimizers.optimizer import get_adafactor, get_adamw
-from optimizers.scheduler import get_reducelronplateau, get_linear_schedule_with_warmup
+from optimizers.scheduler import (
+    get_reducelronplateau,
+    get_linear_schedule_with_warmup,
+    get_polynomial_decay_schedule_with_warmup,
+    get_cosine_schedule_with_warmup,
+)
 
 
 class WeightedMseLoss(nn.Module):
@@ -1002,7 +1007,7 @@ class Tedd1104ModelPL(pl.LightningModule):
         :param str encoder_type: Encoder type: transformer or lstm
         :param float label_smoothing: Label smoothing for the classification task
         :param str optimizer_name: Optimizer to use: adamw or adafactor
-        :param str scheduler_name: Scheduler to use: linear or plateau
+        :param str scheduler_name: Scheduler to use: linear, polynomial, cosine, plateau
         :param float learning_rate: Learning rate
         :param float weight_decay: Weight decay
         :param int num_warmup_steps: Number of warmup steps for the scheduler
@@ -1309,9 +1314,22 @@ class Tedd1104ModelPL(pl.LightningModule):
                 num_warmup_steps=self.num_warmup_steps,
                 num_training_steps=self.num_training_steps,
             )
+        elif self.scheduler_name.lower() == "polynomial":
+            scheduler = get_polynomial_decay_schedule_with_warmup(
+                optimizer=optimizer,
+                num_warmup_steps=self.num_warmup_steps,
+                num_training_steps=self.num_training_steps,
+            )
+
+        elif self.scheduler_name.lower() == "cosine":
+            scheduler = get_cosine_schedule_with_warmup(
+                optimizer=optimizer,
+                num_warmup_steps=self.num_warmup_steps,
+                num_training_steps=self.num_training_steps,
+            )
         else:
             raise ValueError(
-                f"Unsupported scheduler {self.scheduler_name.lower()}. Choose from plateau and linear."
+                f"Unsupported scheduler {self.scheduler_name.lower()}. Choose from linear, polynomial, cosine, plateau."
             )
 
         return [optimizer], [
