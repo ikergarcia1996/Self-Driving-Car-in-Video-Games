@@ -30,16 +30,16 @@ python3 train.py --train_new \
 python3 train.py --train_new \
   --train_dir ../gtaai_datasets/train \
   --val_dir  ../gtaai_datasets/dev \
-  --output_dir models/tedd_1104_large_adafactor \
+  --output_dir models/tedd_1104_large_adafactor_1e-3 \
   --encoder_type transformer \
   --dataloader_num_workers 20 \
   --batch_size 8 \
-  --accumulation_steps 2 \
+  --accumulation_steps 1 \
   --max_epochs 20 \
   --cnn_model_name efficientnet_v2_l \
   --num_layers_encoder 6 \
   --embedded_size 512 \
-  --learning_rate 3e-5 \
+  --learning_rate 1e-3 \
   --optimizer_name adafactor \
   --scheduler_name linear \
   --warmup_factor 0.05 \
@@ -52,5 +52,5 @@ python3 train.py --train_new \
   --control_mode keyboard \
   --val_check_interval 0.25 \
   --precision "16"  \
-  --devices 2 \
+  --devices 4 \
   --strategy "ddp_find_unused_parameters_false"
