@@ -12,7 +12,7 @@ python3 train.py --train_new \
   --cnn_model_name efficientnet_v2_l \
   --num_layers_encoder 4 \
   --embedded_size 896 \
-  --learning_rate 1e-3 \
+  --learning_rate 1e-5 \
   --optimizer_name adafactor \
   --scheduler_name cosine \
   --warmup_factor 0.05 \
@@ -25,7 +25,7 @@ python3 train.py --train_new \
   --control_mode keyboard \
   --val_check_interval 0.25 \
   --precision "16"  \
-  --devices 4 \
+  --devices 2 \
   --strategy "ddp_find_unused_parameters_false"
 
 
