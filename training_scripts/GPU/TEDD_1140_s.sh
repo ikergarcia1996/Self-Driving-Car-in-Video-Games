@@ -39,8 +39,6 @@ python3 train.py --train_new \
   --label_smoothing 0.1 \
   --control_mode keyboard \
   --val_check_interval 0.25 \
-  --precision "16"  \
-  --devices 1 \
-  --strategy "ddp_find_unused_parameters_false"
+  --precision "16"
 
 
