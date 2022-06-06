@@ -1,8 +1,7 @@
 from __future__ import print_function, division
 import os
 import torch
-from skimage import io
-import numpy as np
+import torchvision.io
 from torch.utils.data import Dataset, DataLoader
 from torchvision import transforms
 import glob
@@ -27,7 +26,7 @@ class RemoveMinimap(object):
 
         self.hide_map_prob = hide_map_prob
 
-    def __call__(self, sample: Dict[str, np.ndarray]) -> Dict[str, np.ndarray]:
+    def __call__(self, sample: Dict[str, torch.tensor]) -> (torch.tensor, torch.tensor):
         """
         Applies the transformation to the sequence of images.
 
@@ -35,24 +34,18 @@ class RemoveMinimap(object):
         :return: Dict[str, np.ndarray]- Transformed sequence of images
         """
 
-        image, y = (
-            sample["image"],
-            sample["y"],
-        )
+        image, y = sample
 
-        width: int = int(image.shape[1] / 5)
+        width: int = int(image.size(2) / 5)
 
         if self.hide_map_prob > 0:
             if torch.rand(1)[0] <= self.hide_map_prob:
                 for j in range(0, 5):
-                    image[215:, j * width : (j * width) + 80] = np.zeros(
-                        (55, 80, 3), dtype=image.dtype
+                    image[:, 215:, j * width : (j * width) + 80] = torch.zeros(
+                        (3, 55, 80), dtype=image.dtype
                     )
 
-        return {
-            "image": image,
-            "y": y,
-        }
+        return image, y
 
 
 class RemoveImage(object):
@@ -68,30 +61,25 @@ class RemoveImage(object):
         """
         self.dropout_images_prob = dropout_images_prob
 
-    def __call__(self, sample: Dict[str, np.ndarray]) -> Dict[str, np.ndarray]:
+    def __call__(self, sample: Dict[str, torch.tensor]) -> (torch.tensor, torch.tensor):
         """
         Applies the transformation to the sequence of images.
 
         :param Dict[str, np.ndarray] sample: Sequence of images
         :return: Dict[str, np.ndarray]- Transformed sequence of images
         """
-        image, y = (
-            sample["image"],
-            sample["y"],
-        )
-        width: int = int(image.shape[1] / 5)
+        image, y = sample
+
+        width: int = int(image.size(2) / 5)
 
         for j in range(0, 5):
             if self.dropout_images_prob[j] > 0:
                 if torch.rand(1)[0] <= self.dropout_images_prob[j]:
-                    image[:, j * width : (j + 1) * width] = np.zeros(
-                        (image.shape[0], width, image.shape[2]), dtype=image.dtype
+                    image[:, :, j * width : (j + 1) * width] = torch.zeros(
+                        (image.shape[0], image.shape[1], width), dtype=image.dtype
                     )
 
-        return {
-            "image": image,
-            "y": y,
-        }
+        return image, y
 
 
 class SplitImages(object):
@@ -99,23 +87,21 @@ class SplitImages(object):
     Splits a sequence image file into 5 images
     """
 
-    def __call__(self, sample: np.ndarray) -> Dict[str, np.ndarray]:
+    def __call__(self, sample: torch.tensor) -> (torch.tensor, torch.tensor):
         """
         Applies the transformation to the sequence of images.
 
         :param np.ndarray sample: Sequence image
         :return: Dict[str, np.ndarray]- Transformed sequence of images
         """
-        image, y = sample["image"], sample["y"]
-        width: int = int(image.shape[1] / 5)
-        return {
-            "image1": image[:, 0:width],
-            "image2": image[:, width : width * 2],
-            "image3": image[:, width * 2 : width * 3],
-            "image4": image[:, width * 3 : width * 4],
-            "image5": image[:, width * 4 : width * 5],
-            "y": y,
-        }
+        image, y = sample
+        width: int = int(image.size(2) / 5)
+        image1 = image[:, :, 0:width]
+        image2 = image[:, :, width : width * 2]
+        image3 = image[:, :, width * 2 : width * 3]
+        image4 = image[:, :, width * 3 : width * 4]
+        image5 = image[:, :, width * 4 : width * 5]
+        return torch.stack([image1, image2, image3, image4, image5]), torch.tensor(y)
 
 
 class SequenceColorJitter(object):
@@ -136,93 +122,16 @@ class SequenceColorJitter(object):
             brightness=brightness, contrast=contrast, saturation=saturation, hue=hue
         )
 
-    def __call__(self, sample: Dict[str, torch.tensor]) -> Dict[str, torch.tensor]:
+    def __call__(self, sample: Dict[str, torch.tensor]) -> (torch.tensor, torch.tensor):
         """
         Applies the transformation to the sequence of images.
 
         :param Dict[str, torch.tensor] sample: Sequence of images
         :return: Dict[str, torch.tensor]- Transformed sequence of images
         """
-        image1, image2, image3, image4, image5, y = (
-            sample["image1"],
-            sample["image2"],
-            sample["image3"],
-            sample["image4"],
-            sample["image5"],
-            sample["y"],
-        )
-
-        images = self.jitter(torch.stack([image1, image2, image3, image4, image5]))
-        return {
-            "image1": images[0],
-            "image2": images[1],
-            "image3": images[2],
-            "image4": images[3],
-            "image5": images[4],
-            "y": y,
-        }
-
-
-class MergeImages(object):
-    """Merges the images into one torch.Tensor"""
-
-    def __call__(self, sample: Dict[str, torch.tensor]) -> Dict[str, torch.tensor]:
-        """
-        Applies the transformation to the sequence of images.
-
-        :param Dict[str, torch.tensor] sample: The images to transform.
-        :return: Dict[str, torch.tensor] - The transformed image.
-        """
-        image1, image2, image3, image4, image5, y = (
-            sample["image1"],
-            sample["image2"],
-            sample["image3"],
-            sample["image4"],
-            sample["image5"],
-            sample["y"],
-        )
-
-        return {
-            "images": torch.stack([image1, image2, image3, image4, image5]),
-            "y": y,
-        }
-
-
-class ToTensor(object):
-    """Convert np.ndarray images to Tensors."""
-
-    def __call__(self, sample: Dict[str, np.ndarray]) -> Dict[str, torch.tensor]:
-        """
-        Applies the transformation to the sequence of images.
-
-        :param Dict[str, np.ndarray] sample: Sequence of images
-        :return: Dict[str, torch.tensor]- Transformed sequence of images
-        """
-        image1, image2, image3, image4, image5, y = (
-            sample["image1"],
-            sample["image2"],
-            sample["image3"],
-            sample["image4"],
-            sample["image5"],
-            sample["y"],
-        )
-
-        # swap color axis because
-        # numpy image: H x W x C
-        # torch image: C X H X W
-        image1 = image1.transpose((2, 0, 1))
-        image2 = image2.transpose((2, 0, 1))
-        image3 = image3.transpose((2, 0, 1))
-        image4 = image4.transpose((2, 0, 1))
-        image5 = image5.transpose((2, 0, 1))
-        return {
-            "image1": torch.from_numpy(image1),
-            "image2": torch.from_numpy(image2),
-            "image3": torch.from_numpy(image3),
-            "image4": torch.from_numpy(image4),
-            "image5": torch.from_numpy(image5),
-            "y": torch.tensor(y),
-        }
+        images, y = sample
+        images = self.jitter(images)
+        return images, y
 
 
 class Normalize(object):
@@ -234,29 +143,21 @@ class Normalize(object):
         mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]
     )
 
-    def __call__(self, sample: Dict[str, torch.tensor]) -> Dict[str, torch.tensor]:
+    def __call__(self, sample: Dict[str, torch.tensor]) -> (torch.tensor, torch.tensor):
         """
         Applies the transformation to the sequence of images.
 
         :param Dict[str, torch.tensor] sample: Sequence of images
         :return: Dict[str, torch.tensor]- Transformed sequence of images
         """
-        image1, image2, image3, image4, image5, y = (
-            sample["image1"],
-            sample["image2"],
-            sample["image3"],
-            sample["image4"],
-            sample["image5"],
-            sample["y"],
-        )
-        return {
-            "image1": self.transform(image1 / 255.0),
-            "image2": self.transform(image2 / 255.0),
-            "image3": self.transform(image3 / 255.0),
-            "image4": self.transform(image4 / 255.0),
-            "image5": self.transform(image5 / 255.0),
-            "y": y,
-        }
+        images, y = sample
+        return [
+            self.transform(images[0] / 255.0),
+            self.transform(images[1] / 255.0),
+            self.transform(images[2] / 255.0),
+            self.transform(images[3] / 255.0),
+            self.transform(images[4] / 255.0),
+        ], y
 
 
 def collate_fn(batch):
@@ -266,12 +167,15 @@ def collate_fn(batch):
     :param batch: List of samples
     :return: Dict[str, torch.tensor]- Transformed sequence of images
     """
-    images = torch.cat([b["images"] for b in batch], dim=0)
-    attention_mask = torch.cat([b["attention_mask"] for b in batch], dim=0)
-    y = torch.stack([b["y"] for b in batch])
-    attention_mask.requires_grad = False
-    y.requires_grad = False
-    return {"images": images, "attention_mask": attention_mask, "y": y}
+
+    return_dict: Dict[str, torch.tensor] = {
+        "images": torch.cat([b[0] for b in batch], dim=0),
+        "attention_mask": torch.cat([b[1] for b in batch], dim=0),
+        "y": torch.stack([b[2] for b in batch]),
+    }
+    return_dict["attention_mask"].requires_grad = False
+    return_dict["y"].requires_grad = False
+    return return_dict
 
 
 def set_worker_sharing_strategy(worker_id: int) -> None:
@@ -347,10 +251,8 @@ class Tedd1104Dataset(Dataset):
                     RemoveMinimap(hide_map_prob=hide_map_prob),
                     RemoveImage(dropout_images_prob=dropout_images_prob),
                     SplitImages(),
-                    ToTensor(),
                     SequenceColorJitter(),
                     Normalize(),
-                    MergeImages(),
                 ]
             )
         else:
@@ -359,10 +261,8 @@ class Tedd1104Dataset(Dataset):
                     # RemoveMinimap(hide_map_prob=hide_map_prob),
                     # RemoveImage(dropout_images_prob=dropout_images_prob),
                     SplitImages(),
-                    ToTensor(),
                     # SequenceColorJitter(),
                     Normalize(),
-                    MergeImages(),
                 ]
             )
 

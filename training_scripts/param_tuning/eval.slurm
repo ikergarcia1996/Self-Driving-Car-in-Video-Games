@@ -3,8 +3,8 @@
 #SBATCH --cpus-per-task=32
 #SBATCH --gres=gpu:1
 #SBATCH --mem=64G
-#SBATCH --output=eval.out
-#SBATCH --error=eval.err
+#SBATCH --output=evaluate.out
+#SBATCH --error=evaluate.err
 
 source /ikerlariak/igarcia945/envs/pytorch-tximista/bin/activate
 
