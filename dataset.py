@@ -292,7 +292,7 @@ class Tedd1104Dataset(Dataset):
         image = None
         while image is None:
             try:
-                image = io.imread(img_name)
+                image = torchvision.io.read_image(img_name)
             except (ValueError, FileNotFoundError) as err:
                 error_message = str(err).split("\n")[-1]
                 print(
