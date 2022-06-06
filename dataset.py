@@ -151,12 +151,19 @@ class Normalize(object):
         :return: Dict[str, torch.tensor]- Transformed sequence of images
         """
         images, y = sample
-        images[0] = self.transform(images[0] / 255.0)
-        images[1] = self.transform(images[1] / 255.0)
-        images[2] = self.transform(images[2] / 255.0)
-        images[3] = self.transform(images[3] / 255.0)
-        images[4] = self.transform(images[4] / 255.0)
-        return images, y
+
+        return (
+            torch.stack(
+                [
+                    self.transform(images[0] / 255.0),
+                    self.transform(images[1] / 255.0),
+                    self.transform(images[2] / 255.0),
+                    self.transform(images[3] / 255.0),
+                    self.transform(images[4] / 255.0),
+                ]
+            ),
+            y,
+        )
 
 
 def collate_fn(batch):
