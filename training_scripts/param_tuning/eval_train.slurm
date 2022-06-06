@@ -12,7 +12,7 @@ cd ../../
 
 python3 eval.py \
   --checkpoint_path models/tedd_1104_XXL/epoch=1-step=79417.ckpt \
-  --batch_size 64 \
+  --batch_size 256 \
   --test_dirs \
    /ikerlariak/igarcia945/gtaai_datasets/train \
   --output_path models/tedd_1104_XXL/XXL_eval_train.tsv \
@@ -21,7 +21,7 @@ python3 eval.py \
 
 python3 eval.py \
   --checkpoint_path models/tedd_1104_XXL/epoch=19-last.ckpt \
-  --batch_size 64 \
+  --batch_size 256 \
   --test_dirs \
    /ikerlariak/igarcia945/gtaai_datasets/train \
   --output_path models/tedd_1104_XXL/XXL_last_eval_train.tsv \
@@ -30,7 +30,7 @@ python3 eval.py \
 
 python3 eval.py \
   --checkpoint_path models/tedd_1104_M/epoch=3-step=138981.ckpt \
-  --batch_size 64 \
+  --batch_size 256 \
   --test_dirs \
    /ikerlariak/igarcia945/gtaai_datasets/train \
   --output_path models/tedd_1104_M/M_eval_train.tsv \
@@ -38,7 +38,7 @@ python3 eval.py \
 
   python3 eval.py \
   --checkpoint_path models/tedd_1104_S/epoch=4-step=198544.ckpt \
-  --batch_size 64 \
+  --batch_size 256 \
   --test_dirs \
    /ikerlariak/igarcia945/gtaai_datasets/train \
   --output_path models/tedd_1104_S/S_eval_train.tsv \
