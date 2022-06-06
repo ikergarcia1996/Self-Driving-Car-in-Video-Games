@@ -151,13 +151,19 @@ class Normalize(object):
         :return: Dict[str, torch.tensor]- Transformed sequence of images
         """
         images, y = sample
-        return [
-            self.transform(images[0] / 255.0),
-            self.transform(images[1] / 255.0),
-            self.transform(images[2] / 255.0),
-            self.transform(images[3] / 255.0),
-            self.transform(images[4] / 255.0),
-        ], y
+        images[0] = self.transform(images[0] / 255.0)
+        return (
+            torch.stack(
+                [
+                    self.transform(images[0] / 255.0),
+                    self.transform(images[1] / 255.0),
+                    self.transform(images[2] / 255.0),
+                    self.transform(images[3] / 255.0),
+                    self.transform(images[4] / 255.0),
+                ]
+            ),
+            y,
+        )
 
 
 def collate_fn(batch):
@@ -191,7 +197,7 @@ class Tedd1104Dataset(Dataset):
         hide_map_prob: float,
         token_mask_prob: float,
         transformer_nheads: int = None,
-        dropout_images_prob: List[float] = 0.0,
+        dropout_images_prob: List[float] = None,
         sequence_length: int = 5,
         control_mode: str = "keyboard",
         train: bool = False,
@@ -212,7 +218,9 @@ class Tedd1104Dataset(Dataset):
 
         self.dataset_dir = dataset_dir
         self.hide_map_prob = hide_map_prob
-        self.dropout_images_prob = dropout_images_prob
+        self.dropout_images_prob = (
+            dropout_images_prob if dropout_images_prob else [0.0] * sequence_length
+        )
         self.control_mode = control_mode.lower()
         self.sequence_length = sequence_length
         self.token_mask_prob = token_mask_prob
@@ -224,25 +232,25 @@ class Tedd1104Dataset(Dataset):
             "controller",
         ], f"{self.control_mode} control mode not supported. Supported dataset types: [keyboard, controller].  "
 
-        assert 0 <= hide_map_prob <= 1.0, (
+        assert 0 <= self.hide_map_prob <= 1.0, (
             f"hide_map_prob not in 0 <= hide_map_prob <= 1.0 range. "
-            f"hide_map_prob: {hide_map_prob}"
+            f"hide_map_prob: {self.hide_map_prob}"
         )
 
-        assert len(dropout_images_prob) == 5, (
+        assert len(self.dropout_images_prob) == 5, (
             f"dropout_images_prob must have 5 probabilities, one for each image in the sequence. "
             f"dropout_images_prob len: {len(dropout_images_prob)}"
         )
 
-        for dropout_image_prob in dropout_images_prob:
+        for dropout_image_prob in self.dropout_images_prob:
             assert 0 <= dropout_image_prob < 1.0, (
                 f"All probabilities in dropout_image_prob must be in the range 0 <= dropout_image_prob < 1.0. "
-                f"dropout_images_prob: {dropout_images_prob}"
+                f"dropout_images_prob: {self.dropout_images_prob}"
             )
 
-        assert 0 <= token_mask_prob < 1.0, (
+        assert 0 <= self.token_mask_prob < 1.0, (
             f"token_mask_prob not in 0 <= token_mask_prob < 1.0 range. "
-            f"token_mask_prob: {token_mask_prob}"
+            f"token_mask_prob: {self.token_mask_prob}"
         )
 
         if train:
