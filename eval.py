@@ -18,7 +18,7 @@ def eval_model(
     output_path: str = None,
     devices: str = 1,
     accelerator: str = "auto",
-    precision: str = "bf16",
+    precision: str = "16",
     strategy=None,
     report_to: str = "none",
     experiment_name: str = "test",
