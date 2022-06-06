@@ -309,8 +309,7 @@ class Tedd1104Dataset(Dataset):
             output_type=self.control_mode,
         )
 
-        sample = {"image": image, "y": y}
-        sample = self.transform(sample)
+        sample = self.transform((image, y))
         if self.transformer_nheads is not None:
             sample["attention_mask"] = get_mask(
                 train=self.train,
