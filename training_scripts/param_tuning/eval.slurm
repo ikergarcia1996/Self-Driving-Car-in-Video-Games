@@ -45,22 +45,6 @@ python3 eval.py \
 
 
 python3 eval.py \
-  --checkpoint_path models/tedd_1104_XXL/epoch=1-step=79417.ckpt \
-  --batch_size 32 \
-  --test_dirs \
-   /ikerlariak/igarcia945/gtaai_datasets/dev \
-   /ikerlariak/igarcia945/gtaai_datasets/test/car_city_day_clear \
-   /ikerlariak/igarcia945/gtaai_datasets/test/car_city_day_rain \
-   /ikerlariak/igarcia945/gtaai_datasets/test/car_city_night_clear \
-   /ikerlariak/igarcia945/gtaai_datasets/test/car_city_night_rain \
-   /ikerlariak/igarcia945/gtaai_datasets/test/car_highway_day_clear \
-   /ikerlariak/igarcia945/gtaai_datasets/test/car_highway_day_rain \
-   /ikerlariak/igarcia945/gtaai_datasets/test/car_highway_night_clear \
-   /ikerlariak/igarcia945/gtaai_datasets/test/car_highway_night_rain \
-  --output_path models/tedd_1104_XXL/XXL_eval.tsv \
-  --experiment_name XXL
-
-python3 eval.py \
   --checkpoint_path models/tedd_1104_M/epoch=3-step=138981.ckpt \
   --batch_size 32 \
   --test_dirs \
