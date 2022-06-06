@@ -309,16 +309,16 @@ class Tedd1104Dataset(Dataset):
             output_type=self.control_mode,
         )
 
-        sample = self.transform((image, y))
-        if self.transformer_nheads is not None:
-            sample["attention_mask"] = get_mask(
-                train=self.train,
-                nheads=self.transformer_nheads,
-                mask_prob=self.token_mask_prob,
-                sequence_length=self.sequence_length,
-            )
+        image, y = self.transform((image, y))
 
-        return sample
+        mask = get_mask(
+            train=self.train,
+            nheads=self.transformer_nheads,
+            mask_prob=self.token_mask_prob,
+            sequence_length=self.sequence_length,
+        )
+
+        return image, mask, y
 
 
 class Tedd1104DataModule(pl.LightningDataModule):
