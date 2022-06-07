@@ -15,7 +15,7 @@ def train_new_model(
     batch_size: int,
     max_epochs: int,
     cnn_model_name: str,
-    devices: str = 1,
+    devices: float = 1,
     accelerator: str = "auto",
     precision: str = "bf16",
     strategy=None,
@@ -57,7 +57,7 @@ def train_new_model(
     :param float dropout_images_prob: Probability of dropping an image (0<=dropout_images_prob<=1)
     :param str test_dir: The directory containing the test data.
     :param float val_check_interval: The interval to check the validation accuracy.
-    :param str devices: Number of devices to use.
+    :param float devices: Number of devices to use.
     :param str accelerator: Accelerator to use. If 'auto', tries to automatically detect TPU, GPU, CPU or IPU system.
     :param str precision: Precision to use. Double precision (64), full precision (32), half precision (16) or bfloat16
                           precision (bf16). Can be used on CPU, GPU or TPUs.
@@ -90,7 +90,7 @@ def train_new_model(
 
     num_examples = count_examples(dataset_dir=train_dir)
     num_update_steps_per_epoch = math.ceil(
-        math.ceil(num_examples / batch_size) / accumulation_steps
+        math.ceil(math.ceil(num_examples / batch_size) / accumulation_steps / devices)
     )
     max_train_steps = max_epochs * num_update_steps_per_epoch
     num_warmup_steps = int(max_train_steps * warmup_factor)
@@ -185,6 +185,7 @@ def train_new_model(
         ],
         gradient_clip_val=1.0 if optimizer_name.lower() != "adafactor" else 0.0,
         log_every_n_steps=100,
+        auto_lr_find=find_lr,
     )
 
     if find_lr:
