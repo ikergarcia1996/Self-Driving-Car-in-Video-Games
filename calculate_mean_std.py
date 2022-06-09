@@ -15,19 +15,23 @@ def calculate_mean_str(dataset_dir: str):
         ]
     )
 
-    means = []
-    stds = []
-
-    for img_name in tqdm(dataset_files, desc="Reading images"):
+    mean_sum = torch.tensor(0)
+    stds_sum = torch.tensor(0)
+    total = 0
+    for img_name in tqdm(
+        dataset_files,
+        desc=f"Reading images. Mean: {mean_sum/(total if total>0 else 1)}. STD: {stds_sum/(total if total>0 else 1)}",
+    ):
         images = torchvision.io.read_image(img_name)
         y = 0
         images, _ = transform((images, y))
         for image in images:
-            means.append(torch.mean(image / 255.0))
-            stds.append(torch.std(image / 255.0))
+            mean_sum += torch.mean(image / 255.0)
+            stds_sum += torch.std(image / 255.0)
+            total += 1
 
-    mean = torch.mean(torch.tensor(means))
-    std = torch.mean(torch.tensor(stds))
+    mean = mean_sum / total
+    std = stds_sum / total
 
     print(f"Mean: {mean}")
     print(f"std: {std}")
