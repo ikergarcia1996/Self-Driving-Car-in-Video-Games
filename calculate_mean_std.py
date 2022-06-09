@@ -15,8 +15,8 @@ def calculate_mean_str(dataset_dir: str):
         ]
     )
 
-    mean_sum = torch.tensor(0.0)
-    stds_sum = torch.tensor(0.0)
+    mean_sum = 0.0
+    stds_sum = 0.0
     total = 0
 
     with tqdm(
@@ -28,8 +28,8 @@ def calculate_mean_str(dataset_dir: str):
             y = 0
             images, _ = transform((images, y))
             for image in images:
-                mean_sum += torch.mean(image / 255.0)
-                stds_sum += torch.std(image / 255.0)
+                mean_sum += torch.mean(image / 255.0).item()
+                stds_sum += torch.std(image / 255.0).item()
                 total += 1
             pbar.update(1)
             pbar.set_description(
