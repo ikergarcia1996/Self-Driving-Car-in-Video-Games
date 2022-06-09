@@ -21,7 +21,7 @@ def calculate_mean_str(dataset_dir: str):
 
     with tqdm(
         total=len(dataset_files),
-        desc=f"Reading images. Mean: {mean_sum/(total if total>0 else 1)}. STD: {stds_sum/(total if total>0 else 1)}",
+        desc=f"Reading images. Mean: {round(mean_sum/(total if total>0 else 1),6)}. STD: {round(stds_sum/(total if total>0 else 1),6)}",
     ) as pbar:
         for img_name in dataset_files:
             images = torchvision.io.read_image(img_name)
@@ -33,7 +33,7 @@ def calculate_mean_str(dataset_dir: str):
                 total += 1
             pbar.update(1)
             pbar.set_description(
-                desc=f"Reading images. Mean: {mean_sum/(total if total>0 else 1)}. STD: {stds_sum/(total if total>0 else 1)}"
+                desc=f"Reading images. Mean: {round(mean_sum/(total if total>0 else 1),6)}. STD: {round(stds_sum/(total if total>0 else 1),6)}",
             )
 
     mean = mean_sum / total
