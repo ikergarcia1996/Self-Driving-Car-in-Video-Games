@@ -15,8 +15,8 @@ def calculate_mean_str(dataset_dir: str):
         ]
     )
 
-    mean_sum = torch.tensor(0)
-    stds_sum = torch.tensor(0)
+    mean_sum = torch.tensor(0.0)
+    stds_sum = torch.tensor(0.0)
     total = 0
     for img_name in tqdm(
         dataset_files,
