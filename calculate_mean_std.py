@@ -57,4 +57,7 @@ if __name__ == "__main__":
 
     args = parser.parse_args()
 
-    calculate_mean_str(dataset_dir=args.dataset_dir)
+    mean, std = calculate_mean_str(dataset_dir=args.dataset_dir)
+    with open("image_metrics.txt", "w", encoding="utf8") as output_file:
+        print(f"Mean: {mean}", file=output_file)
+        print(f"STD: {std}", file=output_file)
