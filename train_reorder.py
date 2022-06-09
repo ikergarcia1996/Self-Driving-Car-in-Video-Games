@@ -15,7 +15,7 @@ def train_new_model(
     batch_size: int,
     max_epochs: int,
     cnn_model_name: str,
-    devices: float = 1,
+    devices: int = 1,
     accelerator: str = "auto",
     precision: str = "bf16",
     strategy=None,
@@ -57,7 +57,7 @@ def train_new_model(
     :param float dropout_images_prob: Probability of dropping an image (0<=dropout_images_prob<=1)
     :param str test_dir: The directory containing the test data.
     :param float val_check_interval: The interval to check the validation accuracy.
-    :param float devices: Number of devices to use.
+    :param int devices: Number of devices to use.
     :param str accelerator: Accelerator to use. If 'auto', tries to automatically detect TPU, GPU, CPU or IPU system.
     :param str precision: Precision to use. Double precision (64), full precision (32), half precision (16) or bfloat16
                           precision (bf16). Can be used on CPU, GPU or TPUs.
@@ -213,7 +213,7 @@ def continue_training(
     max_epochs: int,
     output_dir,
     accumulation_steps,
-    devices: str = 1,
+    devices: int = 1,
     accelerator: str = "auto",
     precision: str = "16",
     strategy=None,
@@ -235,7 +235,7 @@ def continue_training(
     :param str output_dir: The directory to save the model to.
     :param int batch_size: The batch size.
     :param int accumulation_steps: The number of steps to accumulate gradients.
-    :param str devices: Number of devices to use.
+    :param int devices: Number of devices to use.
     :param str accelerator: Accelerator to use. If 'auto', tries to automatically detect TPU, GPU, CPU or IPU system.
     :param str precision: Precision to use. Double precision (64), full precision (32), half precision (16) or bfloat16
                           precision (bf16). Can be used on CPU, GPU or TPUs.

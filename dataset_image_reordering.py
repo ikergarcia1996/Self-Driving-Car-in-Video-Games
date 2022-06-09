@@ -1,7 +1,7 @@
 from __future__ import print_function, division
 import os
 import torch
-from skimage import io
+import torchvision
 from torch.utils.data import Dataset, DataLoader
 from torchvision import transforms
 import glob
@@ -12,71 +12,26 @@ from dataset import (
     RemoveMinimap,
     RemoveImage,
     SplitImages,
-    MergeImages,
     Normalize,
     SequenceColorJitter,
     collate_fn,
     set_worker_sharing_strategy,
 )
-import numpy as np
 
 
 class ReOrderImages(object):
     """Reorders the image given a tensor of positions"""
 
-    def __call__(self, sample: Dict[str, torch.tensor]) -> Dict[str, torch.tensor]:
+    def __call__(self, sample: Dict[str, torch.tensor]) -> (torch.tensor, torch.tensor):
         """
         Applies the transformation to the sequence of images.
 
         :param Dict[str, torch.tensor] sample: Sequence of images
         :return: Dict[str, torch.tensor]- Reordered sequence of images
         """
-        images, y = (
-            sample["images"],
-            sample["y"],
-        )
+        images, y = sample
 
-        return {
-            "images": images[y],
-            "y": y,
-        }
-
-
-class ToTensor(object):
-    """Convert np.ndarray images to Tensors."""
-
-    def __call__(self, sample: Dict[str, np.ndarray]) -> Dict[str, torch.tensor]:
-        """
-        Applies the transformation to the sequence of images.
-
-        :param Dict[str, np.ndarray] sample: Sequence of images
-        :return: Dict[str, torch.tensor]- Transformed sequence of images
-        """
-        image1, image2, image3, image4, image5, y = (
-            sample["image1"],
-            sample["image2"],
-            sample["image3"],
-            sample["image4"],
-            sample["image5"],
-            sample["y"],
-        )
-
-        # swap color axis because
-        # numpy image: H x W x C
-        # torch image: C X H X W
-        image1 = image1.transpose((2, 0, 1))
-        image2 = image2.transpose((2, 0, 1))
-        image3 = image3.transpose((2, 0, 1))
-        image4 = image4.transpose((2, 0, 1))
-        image5 = image5.transpose((2, 0, 1))
-        return {
-            "image1": torch.from_numpy(image1),
-            "image2": torch.from_numpy(image2),
-            "image3": torch.from_numpy(image3),
-            "image4": torch.from_numpy(image4),
-            "image5": torch.from_numpy(image5),
-            "y": y,
-        }
+        return images[y], sample
 
 
 class Tedd1104Dataset(Dataset):
@@ -139,10 +94,8 @@ class Tedd1104Dataset(Dataset):
                     RemoveMinimap(hide_map_prob=hide_map_prob),
                     RemoveImage(dropout_images_prob=dropout_images_prob),
                     SplitImages(),
-                    ToTensor(),
                     SequenceColorJitter(),
                     Normalize(),
-                    MergeImages(),
                     ReOrderImages(),
                 ]
             )
@@ -152,10 +105,8 @@ class Tedd1104Dataset(Dataset):
                     RemoveMinimap(hide_map_prob=hide_map_prob),
                     # RemoveImage(dropout_images_prob=dropout_images_prob),
                     SplitImages(),
-                    ToTensor(),
                     # SequenceColorJitter(),
                     Normalize(),
-                    MergeImages(),
                     ReOrderImages(),
                 ]
             )
@@ -185,7 +136,7 @@ class Tedd1104Dataset(Dataset):
         image = None
         while image is None:
             try:
-                image = io.imread(img_name)
+                image = torchvision.io.read_image(img_name)
             except (ValueError, FileNotFoundError) as err:
                 error_message = str(err).split("\n")[-1]
                 print(
@@ -199,17 +150,16 @@ class Tedd1104Dataset(Dataset):
 
         y = torch.randperm(5)
 
-        sample = {"image": image, "y": y}
-        sample = self.transform(sample)
-        if self.transformer_nheads is not None:
-            sample["attention_mask"] = get_mask(
-                train=self.train,
-                nheads=self.transformer_nheads,
-                mask_prob=self.token_mask_prob,
-                sequence_length=self.sequence_length,
-            )
+        image, y = self.transform((image, y))
 
-        return sample
+        mask = get_mask(
+            train=self.train,
+            nheads=self.transformer_nheads,
+            mask_prob=self.token_mask_prob,
+            sequence_length=self.sequence_length,
+        )
+
+        return image, mask, y
 
 
 class Tedd1104ataModuleForImageReordering(pl.LightningDataModule):
