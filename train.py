@@ -68,7 +68,7 @@ def train_new_model(
     :param int batch_size: The batch size.
     :param int accumulation_steps: The number of steps to accumulate gradients.
     :param int max_epochs: The maximum number of epochs to train for.
-    :param bool hide_map_prob: Probability of hiding the minimap (0<=hide_map_prob<=1)
+    :param float hide_map_prob: Probability of hiding the minimap (0<=hide_map_prob<=1)
     :param float dropout_images_prob: Probability of dropping an image (0<=dropout_images_prob<=1)
     :param str test_dir: The directory containing the test data.
     :param str control_mode: Model output format: keyboard (Classification task: 9 classes) or controller (Regression task: 2 variables)

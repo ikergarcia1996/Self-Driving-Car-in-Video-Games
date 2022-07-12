@@ -358,7 +358,7 @@ class Tedd1104DataModule(pl.LightningDataModule):
         :param bool token_mask_prob: Probability of masking a token in the transformer model (0<=token_mask_prob<=1)
         :param int transformer_nheads: Number of heads in the transformer model, None if LSTM is used
         :param int sequence_length: Length of the image sequence
-        :param bool hide_map_prob: Probability of hiding the minimap (0<=hide_map_prob<=1)
+        :param float hide_map_prob: Probability of hiding the minimap (0<=hide_map_prob<=1)
         :param float dropout_images_prob: Probability of dropping an image (0<=dropout_images_prob<=1)
         :param str control_mode: Record the input from the "keyboard" or "controller"
         :param int num_workers: Number of workers to use to load the dataset.
