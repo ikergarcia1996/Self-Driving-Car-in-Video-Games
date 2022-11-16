@@ -8,7 +8,6 @@ from torch.utils.data import DataLoader
 from tabulate import tabulate
 from dataset import collate_fn, set_worker_sharing_strategy
 from pytorch_lightning import loggers as pl_loggers
-import torch
 
 
 def eval_model(
@@ -46,21 +45,8 @@ def eval_model(
     if not os.path.exists(os.path.dirname(output_path)):
         os.makedirs(os.path.dirname(output_path))
 
-    if precision == "32":
-        dtype = torch.float32
-    elif precision == "16":
-        dtype = torch.float16
-    elif precision == "bf16":
-        dtype = torch.bfloat16
-    elif precision == "64":
-        dtype = torch.float64
-    else:
-        raise ValueError(f"Invalid dtype {args.dtype}. Choose from 64, 32, 16 or bf16")
-
     print(f"Restoring model from {checkpoint_path}")
-    model = Tedd1104ModelPL.load_from_checkpoint(checkpoint_path=checkpoint_path).to(
-        dtype=dtype
-    )
+    model = Tedd1104ModelPL.load_from_checkpoint(checkpoint_path=checkpoint_path)
 
     if report_to == "tensorboard":
         logger = pl_loggers.TensorBoardLogger(
@@ -227,7 +213,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--precision",
         type=str,
-        default="16",
+        default="32",
         choices=["bf16", "16", "32", "64"],
         help=" Double precision (64), full precision (32), "
         "half precision (16) or bfloat16 precision (bf16). "
