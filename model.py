@@ -28,6 +28,13 @@ import torchvision
 import torchvision.models as models
 import pytorch_lightning as pl
 import torchmetrics
+from optimizers.optimizer import get_adafactor, get_adamw
+from optimizers.scheduler import (
+    get_reducelronplateau,
+    get_linear_schedule_with_warmup,
+    get_polynomial_decay_schedule_with_warmup,
+    get_cosine_schedule_with_warmup,
+)
 
 
 class WeightedMseLoss(nn.Module):
@@ -115,11 +122,9 @@ class CrossEntropyLoss(torch.nn.Module):
         super(CrossEntropyLoss, self).__init__()
 
         self.reduction = reduction
-        if not weights:
-            weights = [1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0]
-
-        weights = torch.tensor(weights)
-        weights.requires_grad = False
+        if weights:
+            weights = torch.tensor(weights)
+            weights.requires_grad = False
 
         self.register_buffer("weights", weights)
 
@@ -429,7 +434,6 @@ class EncoderTransformer(nn.Module):
         d_model: int = 512,
         nhead: int = 8,
         num_layers: int = 1,
-        mask_prob: float = 0.2,
         dropout: float = 0.1,
         sequence_length: int = 5,
     ):
@@ -439,7 +443,6 @@ class EncoderTransformer(nn.Module):
         :param int d_model: Size of the input feature vectors
         :param int nhead: Number of heads in the multi-head attention
         :param int num_layers: number of transformer layers in the encoder
-        :param float mask_prob: probability of masking each input vector
         :param float dropout: dropout probability of transformer layers in the encoder
         :param int sequence_length: Length of the input sequence
 
@@ -448,7 +451,6 @@ class EncoderTransformer(nn.Module):
         self.d_model = d_model
         self.nhead = nhead
         self.num_layers = num_layers
-        self.mask_prob = mask_prob
         self.dropout = dropout
         self.sequence_length = sequence_length
 
@@ -466,6 +468,8 @@ class EncoderTransformer(nn.Module):
             nhead=self.nhead,
             dim_feedforward=self.d_model * 4,
             dropout=dropout,
+            activation="gelu",
+            batch_first=True,
         )
 
         self.transformer_encoder = torch.nn.TransformerEncoder(
@@ -475,47 +479,24 @@ class EncoderTransformer(nn.Module):
         for parameter in self.transformer_encoder.parameters():
             parameter.requires_grad = True
 
-    def forward(self, features: torch.tensor):
+    def forward(
+        self, features: torch.tensor, attention_mask: torch.tensor = None
+    ) -> torch.tensor:
         """
         Forward pass
 
         :param torch.tensor features: Input features [batch_size, sequence_length, embedded_size]
+        :param torch.tensor attention_mask: Mask for the input features
+                                            [batch_size*heads, sequence_length, sequence_length]
+                                            1 for masked positions and 0 for unmasked positions
         :return: Output features [batch_size, d_model]
         """
-        if self.training:
-            bernolli_matrix = (
-                torch.cat(
-                    (
-                        torch.tensor([1]).float(),
-                        (torch.tensor([self.mask_prob]).float()).repeat(
-                            self.sequence_length
-                        ),
-                    ),
-                    0,
-                )
-                .unsqueeze(0)
-                .repeat([features.size(0) * self.nhead, 1])
-            )
-            bernolli_distributor = torch.distributions.Bernoulli(bernolli_matrix)
-            sample = bernolli_distributor.sample()
-            mask = (sample > 0).unsqueeze(1).repeat(1, sample.size(1), 1)
-        else:
 
-            mask = torch.ones(
-                features.size(0) * self.nhead,
-                self.sequence_length + 1,
-                self.sequence_length + 1,
-            )
-
-        mask = mask.type_as(features)
         features = torch.cat(
             (self.clsToken.repeat(features.size(0), 1, 1), features), dim=1
         )
         features = self.pe(features)
-        # print(f"x.size(): {x.size()}. mask.size(): {mask.size()}")
-        features = self.transformer_encoder(
-            features.transpose(0, 1), mask=mask
-        ).transpose(0, 1)
+        features = self.transformer_encoder(features, attention_mask)
         return features
 
 
@@ -763,11 +744,14 @@ class TEDD1104LSTM(nn.Module):
             from_transformer=False,
         )
 
-    def forward(self, x: torch.tensor) -> torch.tensor:
+    def forward(
+        self, x: torch.tensor, attention_mask: torch.tensor = None
+    ) -> torch.tensor:
         """
         Forward pass
 
         :param torch.tensor x: Input tensor of shape [batch_size * sequence_size, 3, 270, 480]
+        :param torch.tensor attention_mask: For compatibility with the Transformer model, this is not used
         :return: Output tensor of shape [9] if control_mode == "keyboard" or [2] if control_mode == "controller"
         """
         x = self.EncoderCNN(x)
@@ -794,7 +778,6 @@ class TEDD1104Transformer(nn.Module):
         positional_embeddings_dropout: float,
         dropout_transformer: float,
         dropout_encoder_features: float,
-        mask_prob: float,
         control_mode: str = "keyboard",
         sequence_size: int = 5,
     ):
@@ -808,7 +791,6 @@ class TEDD1104Transformer(nn.Module):
         :param int embedded_size: Size of the input feature vectors
         :param int nhead: Number of heads in the multi-head attention
         :param int num_layers_transformer: number of transformer layers in the encoder
-        :param float mask_prob: probability of masking each input vector
         :param float positional_embeddings_dropout: Dropout rate for the positional embeddings
         :param float dropout_transformer: dropout probability of transformer layers in the encoder
         :param int sequence_size: Length of the input sequence
@@ -827,7 +809,6 @@ class TEDD1104Transformer(nn.Module):
         self.dropout_cnn_out: float = dropout_cnn_out
         self.positional_embeddings_dropout: float = positional_embeddings_dropout
         self.dropout_transformer: float = dropout_transformer
-        self.mask_prob = mask_prob
         self.control_mode = control_mode
         self.dropout_encoder_features = dropout_encoder_features
 
@@ -849,7 +830,6 @@ class TEDD1104Transformer(nn.Module):
             d_model=embedded_size,
             nhead=nhead,
             num_layers=num_layers_transformer,
-            mask_prob=self.mask_prob,
             dropout=self.dropout_transformer,
         )
 
@@ -860,16 +840,22 @@ class TEDD1104Transformer(nn.Module):
             from_transformer=True,
         )
 
-    def forward(self, x: torch.tensor) -> torch.tensor:
+    def forward(
+        self, x: torch.tensor, attention_mask: torch.tensor = None
+    ) -> torch.tensor:
         """
         Forward pass
 
         :param torch.tensor x: Input tensor of shape [batch_size * sequence_size, 3, 270, 480]
+        :param torch.tensor attention_mask: Mask for the input features
+                                            [batch_size*heads, sequence_length, sequence_length]
+                                            1 for masked positions and 0 for unmasked positions
         :return: Output tensor of shape [9] if control_mode == "keyboard" or [2] if control_mode == "controller"
         """
+
         x = self.EncoderCNN(x)
         x = self.PositionalEncoding(x)
-        x = self.EncoderTransformer(x)
+        x = self.EncoderTransformer(x, attention_mask=attention_mask)
         return self.OutputLayer(x)
 
 
@@ -892,7 +878,6 @@ class TEDD1104TransformerForImageReordering(nn.Module):
         positional_embeddings_dropout: float,
         dropout_transformer: float,
         dropout_encoder_features: float,
-        mask_prob: float,
         sequence_size: int = 5,
     ):
         """
@@ -905,7 +890,6 @@ class TEDD1104TransformerForImageReordering(nn.Module):
         :param int embedded_size: Size of the input feature vectors
         :param int nhead: Number of heads in the multi-head attention
         :param int num_layers_transformer: number of transformer layers in the encoder
-        :param float mask_prob: probability of masking each input vector
         :param float positional_embeddings_dropout: Dropout rate for the positional embeddings
         :param float dropout_transformer: dropout probability of transformer layers in the encoder
         :param int sequence_size: Length of the input sequence
@@ -925,7 +909,6 @@ class TEDD1104TransformerForImageReordering(nn.Module):
         self.dropout_cnn_out: float = dropout_cnn_out
         self.positional_embeddings_dropout: float = positional_embeddings_dropout
         self.dropout_transformer: float = dropout_transformer
-        self.mask_prob = mask_prob
         self.dropout_encoder_features = dropout_encoder_features
 
         self.EncoderCNN: EncoderCNN = EncoderCNN(
@@ -946,7 +929,6 @@ class TEDD1104TransformerForImageReordering(nn.Module):
             d_model=embedded_size,
             nhead=nhead,
             num_layers=num_layers_transformer,
-            mask_prob=self.mask_prob,
             dropout=self.dropout_transformer,
         )
 
@@ -955,16 +937,21 @@ class TEDD1104TransformerForImageReordering(nn.Module):
             num_classes=self.sequence_size,
         )
 
-    def forward(self, x: torch.tensor) -> torch.tensor:
+    def forward(
+        self, x: torch.tensor, attention_mask: torch.tensor = None
+    ) -> torch.tensor:
         """
         Forward pass
 
         :param torch.tensor x: Input tensor of shape [batch_size * sequence_size, 3, 270, 480]
+        :param torch.tensor attention_mask: Mask for the input features
+                                            [batch_size*heads, sequence_length, sequence_length]
+                                            1 for masked positions and 0 for unmasked positions
         :return: Output tensor of shape [9] if control_mode == "keyboard" or [2] if control_mode == "controller"
         """
         x = self.EncoderCNN(x)
         x = self.PositionalEncoding(x)
-        x = self.EncoderTransformer(x)
+        x = self.EncoderTransformer(x, attention_mask=attention_mask)
         return self.OutputLayer(x)
 
 
@@ -984,17 +971,20 @@ class Tedd1104ModelPL(pl.LightningModule):
         dropout_cnn_out: float,
         positional_embeddings_dropout: float,
         dropout_encoder: float,
-        mask_prob: float,
         dropout_encoder_features: float = 0.8,
         control_mode: str = "keyboard",
         sequence_size: int = 5,
         encoder_type: str = "transformer",
         bidirectional_lstm=True,
         weights: List[float] = None,
-        learning_rate: float = 1e-5,
-        weight_decay: float = 1e-3,
         label_smoothing: float = 0.0,
         accelerator: str = None,
+        optimizer_name: str = "adamw",
+        scheduler_name: str = "linear",
+        learning_rate: float = 1e-5,
+        weight_decay: float = 1e-3,
+        num_warmup_steps: int = 0,
+        num_training_steps: int = 0,
     ):
         """
         INIT
@@ -1006,7 +996,6 @@ class Tedd1104ModelPL(pl.LightningModule):
         :param int embedded_size: Size of the input feature vectors
         :param int nhead: Number of heads in the multi-head attention
         :param int num_layers_encoder: number of transformer layers in the encoder
-        :param float mask_prob: probability of masking each input vector
         :param float positional_embeddings_dropout: Dropout rate for the positional embeddings
         :param int sequence_size: Length of the input sequence
         :param float dropout_encoder: Dropout rate for the encoder
@@ -1014,11 +1003,15 @@ class Tedd1104ModelPL(pl.LightningModule):
         :param int lstm_hidden_size: LSTM hidden size
         :param bool bidirectional_lstm: forward or bidirectional LSTM
         :param List[float] weights: List of weights for the loss function [9] if control_mode == "keyboard" or [2] if control_mode == "controller"
-        :param float learning_rate: Learning rate
-        :param float weight_decay: Weight decay
         :param str control_mode: Model output format: keyboard (Classification task: 9 classes) or controller (Regression task: 2 variables)
         :param str encoder_type: Encoder type: transformer or lstm
         :param float label_smoothing: Label smoothing for the classification task
+        :param str optimizer_name: Optimizer to use: adamw or adafactor
+        :param str scheduler_name: Scheduler to use: linear, polynomial, cosine, plateau
+        :param float learning_rate: Learning rate
+        :param float weight_decay: Weight decay
+        :param int num_warmup_steps: Number of warmup steps for the scheduler
+        :param int num_training_steps: Number of training steps
         """
 
         super(Tedd1104ModelPL, self).__init__()
@@ -1046,14 +1039,17 @@ class Tedd1104ModelPL(pl.LightningModule):
         self.positional_embeddings_dropout: float = positional_embeddings_dropout
         self.dropout_encoder: float = dropout_encoder
         self.dropout_encoder_features = dropout_encoder_features
-        self.mask_prob = mask_prob
         self.bidirectional_lstm = bidirectional_lstm
         self.lstm_hidden_size = lstm_hidden_size
         self.weights = weights
-        self.learning_rate = learning_rate
-        self.weight_decay = weight_decay
         self.label_smoothing = label_smoothing
         self.accelerator = accelerator
+        self.learning_rate = learning_rate
+        self.weight_decay = weight_decay
+        self.optimizer_name = optimizer_name
+        self.scheduler_name = scheduler_name
+        self.num_warmup_steps = num_warmup_steps
+        self.num_training_steps = num_training_steps
 
         if self.encoder_type == "transformer":
             self.model = TEDD1104Transformer(
@@ -1065,7 +1061,6 @@ class Tedd1104ModelPL(pl.LightningModule):
                 dropout_cnn_out=self.dropout_cnn_out,
                 positional_embeddings_dropout=self.positional_embeddings_dropout,
                 dropout_transformer=self.dropout_encoder,
-                mask_prob=self.mask_prob,
                 control_mode=self.control_mode,
                 sequence_size=self.sequence_size,
                 dropout_encoder_features=self.dropout_encoder_features,
@@ -1148,7 +1143,7 @@ class Tedd1104ModelPL(pl.LightningModule):
         """
         x = self.model(x)
         if self.control_mode == "keyboard":
-            x = torch.functional.F.softmax(x, dim=1)
+            x = torch.nn.functional.softmax(x, dim=1)
             if output_mode == "keyboard":
                 if return_best:
                     return torch.argmax(x, dim=1)
@@ -1187,9 +1182,9 @@ class Tedd1104ModelPL(pl.LightningModule):
         :param batch: batch of data
         :param batch_idx: batch index
         """
-        x, y = batch["images"], batch["y"]
-        x = torch.flatten(x, start_dim=0, end_dim=1)
-        preds = self.model(x)
+        x, attention_mask, y = batch["images"], batch["attention_mask"], batch["y"]
+        # x = torch.flatten(x, start_dim=0, end_dim=1)
+        preds = self.model(x, attention_mask)
         loss = self.criterion(preds, y)
         self.total_batches += 1
         if self.accelerator != "tpu":
@@ -1204,24 +1199,7 @@ class Tedd1104ModelPL(pl.LightningModule):
             if self.total_batches % 200 == 0:
                 self.log("Train/loss", loss, sync_dist=True)
 
-        return (
-            {"preds": preds.detach(), "y": y, "loss": loss}
-            if self.accelerator != "tpu"
-            else {"loss": loss}
-        )
-
-    def training_step_end(self, outputs):
-        """
-        Training step end.
-
-        :param outputs: outputs of the training step
-        """
-        if self.accelerator != "tpu" and self.control_mode == "keyboard":
-            self.train_accuracy(outputs["preds"], outputs["y"])
-            self.log(
-                "Train/acc_k@1_macro",
-                self.train_accuracy,
-            )
+        return {"loss": loss}
 
     def validation_step(self, batch, batch_idx):
         """
@@ -1231,7 +1209,7 @@ class Tedd1104ModelPL(pl.LightningModule):
         :param batch_idx: batch index
         """
         x, y = batch["images"], batch["y"]
-        x = torch.flatten(x, start_dim=0, end_dim=1)
+        # x = torch.flatten(x, start_dim=0, end_dim=1)
         preds = self.forward(x, output_mode="keyboard", return_best=False)
 
         return {"preds": preds, "y": y}  # "loss":loss}
@@ -1273,7 +1251,7 @@ class Tedd1104ModelPL(pl.LightningModule):
         :param batch_idx: batch index
         """
         x, y = batch["images"], batch["y"]
-        x = torch.flatten(x, start_dim=0, end_dim=1)
+        # x = torch.flatten(x, start_dim=0, end_dim=1)
         preds = self.forward(x, output_mode="keyboard", return_best=False)
 
         return {"preds": preds, "y": y}  # "loss":loss}
@@ -1311,22 +1289,58 @@ class Tedd1104ModelPL(pl.LightningModule):
         """
         Configure optimizers.
         """
-        optimizer = torch.optim.AdamW(
-            self.parameters(),
-            lr=self.learning_rate,
-            weight_decay=self.weight_decay,
-            eps=1e-4,
-        )
+        if self.optimizer_name.lower() == "adamw":
+            optimizer = get_adamw(
+                parameters=self.parameters(),
+                learning_rate=self.learning_rate,
+                weight_decay=self.weight_decay,
+            )
+        elif self.optimizer_name.lower() == "adafactor":
+            optimizer = get_adafactor(
+                parameters=self.parameters(),
+                learning_rate=self.learning_rate,
+                weight_decay=self.weight_decay,
+            )
+        else:
+            raise ValueError(
+                f"Unsupported optimizer {self.optimizer_name.lower()}. Choose from adamw and adafactor."
+            )
 
-        return {
-            "optimizer": optimizer,
-            "lr_scheduler": {
-                "scheduler": torch.optim.lr_scheduler.ReduceLROnPlateau(
-                    optimizer, "max", patience=5, verbose=True
-                ),
+        if self.scheduler_name.lower() == "plateau":
+            scheduler = get_reducelronplateau(optimizer=optimizer)
+        elif self.scheduler_name.lower() == "linear":
+            scheduler = get_linear_schedule_with_warmup(
+                optimizer=optimizer,
+                num_warmup_steps=self.num_warmup_steps,
+                num_training_steps=self.num_training_steps,
+            )
+        elif self.scheduler_name.lower() == "polynomial":
+            scheduler = get_polynomial_decay_schedule_with_warmup(
+                optimizer=optimizer,
+                num_warmup_steps=self.num_warmup_steps,
+                num_training_steps=self.num_training_steps,
+            )
+
+        elif self.scheduler_name.lower() == "cosine":
+            scheduler = get_cosine_schedule_with_warmup(
+                optimizer=optimizer,
+                num_warmup_steps=self.num_warmup_steps,
+                num_training_steps=self.num_training_steps,
+            )
+        else:
+            raise ValueError(
+                f"Unsupported scheduler {self.scheduler_name.lower()}. Choose from linear, polynomial, cosine, plateau."
+            )
+
+        return [optimizer], [
+            {
+                "scheduler": scheduler,
                 "monitor": "Validation/acc_k@1_macro",
-            },
-        }
+                "interval": "epoch",
+            }
+            if self.scheduler_name.lower() == "plateau"
+            else {"scheduler": scheduler, "interval": "step", "frequency": 1}
+        ]
 
 
 class Tedd1104ModelPLForImageReordering(pl.LightningModule):
@@ -1344,13 +1358,16 @@ class Tedd1104ModelPLForImageReordering(pl.LightningModule):
         dropout_cnn_out: float,
         positional_embeddings_dropout: float,
         dropout_encoder: float,
-        mask_prob: float,
         dropout_encoder_features: float = 0.8,
         sequence_size: int = 5,
-        learning_rate: float = 1e-5,
-        weight_decay: float = 1e-3,
         encoder_type: str = "transformer",
         accelerator: str = None,
+        optimizer_name: str = "adamw",
+        scheduler_name: str = "linear",
+        learning_rate: float = 1e-5,
+        weight_decay: float = 1e-3,
+        num_warmup_steps: int = 0,
+        num_training_steps: int = 0,
     ):
 
         """
@@ -1363,14 +1380,17 @@ class Tedd1104ModelPLForImageReordering(pl.LightningModule):
         :param int embedded_size: Size of the input feature vectors
         :param int nhead: Number of heads in the multi-head attention
         :param int num_layers_encoder: number of transformer layers in the encoder
-        :param float mask_prob: probability of masking each input vector
         :param float positional_embeddings_dropout: Dropout rate for the positional embeddings
         :param int sequence_size: Length of the input sequence
         :param float dropout_encoder: Dropout rate for the encoder
         :param float dropout_encoder_features: Dropout probability of the encoder output
+        :param str encoder_type: Encoder type: transformer or lstm
+        :param str optimizer_name: Optimizer to use: adamw or adafactor
+        :param str scheduler_name: Scheduler to use: linear or plateau
         :param float learning_rate: Learning rate
         :param float weight_decay: Weight decay
-        :param str encoder_type: Encoder type: transformer or lstm
+        :param int num_warmup_steps: Number of warmup steps for the scheduler
+        :param int num_training_steps: Number of training steps
         """
 
         super(Tedd1104ModelPLForImageReordering, self).__init__()
@@ -1385,11 +1405,14 @@ class Tedd1104ModelPLForImageReordering(pl.LightningModule):
         self.positional_embeddings_dropout: float = positional_embeddings_dropout
         self.dropout_encoder: float = dropout_encoder
         self.dropout_encoder_features = dropout_encoder_features
-        self.mask_prob = mask_prob
-        self.learning_rate = learning_rate
-        self.weight_decay = weight_decay
         self.encoder_type = encoder_type
         self.accelerator = accelerator
+        self.learning_rate = learning_rate
+        self.weight_decay = weight_decay
+        self.optimizer_name = optimizer_name
+        self.scheduler_name = scheduler_name
+        self.num_warmup_steps = num_warmup_steps
+        self.num_training_steps = num_training_steps
 
         self.model = TEDD1104TransformerForImageReordering(
             cnn_model_name=self.cnn_model_name,
@@ -1400,7 +1423,6 @@ class Tedd1104ModelPLForImageReordering(pl.LightningModule):
             dropout_cnn_out=self.dropout_cnn_out,
             positional_embeddings_dropout=self.positional_embeddings_dropout,
             dropout_transformer=self.dropout_encoder,
-            mask_prob=self.mask_prob,
             sequence_size=self.sequence_size,
             dropout_encoder_features=self.dropout_encoder_features,
         )
@@ -1437,7 +1459,7 @@ class Tedd1104ModelPLForImageReordering(pl.LightningModule):
         :param batch_idx: batch index
         """
         x, y = batch["images"], batch["y"]
-        x = torch.flatten(x, start_dim=0, end_dim=1)
+        # x = torch.flatten(x, start_dim=0, end_dim=1)
         preds = self.model(x)
         loss = self.criterion(preds, y)
         self.total_batches += 1
@@ -1454,24 +1476,7 @@ class Tedd1104ModelPLForImageReordering(pl.LightningModule):
             if self.total_batches % 200 == 0:
                 self.log("Train/loss", loss, sync_dist=True)
 
-        return (
-            {"preds": torch.argmax(preds.detach(), dim=-1), "y": y, "loss": loss}
-            if self.accelerator != "tpu"
-            else {"loss": loss}
-        )
-
-    def training_step_end(self, outputs):
-        """
-        Training step end.
-
-        :param outputs: outputs of the training step
-        """
-        if self.accelerator != "tpu":
-            self.train_accuracy(outputs["preds"], outputs["y"])
-            self.log(
-                "Train/acc",
-                self.train_accuracy,
-            )
+        return {"loss": loss}
 
     def validation_step(self, batch, batch_idx):
         """
@@ -1481,7 +1486,7 @@ class Tedd1104ModelPLForImageReordering(pl.LightningModule):
         :param batch_idx: batch index
         """
         x, y = batch["images"], batch["y"]
-        x = torch.flatten(x, start_dim=0, end_dim=1)
+        # x = torch.flatten(x, start_dim=0, end_dim=1)
         preds = self.forward(x, return_best=True)
 
         return {"preds": preds, "y": y}
@@ -1506,7 +1511,7 @@ class Tedd1104ModelPLForImageReordering(pl.LightningModule):
         :param batch_idx: batch index
         """
         x, y = batch["images"], batch["y"]
-        x = torch.flatten(x, start_dim=0, end_dim=1)
+        # x = torch.flatten(x, start_dim=0, end_dim=1)
         preds = self.forward(x, return_best=True)
 
         return {"preds": preds, "y": y}
@@ -1528,19 +1533,42 @@ class Tedd1104ModelPLForImageReordering(pl.LightningModule):
         """
         Configure optimizers.
         """
-        optimizer = torch.optim.AdamW(
-            self.parameters(),
-            lr=self.learning_rate,
-            weight_decay=self.weight_decay,
-            eps=1e-4,
-        )
+        if self.optimizer_name.lower() == "adamw":
+            optimizer = get_adamw(
+                parameters=self.parameters(),
+                learning_rate=self.learning_rate,
+                weight_decay=self.weight_decay,
+            )
+        elif self.optimizer_name.lower() == "adafactor":
+            optimizer = get_adafactor(
+                parameters=self.parameters(),
+                learning_rate=self.learning_rate,
+                weight_decay=self.weight_decay,
+            )
+        else:
+            raise ValueError(
+                f"Unsupported optimizer {self.optimizer_name.lower()}. Choose from adamw and adafactor."
+            )
 
-        return {
-            "optimizer": optimizer,
-            "lr_scheduler": {
-                "scheduler": torch.optim.lr_scheduler.ReduceLROnPlateau(
-                    optimizer, "min", patience=5, verbose=True
-                ),
-                "monitor": "Validation/acc",
-            },
-        }
+        if self.scheduler_name.lower() == "plateau":
+            scheduler = get_reducelronplateau(optimizer=optimizer)
+        elif self.scheduler_name.lower() == "linear":
+            scheduler = get_linear_schedule_with_warmup(
+                optimizer=optimizer,
+                num_warmup_steps=self.num_warmup_steps,
+                num_training_steps=self.num_training_steps,
+            )
+        else:
+            raise ValueError(
+                f"Unsupported scheduler {self.scheduler_name.lower()}. Choose from plateau and linear."
+            )
+
+        return [optimizer], [
+            {
+                "scheduler": scheduler,
+                "monitor": "Validation/acc_k@1_macro",
+                "interval": "epoch",
+            }
+            if self.scheduler_name.lower() == "plateau"
+            else {"scheduler": scheduler, "interval": "step", "frequency": 1}
+        ]

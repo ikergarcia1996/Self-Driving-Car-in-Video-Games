@@ -1,105 +1,11 @@
 from model import Tedd1104ModelPLForImageReordering
-from typing import List
+from dataset import count_examples
 import argparse
 from dataset_image_reordering import Tedd1104ataModuleForImageReordering
 import os
 from pytorch_lightning import loggers as pl_loggers
 import pytorch_lightning as pl
-
-
-def train(
-    model: Tedd1104ModelPLForImageReordering,
-    train_dir: str,
-    val_dir: str,
-    output_dir: str,
-    batch_size: int,
-    accumulation_steps: int,
-    max_epochs: int,
-    hide_map_prob: float,
-    dropout_images_prob: List[float],
-    test_dir: str = None,
-    val_check_interval: float = 0.25,
-    dataloader_num_workers=os.cpu_count(),
-    devices: str = 1,
-    accelerator: str = "auto",
-    precision: str = "bf16",
-    strategy=None,
-    report_to: str = "wandb",
-):
-    """
-    Train the model.
-
-    :param Tedd1104ModelPL model: The model to train.
-    :param str train_dir: The directory containing the training data.
-    :param str val_dir: The directory containing the validation data.
-    :param str output_dir: The directory to save the model to.
-    :param int batch_size: The batch size.
-    :param int accumulation_steps: The number of steps to accumulate gradients.
-    :param int max_epochs: The maximum number of epochs to train for.
-    :param bool hide_map_prob: Probability of hiding the minimap (0<=hide_map_prob<=1)
-    :param float dropout_images_prob: Probability of dropping an image (0<=dropout_images_prob<=1)
-    :param str test_dir: The directory containing the test data.
-    :param float val_check_interval: The interval to check the validation accuracy.
-    :param int dataloader_num_workers: The number of workers to use for the dataloader.
-    """
-
-    if not os.path.exists(output_dir):
-        print(f"{output_dir} does not exits. We will create it.")
-        os.makedirs(output_dir)
-
-    data = Tedd1104ataModuleForImageReordering(
-        train_dir=train_dir,
-        val_dir=val_dir,
-        test_dir=test_dir,
-        batch_size=batch_size,
-        hide_map_prob=hide_map_prob,
-        dropout_images_prob=dropout_images_prob,
-        num_workers=dataloader_num_workers,
-    )
-
-    experiment_name = os.path.basename(output_dir)
-    if report_to == "tensorboard":
-        logger = pl_loggers.TensorBoardLogger(
-            save_dir=output_dir,
-            name=experiment_name,
-        )
-    elif report_to == "wandb":
-        logger = pl_loggers.WandbLogger(
-            name=experiment_name,
-            id=experiment_name,
-            resume=None,
-            project="TEDD1104_reorder",
-            save_dir=output_dir,
-        )
-    else:
-        raise ValueError(
-            f"Unknown logger: {report_to}. Please use 'tensorboard' or 'wandb'."
-        )
-    lr_monitor = pl.callbacks.LearningRateMonitor(logging_interval="step")
-    checkpoint_callback = pl.callbacks.ModelCheckpoint(
-        monitor="Validation/acc", mode="max", save_last=True
-    )
-    checkpoint_callback.CHECKPOINT_NAME_LAST = "{epoch}-last"
-
-    trainer = pl.Trainer(
-        devices=devices,
-        accelerator=accelerator,
-        precision=precision if precision == "bf16" else int(precision),
-        strategy=strategy,
-        val_check_interval=val_check_interval,
-        accumulate_grad_batches=accumulation_steps,
-        max_epochs=max_epochs,
-        logger=logger,
-        callbacks=[checkpoint_callback, lr_monitor],
-        default_root_dir=os.path.join(output_dir, "trainer_checkpoint"),
-        log_every_n_steps=10,
-    )
-
-    trainer.fit(model, datamodule=data)
-
-    print(f"Best model path: {checkpoint_callback.best_model_path}")
-    if test_dir:
-        trainer.test(datamodule=data, ckpt_path="best")
+import math
 
 
 def train_new_model(
@@ -109,7 +15,7 @@ def train_new_model(
     batch_size: int,
     max_epochs: int,
     cnn_model_name: str,
-    devices: str = 1,
+    devices: int = 1,
     accelerator: str = "auto",
     precision: str = "bf16",
     strategy=None,
@@ -129,9 +35,13 @@ def train_new_model(
     dropout_encoder_features: float = 0.8,
     mask_prob: float = 0.0,
     sequence_size: int = 5,
+    report_to: str = "wandb",
+    find_lr: bool = False,
+    optimizer_name: str = "adamw",
+    scheduler_name: str = "linear",
     learning_rate: float = 1e-5,
     weight_decay: float = 1e-3,
-    report_to: str = "wandb",
+    warmup_factor: float = 0.05,
 ):
 
     """
@@ -147,6 +57,13 @@ def train_new_model(
     :param float dropout_images_prob: Probability of dropping an image (0<=dropout_images_prob<=1)
     :param str test_dir: The directory containing the test data.
     :param float val_check_interval: The interval to check the validation accuracy.
+    :param int devices: Number of devices to use.
+    :param str accelerator: Accelerator to use. If 'auto', tries to automatically detect TPU, GPU, CPU or IPU system.
+    :param str precision: Precision to use. Double precision (64), full precision (32), half precision (16) or bfloat16
+                          precision (bf16). Can be used on CPU, GPU or TPUs.
+    :param str strategy: Strategy to use for data parallelism. "None" for no data parallelism,
+                         ddp_find_unused_parameters_false for DDP.
+    :param str report_to: Where to report the results. "tensorboard" for TensorBoard, "wandb" for W&B.
     :param int dataloader_num_workers: The number of workers to use for the dataloader.
     :param int embedded_size: Size of the output embedding
     :param float dropout_cnn_out: Dropout rate for the output of the CNN
@@ -160,12 +77,34 @@ def train_new_model(
     :param int sequence_size: Length of the input sequence
     :param float dropout_encoder: Dropout rate for the encoder
     :param float dropout_encoder_features: Dropout probability of the encoder output
+    :param str optimizer_name: Optimizer to use: adamw or adafactor
+    :param str scheduler_name: Scheduler to use: linear or plateau
     :param float learning_rate: Learning rate
     :param float weight_decay: Weight decay
+    :param bool find_lr: Whether to find the learning rate. We will use PytorchLightning's find_lr function.
+                     See: https://pytorch-lightning.readthedocs.io/en/latest/advanced/training_tricks.html#learning-rate-finder
     """
 
     if dropout_images_prob is None:
         dropout_images_prob = [0.0, 0.0, 0.0, 0.0, 0.0]
+
+    num_examples = count_examples(dataset_dir=train_dir)
+    num_update_steps_per_epoch = math.ceil(
+        math.ceil(math.ceil(num_examples / batch_size) / accumulation_steps / devices)
+    )
+    max_train_steps = max_epochs * num_update_steps_per_epoch
+    num_warmup_steps = int(max_train_steps * warmup_factor)
+
+    print(
+        f"\n*** Training info ***\n"
+        f"Number of training examples: {num_examples}\n"
+        f"Number of update steps per epoch: {num_update_steps_per_epoch}\n"
+        f"Max training steps: {max_train_steps}\n"
+        f"Number of warmup steps: {num_warmup_steps}\n"
+        f"Optimizer: {optimizer_name}\n"
+        f"Scheduler: {scheduler_name}\n"
+        f"Learning rate: {learning_rate}\n"
+    )
 
     model: Tedd1104ModelPLForImageReordering = Tedd1104ModelPLForImageReordering(
         cnn_model_name=cnn_model_name,
@@ -177,32 +116,93 @@ def train_new_model(
         positional_embeddings_dropout=positional_embeddings_dropout,
         dropout_encoder=dropout_encoder,
         dropout_encoder_features=dropout_encoder_features,
-        mask_prob=mask_prob,
         sequence_size=sequence_size,
+        accelerator=accelerator,
         learning_rate=learning_rate,
         weight_decay=weight_decay,
-        accelerator=accelerator,
+        optimizer_name=optimizer_name,
+        scheduler_name=scheduler_name,
+        num_warmup_steps=num_warmup_steps,
+        num_training_steps=max_train_steps,
     )
 
-    train(
-        model=model,
+    if not os.path.exists(output_dir):
+        print(f"{output_dir} does not exits. We will create it.")
+        os.makedirs(output_dir)
+
+    data = Tedd1104ataModuleForImageReordering(
         train_dir=train_dir,
         val_dir=val_dir,
         test_dir=test_dir,
-        output_dir=output_dir,
         batch_size=batch_size,
-        accumulation_steps=accumulation_steps,
-        max_epochs=max_epochs,
         hide_map_prob=hide_map_prob,
         dropout_images_prob=dropout_images_prob,
-        val_check_interval=val_check_interval,
-        dataloader_num_workers=dataloader_num_workers,
+        num_workers=dataloader_num_workers,
+        token_mask_prob=mask_prob,
+        transformer_nheads=None if model.encoder_type == "lstm" else model.nhead,
+        sequence_length=model.sequence_size,
+    )
+
+    experiment_name = os.path.basename(
+        output_dir if output_dir[-1] != "/" else output_dir[:-1]
+    )
+    if report_to == "tensorboard":
+        logger = pl_loggers.TensorBoardLogger(
+            save_dir=output_dir,
+            name=experiment_name,
+        )
+    elif report_to == "wandb":
+        logger = pl_loggers.WandbLogger(
+            name=experiment_name,
+            # id=experiment_name,
+            # resume=None,
+            project="TEDD1104_reorder",
+            save_dir=output_dir,
+        )
+    else:
+        raise ValueError(
+            f"Unknown logger: {report_to}. Please use 'tensorboard' or 'wandb'."
+        )
+    lr_monitor = pl.callbacks.LearningRateMonitor(logging_interval="step")
+    checkpoint_callback = pl.callbacks.ModelCheckpoint(
+        dirpath=output_dir, monitor="Validation/acc", mode="max", save_last=True
+    )
+    checkpoint_callback.CHECKPOINT_NAME_LAST = "{epoch}-last"
+
+    trainer = pl.Trainer(
         devices=devices,
         accelerator=accelerator,
-        precision=precision,
+        precision=precision if precision == "bf16" else int(precision),
         strategy=strategy,
-        report_to=report_to,
+        val_check_interval=val_check_interval,
+        accumulate_grad_batches=accumulation_steps,
+        max_epochs=max_epochs,
+        logger=logger,
+        callbacks=[
+            pl.callbacks.StochasticWeightAveraging(swa_lrs=1e-2),
+            checkpoint_callback,
+            lr_monitor,
+        ],
+        gradient_clip_val=1.0 if optimizer_name.lower() != "adafactor" else 0.0,
+        log_every_n_steps=100,
+        auto_lr_find=find_lr,
     )
+
+    if find_lr:
+        print(f"We will try to find the optimal learning rate.")
+        lr_finder = trainer.tuner.lr_find(model, datamodule=data)
+        print(lr_finder.results)
+        fig = lr_finder.plot(suggest=True)
+        fig.savefig(os.path.join(output_dir, "lr_finder.png"))
+        new_lr = lr_finder.suggestion()
+        print(f"We will train with the suggested learning rate: {new_lr}")
+        model.hparams.learning_rate = new_lr
+
+    trainer.fit(model, datamodule=data)
+
+    print(f"Best model path: {checkpoint_callback.best_model_path}")
+    if test_dir:
+        trainer.test(datamodule=data, ckpt_path="best")
 
 
 def continue_training(
@@ -213,12 +213,12 @@ def continue_training(
     max_epochs: int,
     output_dir,
     accumulation_steps,
-    devices: str = 1,
+    devices: int = 1,
     accelerator: str = "auto",
-    precision: str = "bf16",
+    precision: str = "16",
     strategy=None,
     test_dir: str = None,
-    hparams_path: str = None,
+    mask_prob: float = 0.2,
     hide_map_prob: float = 0.0,
     dropout_images_prob=None,
     dataloader_num_workers=os.cpu_count(),
@@ -235,8 +235,16 @@ def continue_training(
     :param str output_dir: The directory to save the model to.
     :param int batch_size: The batch size.
     :param int accumulation_steps: The number of steps to accumulate gradients.
+    :param int devices: Number of devices to use.
+    :param str accelerator: Accelerator to use. If 'auto', tries to automatically detect TPU, GPU, CPU or IPU system.
+    :param str precision: Precision to use. Double precision (64), full precision (32), half precision (16) or bfloat16
+                          precision (bf16). Can be used on CPU, GPU or TPUs.
+    :param str strategy: Strategy to use for data parallelism. "None" for no data parallelism,
+                         ddp_find_unused_parameters_false for DDP.
+    :param str report_to: Where to report the results. "tensorboard" for TensorBoard, "wandb" for W&B.
     :param int max_epochs: The maximum number of epochs to train for.
     :param bool hide_map_prob: Probability of hiding the minimap (0<=hide_map_prob<=1)
+    :param float mask_prob: probability of masking each input vector in the transformer
     :param float dropout_images_prob: Probability of dropping an image (0<=dropout_images_prob<=1)
     :param str test_dir: The directory containing the test data.
     :param int dataloader_num_workers: The number of workers to use for the dataloaders.
@@ -262,11 +270,16 @@ def continue_training(
         hide_map_prob=hide_map_prob,
         dropout_images_prob=dropout_images_prob,
         num_workers=dataloader_num_workers,
+        token_mask_prob=mask_prob,
+        transformer_nheads=None if model.encoder_type == "lstm" else model.nhead,
+        sequence_length=model.sequence_size,
     )
 
-    print(f"Restoring checkpoint: {checkpoint_path}. hparams: {hparams_path}")
+    print(f"Restoring checkpoint: {checkpoint_path}")
 
-    experiment_name = os.path.basename(output_dir)
+    experiment_name = os.path.basename(
+        output_dir if output_dir[-1] != "/" else output_dir[:-1]
+    )
     if report_to == "tensorboard":
         logger = pl_loggers.TensorBoardLogger(
             save_dir=output_dir,
@@ -274,8 +287,8 @@ def continue_training(
         )
     elif report_to == "wandb":
         logger = pl_loggers.WandbLogger(
-            name=experiment_name,
-            id=experiment_name,
+            # name=experiment_name,
+            # id=experiment_name,
             resume="allow",
             project="TEDD1104_reorder",
             save_dir=output_dir,
@@ -287,7 +300,7 @@ def continue_training(
 
     lr_monitor = pl.callbacks.LearningRateMonitor(logging_interval="step")
     checkpoint_callback = pl.callbacks.ModelCheckpoint(
-        monitor="Validation/acc", mode="max", save_last=True
+        dirpath=output_dir, monitor="Validation/acc", mode="max", save_last=True
     )
     checkpoint_callback.CHECKPOINT_NAME_LAST = "{epoch}-last"
 
@@ -302,9 +315,13 @@ def continue_training(
         accumulate_grad_batches=accumulation_steps,
         max_epochs=max_epochs,
         logger=logger,
-        callbacks=[checkpoint_callback, lr_monitor],
-        default_root_dir=os.path.join(output_dir, "trainer_checkpoint"),
-        log_every_n_steps=10,
+        callbacks=[
+            # pl.callbacks.StochasticWeightAveraging(swa_lrs=1e-2),
+            checkpoint_callback,
+            lr_monitor,
+        ],
+        gradient_clip_val=1.0,
+        log_every_n_steps=100,
     )
 
     trainer.fit(
@@ -416,15 +433,39 @@ if __name__ == "__main__":
     parser.add_argument(
         "--learning_rate",
         type=float,
-        default=1e-5,
+        default=3e-5,
         help="[NEW MODEL] The learning rate for the optimizer.",
     )
 
     parser.add_argument(
         "--weight_decay",
         type=float,
-        default=1e-3,
+        default=1e-4,
         help="[NEW MODEL]] AdamW Weight Decay",
+    )
+
+    parser.add_argument(
+        "--optimizer_name",
+        type=str,
+        default="adamw",
+        choices=["adamw", "adafactor"],
+        help="[NEW MODEL] The optimizer to use: adamw or adafactor. Adafactor requires fairseq to be installed. "
+        "pip install fairseq",
+    )
+
+    parser.add_argument(
+        "--scheduler_name",
+        type=str,
+        default="linear",
+        choices=["linear", "plateau"],
+        help="[NEW MODEL] The scheduler to use: linear or plateau.",
+    )
+
+    parser.add_argument(
+        "--warmup_factor",
+        type=float,
+        default=0.05,
+        help="[NEW MODEL] Percentage of the total training steps that we will use for the warmup (0<=warmup_factor<=1)",
     )
 
     parser.add_argument(
@@ -530,7 +571,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--precision",
         type=str,
-        default="bf16",
+        default="16",
         choices=["bf16", "16", "32", "64"],
         help=" Double precision (64), full precision (32), "
         "half precision (16) or bfloat16 precision (bf16). "
@@ -550,6 +591,14 @@ if __name__ == "__main__":
         default="wandb",
         choices=["wandb", "tensorboard"],
         help="Report to wandb or tensorboard",
+    )
+
+    parser.add_argument(
+        "--find_lr",
+        action="store_true",
+        help="Find the optimal learning rate for the model. We will use Pytorch Lightning's find_lr function. "
+        "See: "
+        "https://pytorch-lightning.readthedocs.io/en/latest/advanced/training_tricks.html#learning-rate-finder",
     )
 
     args = parser.parse_args()
@@ -578,13 +627,17 @@ if __name__ == "__main__":
             dropout_encoder=args.dropout_encoder,
             mask_prob=args.mask_prob,
             sequence_size=args.sequence_size,
-            learning_rate=args.learning_rate,
-            weight_decay=args.weight_decay,
             devices=args.devices,
             accelerator=args.accelerator,
             precision=args.precision,
             strategy=args.strategy,
             report_to=args.report_to,
+            find_lr=args.find_lr,
+            learning_rate=args.learning_rate,
+            weight_decay=args.weight_decay,
+            optimizer_name=args.optimizer_name,
+            scheduler_name=args.scheduler_name,
+            warmup_factor=args.warmup_factor,
         )
 
     else:
@@ -598,6 +651,7 @@ if __name__ == "__main__":
             batch_size=args.batch_size,
             accumulation_steps=args.accumulation_steps,
             max_epochs=args.max_epochs,
+            mask_prob=args.mask_prob,
             hide_map_prob=args.hide_map_prob,
             dropout_images_prob=args.dropout_images_prob,
             dataloader_num_workers=args.dataloader_num_workers,

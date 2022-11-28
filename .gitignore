@@ -132,12 +132,10 @@ runs*/
 
 */.ipynb_checkpoints/*
 
-debug/Test.ipynb
-
 .vs/
-
-*.slurm
 
 lightning_logs/
 
 models/
+
+wandb/

@@ -5,11 +5,11 @@ python3 train.py --train_new \
   --val_dir  ../gtaai_datasets/dev \
   --output_dir models/tedd_1104_base \
   --encoder_type transformer \
-  --dataloader_num_workers 16 \
+  --dataloader_num_workers 32 \
   --batch_size 16 \
   --accumulation_steps 1 \
-  --max_epochs 40 \
-  --cnn_model_name convnext_base \
+  --max_epochs 10 \
+  --cnn_model_name efficientnet_v2_m \
   --num_layers_encoder 4 \
   --embedded_size 512 \
   --learning_rate 5e-5 \
@@ -18,8 +18,8 @@ python3 train.py --train_new \
   --dropout_encoder 0.1 \
   --dropout_encoder_features 0.3 \
   --control_mode keyboard \
-  --val_check_interval 0.5 \
-  --precision 16 \
+  --val_check_interval 0.25 \
+  --precision "bf16" \
   --devices 8 \
   --accelerator tpu \
   --report_to wandb
