@@ -1,0 +1,5 @@
+Mean and STD values for the train set.
+
+Mean: [0.33363932 0.32581538 0.31566033]
+STD: [0.1914285  0.18449214 0.1853477 ]
+

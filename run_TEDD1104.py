@@ -364,29 +364,27 @@ if __name__ == "__main__":
         action="store_true",
         help="Experimental. Enable segmentation using segformer (It will only apply segmentation"
         "to the images displayed to the user if you push the 'L' key). Requires huggingface transformers to be "
-        "installed (https://huggingface.co/docs/transformers/index). Very GPU demanding!"
-        ":param dtype: Data type to use for the model. BF16 is only supported on Nvidia Ampere GPUs and requires"
-        "PyTorch 1.10 or higher.",
+        "installed (https://huggingface.co/docs/transformers/index). Very GPU demanding!",
     )
 
     parser.add_argument(
         "--dtype",
-        choices=["fp32", "fp16", "bf16"],
-        default="fp32",
+        choices=["32", "16", "bf16"],
+        default="32",
         help="Use FP32, FP16 or BF16 (bfloat16) for inference. "
         "BF16 requires a GPU with BF16 support (like Volta or Ampere) and Pytorch >= 1.10",
     )
 
     args = parser.parse_args()
 
-    if args.dtype == "fp32":
+    if args.dtype == "32":
         dtype = torch.float32
-    elif args.dtype == "fp16":
+    elif args.dtype == "16":
         dtype = torch.float16
     elif args.dtype == "bf16":
         dtype = torch.bfloat16
     else:
-        raise ValueError(f"Invalid dtype {args.dtype}. Choose from fp32, fp16 or bf16")
+        raise ValueError(f"Invalid dtype {args.dtype}. Choose from 32, 16 or bf16")
 
     run_ted1104(
         checkpoint_path=args.checkpoint_path,

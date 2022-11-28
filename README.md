@@ -34,29 +34,53 @@ video game.
 We provide pretrained T.E.D.D. 1104 models that you can use for real-time inference :)  
 The models are trained using 130 GB of human labelled data.  
 The model has been trained in first-person-view with a route to follow in the minimap.  
-The model has learned to drive a large variety of vehicles in different weather conditions (Sun, night, sunny, rain...). 
+The model has learned to drive a large variety of vehicles in different weather conditions (Sun, night, sunny, rain...).  
+For each model we provide the best and the last epoch.  
 See [Software and HOW-TO Section](https://github.com/ikergarcia1996/Self-Driving-Car-in-Video-Games#software-and-how-to) for instructions on how run the models.
 
-### T.E.D.D. 1104 Base: 34.6M Parameters. 
-Download link: [See the Releases Tab](https://github.com/ikergarcia1996/Self-Driving-Car-in-Video-Games/releases)
-
+### T.E.D.D. 1104 XXL: 138M Parameters. 
+Download link: [See the Releases Tab](https://github.com/ikergarcia1996/Self-Driving-Car-in-Video-Games/releases)  
 Accuracy in the test datasets:
 
 |         |              Time              |   Weather  | Micro-Acc K@1 | Micro-Acc k@3 | Macro-Acc K@1 |
 |---------|:------------------------------:|:----------:|:-------------:|:-------------:|:-------------:|
-| City    |         :sun_with_face:        |   :sunny:  |      49.8     |     83.8      |     44.1      |
-| City    |         :sun_with_face:        | :umbrella: |      52.1     |     84.7      |     46.1      |
-| City    | :first_quarter_moon_with_face: |   :sunny:  |      54.5     |     86.9      |     48.0      |
-| City    | :first_quarter_moon_with_face: | :umbrella: |      48.8     |     82.5      |     43.2      |
-| Highway |         :sun_with_face:        |   :sunny:  |      65.6     |     100.0     |     53.2      |
-| Highway |         :sun_with_face:        | :umbrella: |      70.6     |     98.0      |     54.2      |
-| Highway | :first_quarter_moon_with_face: |   :sunny:  |      71.3     |     100.0     |     52.3      |
-| Highway | :first_quarter_moon_with_face: | :umbrella: |      67.7     |     100.0     |     50.9      |
+| City    |         :sun_with_face:        |   :sunny:  |     53.2      |     84.4      |     46.2      |
+| City    |         :sun_with_face:        | :umbrella: |     51.4      |     83.4      |     46.3      |
+| City    | :first_quarter_moon_with_face: |   :sunny:  |     54.3      |     85.6      |     46.3      |
+| City    | :first_quarter_moon_with_face: | :umbrella: |     47.3      |     82.3      |     49.9      |
+| Highway |         :sun_with_face:        |   :sunny:  |     72.7      |     97.7      |     40.6      |
+| Highway |         :sun_with_face:        | :umbrella: |     70.6      |     99.3      |     39.6      |
+| Highway | :first_quarter_moon_with_face: |   :sunny:  |     77.9      |     99.3      |     45.7      |
+| Highway | :first_quarter_moon_with_face: | :umbrella: |     70.9      |     97.6      |     30.8      |
 
-### T.E.D.D. 1104 Large: 
-Coming Soon...
-###  T.E.D.D. 1104 Small:
-Coming Soon...
+### T.E.D.D. 1104 M: 68M Parameters.
+Download link: [See the Releases Tab](https://github.com/ikergarcia1996/Self-Driving-Car-in-Video-Games/releases)  
+Accuracy in the test datasets:
+
+|         |              Time              |   Weather  | Micro-Acc K@1 | Micro-Acc k@3 | Macro-Acc K@1 |
+|---------|:------------------------------:|:----------:|:-------------:|:-------------:|:-------------:|
+| City    |         :sun_with_face:        |   :sunny:  |     52.9      |     84.1      |     43.1      |
+| City    |         :sun_with_face:        | :umbrella: |     49.9      |     81.3      |     42.2      |
+| City    | :first_quarter_moon_with_face: |   :sunny:  |     54.7      |     85.1      |     48.4      |
+| City    | :first_quarter_moon_with_face: | :umbrella: |     49.5      |     81.1      |     41.1      |
+| Highway |         :sun_with_face:        |   :sunny:  |     62.5      |     99.2      |     43.1      |
+| Highway |         :sun_with_face:        | :umbrella: |     71.9      |     99.3      |     39.2      |
+| Highway | :first_quarter_moon_with_face: |   :sunny:  |     79.4      |     99.3      |     45.3      |
+| Highway | :first_quarter_moon_with_face: | :umbrella: |     63.0      |     97.2      |     47.2      |
+###  T.E.D.D. 1104 S: 26M Parameters.
+Download link: [See the Releases Tab](https://github.com/ikergarcia1996/Self-Driving-Car-in-Video-Games/releases)  
+Accuracy in the test datasets:
+
+|         |              Time              |   Weather  | Micro-Acc K@1 | Micro-Acc k@3 | Macro-Acc K@1 |
+|---------|:------------------------------:|:----------:|:-------------:|:-------------:|:-------------:|
+| City    |         :sun_with_face:        |   :sunny:  |     51.0      |     83.0      |     46.3      |
+| City    |         :sun_with_face:        | :umbrella: |     49.0      |     82.5      |     45.2      |
+| City    | :first_quarter_moon_with_face: |   :sunny:  |     56.3      |     86.6      |     49.0      |
+| City    | :first_quarter_moon_with_face: | :umbrella: |     49.4      |     81.4      |     42.5      |
+| Highway |         :sun_with_face:        |   :sunny:  |     70.3      |      100      |     68.5      |
+| Highway |         :sun_with_face:        | :umbrella: |     71.2      |      100      |     37.6      |
+| Highway | :first_quarter_moon_with_face: |   :sunny:  |     80.9      |      100      |     49.1      |
+| Highway | :first_quarter_moon_with_face: | :umbrella: |     69.3      |      100      |     61.1      |
 
 # Datasets
 We provide train/dev/test datasets for training and evaluating T.E.D.D 1107 models:
@@ -77,7 +101,7 @@ The outputs are the correct keys on the keyboard to press. Alternatively T.E.D.D
 
 The model consists of three modules:
 First, a **Convolutional Neural Network** that encodes each input image in a feature 
-vector. We use EfficientNet (https://arxiv.org/abs/1905.11946).
+vector. We use EfficientNetV2 [arXiv:2104.00298](https://arxiv.org/abs/2104.00298).
 We use a **transformer encoder** (https://arxiv.org/abs/1706.03762) to generate bidirectional joint distributions over the feature vector
 sequence. Finally, we use the [CLS] token to predict the key combination. 
 
@@ -93,8 +117,8 @@ You can train and evaluate models on any Operating System (We use Linux for trai
 Running real time inference (Let TEDD1104 drive in GTAV) requires Windows 10/11.
 ```
 Python 3.7 or newer (3.9.7 tested)
-Pytorch 1.6.0 or newer (1.12 nightly build tested)
-Torchvision (0.13.0 or newer, currently a nightly build, required for using the efficientnet_v2 models)
+Pytorch (1.12.0 or newer)
+Torchvision (>=0.13.0 and < 0.15.0. Compatibility with torchvision >=0.15.0 will be added in a future release)
 PyTorch Lightning (1.6.0 or newer)
 torchmetrics
 scikit-image
@@ -103,7 +127,8 @@ PIL/Pillow
 cv2 (opencv-python)
 tkinter
 tabulate
-wandb or tensorboard for training (Set "report_to" accordingly)
+fairseq (If you want to train a model using AdaFactor)
+wandb or tensorboard for training (Set "--report_to" accordingly)
 win32api (PythonWin) - Only required for running real time inference (Let TEDD play the game)
                        Should be installed by default in newest Python versions for Windows. 
 
@@ -175,6 +200,9 @@ push "L" while the script is running to verify the input images.
 
 Use the *train.py* script to train a new model from scratch or continue training a model. 
 See "train.py -h" to get a description of all the available parameters. 
+See the [training_scripts](/training_scripts) folder to see the training commands that we used
+to train the released models. 
+
 
 Example command:
 ```sh
@@ -216,7 +244,7 @@ python3 train.py --continue_training \
 Use the eval.py script to evaluate a model in the test dataset.
 ```sh
 python3 eval.py \
-  --checkpoint_path runs/TEDD1104-base/model.ckpt \
+  --checkpoint_path models/tedd_1104_S/epoch=4-step=198544.ckpt \
   --batch_size 32 \
   --test_dirs \
    /data/gtaai_datasets/dev \
@@ -228,7 +256,7 @@ python3 eval.py \
    /data/gtaai_datasets/test/car_highway_day_rain \
    /data/gtaai_datasets/test/car_highway_night_clear \
    /data/gtaai_datasets/test/car_highway_night_rain \
-  --output_path results/TEDD1104-base.tsv
+  --output_path results/tedd_1104_S.tsv
 ```
 
 ### Image Reordering Model
@@ -245,12 +273,12 @@ python3 train.py \
 ...
 ```
 
-Use the eval_reorder.py script to evaluate a image reordering model in the test dataset.
+Use the eval_reorder.py script to evaluate an image reordering model in the test dataset.
 
 
 ## Generate Data
 
-Use the *generate_data.py* script to generate new data for training. See Use "run_TEDD1104.py -h" to get a description of all the available parameters.
+Use the *generate_data.py* script to generate new data for training or evaluation. See Use "run_TEDD1104.py -h" to get a description of all the available parameters.
 Configure the game following [The Configure the game section](#configure-the-game). 
 ```
 python generate_data.py \
