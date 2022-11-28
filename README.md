@@ -6,7 +6,7 @@
     <a href="https://github.com/ikergarcia1996/Self-Driving-Car-in-Video-Games/blob/master/LICENSE"><img alt="GitHub license" src="https://img.shields.io/github/license/ikergarcia1996/Self-Driving-Car-in-Video-Games"></a>
     <a href="https://github.com/ikergarcia1996/Self-Driving-Car-in-Video-Games/stargazers"><img alt="GitHub stars" src="https://img.shields.io/github/stars/ikergarcia1996/Self-Driving-Car-in-Video-Games?color=yellow"></a>
     <a href="https://github.com/ikergarcia1996/Self-Driving-Car-in-Video-Games/network"><img alt="GitHub forks" src="https://img.shields.io/github/forks/ikergarcia1996/Self-Driving-Car-in-Video-Games"></a>
-    <a href="https://github.com/ikergarcia1996/Self-Driving-Car-in-Video-Games/releases"><img alt="GitHub release" src="https://img.shields.io/badge/Release-5.0.0-green"></a>
+    <a href="https://github.com/ikergarcia1996/Self-Driving-Car-in-Video-Games/releases"><img alt="GitHub release" src="https://img.shields.io/badge/Release-5.1.0-green"></a>
     <a href="https://github.com/ikergarcia1996/Self-Driving-Car-in-Video-Games/releases"><img alt="Pretrained Models" src="https://img.shields.io/badge/Pretrained Models-Available-green"></a>
     <a href="https://ikergarcia1996.github.io/Iker-Garcia-Ferrero/"><img alt="Author" src="https://img.shields.io/badge/Author-Iker García Ferrero-ff69b4"></a>
     <br>
