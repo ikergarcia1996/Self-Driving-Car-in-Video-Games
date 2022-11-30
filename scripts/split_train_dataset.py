@@ -51,8 +51,10 @@ def split_and_compress_dataset(
 
         # Create zip file
 
+        filename = f"TEDD1140_dataset_{i // img_per_file}.zip"
         os.system(
-            f"zip -r {quote(os.path.join(output_dir, str(i // img_per_file)))}.zip {quote(os.path.join(output_dir, str(i // img_per_file)))}"
+            f"zip -r {quote(os.path.join(output_dir, filename))}.zip "
+            f"{quote(os.path.join(output_dir, str(i // img_per_file)))}"
         )
         # Remove folder
         os.system(f"rm -rf {quote(os.path.join(output_dir, str(i // img_per_file)))}")
