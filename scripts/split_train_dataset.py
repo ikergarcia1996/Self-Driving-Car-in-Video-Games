@@ -23,6 +23,14 @@ def split_and_compress_dataset(
     dataset_files = glob.glob(os.path.join(dataset_dir, "*.jpeg"))
     img_per_file = len(dataset_files) // splits
 
+    print(
+        f"Splitting dataset into {splits} subfolders of {img_per_file} images each. Total images: {len(dataset_files)}"
+    )
+    print(f"Dataset directory: {dataset_dir}")
+    print(f"Output directory: {output_dir}")
+    print("This may take a while, go grab a coffee!")
+    print()
+
     # Split the dataset into multiple subfolders of img_per_file images
     for i in tqdm(
         range(0, len(dataset_files), img_per_file), desc="Splitting dataset", position=0
