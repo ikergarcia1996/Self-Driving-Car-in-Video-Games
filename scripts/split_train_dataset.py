@@ -4,6 +4,7 @@ from shutil import copyfile
 from tqdm.auto import tqdm
 from shlex import quote
 import argparse
+import math
 
 
 def split_and_compress_dataset(
@@ -21,7 +22,7 @@ def split_and_compress_dataset(
     """
 
     dataset_files = glob.glob(os.path.join(dataset_dir, "*.jpeg"))
-    img_per_file = len(dataset_files) // splits
+    img_per_file = math.ceil(len(dataset_files) / splits)
 
     print(
         f"Splitting dataset into {splits} subfolders of {img_per_file} images each. Total images: {len(dataset_files)}"
