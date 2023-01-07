@@ -35,6 +35,7 @@ from optimizers.scheduler import (
     get_polynomial_decay_schedule_with_warmup,
     get_cosine_schedule_with_warmup,
 )
+from packaging import version  # Requires setuptools
 
 
 class WeightedMseLoss(nn.Module):
@@ -1083,41 +1084,44 @@ class Tedd1104ModelPL(pl.LightningModule):
         self.total_batches = 0
         self.running_loss = 0
 
-        self.train_accuracy = torchmetrics.Accuracy(
+        if version.parse(torchmetrics.__version__) < version.parse("0.10.0"):
+            accuracy_fn = torchmetrics.Accuracy
+        else:
+            accuracy_fn = torchmetrics.classification.MulticlassAccuracy
+
+        self.train_accuracy = accuracy_fn(num_classes=9, top_k=1, average="macro")
+
+        self.test_accuracy_k1_macro = accuracy_fn(
             num_classes=9, top_k=1, average="macro"
         )
 
-        self.test_accuracy_k1_macro = torchmetrics.Accuracy(
-            num_classes=9, top_k=1, average="macro"
-        )
-
-        self.test_accuracy_k3_micro = torchmetrics.Accuracy(
+        self.test_accuracy_k3_micro = accuracy_fn(
             num_classes=9, top_k=1, average="micro"
         )
 
-        self.validation_accuracy_k1_micro = torchmetrics.Accuracy(
+        self.validation_accuracy_k1_micro = accuracy_fn(
             num_classes=9, top_k=1, average="micro"
         )
-        self.validation_accuracy_k3_micro = torchmetrics.Accuracy(
+        self.validation_accuracy_k3_micro = accuracy_fn(
             num_classes=9, top_k=3, average="micro"
         )
-        self.validation_accuracy_k1_macro = torchmetrics.Accuracy(
+        self.validation_accuracy_k1_macro = accuracy_fn(
             num_classes=9, top_k=1, average="macro"
         )
-        self.validation_accuracy_k3_macro = torchmetrics.Accuracy(
+        self.validation_accuracy_k3_macro = accuracy_fn(
             num_classes=9, top_k=3, average="macro"
         )
 
-        self.test_accuracy_k1_micro = torchmetrics.Accuracy(
+        self.test_accuracy_k1_micro = accuracy_fn(
             num_classes=9, top_k=1, average="micro"
         )
-        self.test_accuracy_k3_micro = torchmetrics.Accuracy(
+        self.test_accuracy_k3_micro = accuracy_fn(
             num_classes=9, top_k=3, average="micro"
         )
-        self.test_accuracy_k1_macro = torchmetrics.Accuracy(
+        self.test_accuracy_k1_macro = accuracy_fn(
             num_classes=9, top_k=1, average="macro"
         )
-        self.test_accuracy_k3_macro = torchmetrics.Accuracy(
+        self.test_accuracy_k3_macro = accuracy_fn(
             num_classes=9, top_k=3, average="macro"
         )
 
