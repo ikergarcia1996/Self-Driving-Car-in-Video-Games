@@ -1,17 +1,16 @@
-import datetime
-from typing import Union
+from typing import Union, Tuple
 import numpy as np
 import os
-import torch
+from transformers import PreTrainedModel
+import logging
 
 
-def print_message(message: str) -> None:
-    """
-    Prints a message with the current time.
-
-    :param str message: Message to print
-    """
-    print(f"<{str(datetime.datetime.now()).split('.')[0]}> {message}")
+def init_logger():
+    logging.basicConfig(
+        format="%(asctime)s - %(levelname)s - %(name)s -   %(message)s",
+        datefmt="%m/%d/%Y %H:%M:%S",
+        level=logging.INFO,
+    )
 
 
 def mse(image1: np.ndarray, image2: np.ndarray) -> np.float:
@@ -22,9 +21,7 @@ def mse(image1: np.ndarray, image2: np.ndarray) -> np.float:
     :param np.ndarray image2: Second image
     :return: Float - Mean squared error
     """
-    err = np.float(np.sum((np.asarray(image1) - np.asarray(image2)) ** 2))
-    err /= np.float(image1.shape[0] * image1.shape[1])
-    return err
+    return np.sum((np.asarray(image1) - np.asarray(image2)) ** 2).item()
 
 
 def length_normalize(
@@ -36,7 +33,7 @@ def length_normalize(
     :param np.ndarray matrix: Matrix to normalize
     :return: np.ndarray - Normalized matrix
     """
-    norms = np.sqrt(np.sum(matrix ** 2, axis=1))
+    norms = np.sqrt(np.sum(matrix**2, axis=1))
     norms[norms == 0] = 1
     return matrix / norms[:, np.newaxis]
 
@@ -111,7 +108,6 @@ class IOHandler:
         values = values.split("_")
 
         if control_mode == "controller":
-
             input_value: np.ndarray = np.asarray(
                 [float(x) for x in values[-1].split(",")],
                 dtype=np.float32,
@@ -152,7 +148,7 @@ class IOHandler:
         :return: Union[int, np.ndarray] - Output in the specified format
         """
 
-        if type(input_value) == int or input_value.size == 1:
+        if isinstance(input_value, int) or input_value.size == 1:
             if output_type == "controller":
                 return self.keys2controller(int(input_value))
             elif output_type == "keyboard":
@@ -172,27 +168,29 @@ class IOHandler:
                 )
 
 
-def get_mask(
-    train: bool,
-    nheads: int,
-    mask_prob: float = 0.0,
-    sequence_length: int = 5,
-) -> torch.tensor:
-    if train:
-        bernolli_matrix = torch.cat(
-            (
-                torch.tensor([0]).float(),
-                (torch.tensor([mask_prob]).float()).repeat(sequence_length),
-            ),
-            0,
-        )
-        bernolli_distributor = torch.distributions.Bernoulli(bernolli_matrix)
-        sample = bernolli_distributor.sample()
-        mask = sample > 0
-    else:
+def get_trainable_parameters(model: PreTrainedModel) -> Tuple[int, int, float]:
+    """
+    Prints the number of trainable parameters in the model.
 
-        mask = torch.zeros(sequence_length + 1, dtype=torch.bool)
+    Args:
+        model (`PreTrainedModel`):
+            The model to print the number of trainable parameters for.
 
-    mask = mask.repeat(nheads, sequence_length + 1, 1)
-    mask.requires_grad = False
-    return mask
+    Returns:
+        `Tuple[int, int, float]`:
+            The number of trainable parameters, the total number of parameters and the
+            percentage of trainable parameters.
+    """
+    trainable_params = 0
+    all_param = 0
+    for _, param in model.named_parameters():
+        num_params = param.numel()
+        # if using DS Zero 3 and the weights are initialized empty
+        if num_params == 0 and hasattr(param, "ds_numel"):
+            num_params = param.ds_numel
+
+        all_param += num_params
+        if param.requires_grad:
+            trainable_params += num_params
+
+    return trainable_params, all_param, 100 * trainable_params / all_param

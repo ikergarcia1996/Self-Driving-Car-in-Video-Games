@@ -245,7 +245,6 @@ class ImageSequencer:
                     axis=0,
                 )
             else:
-
                 self.input_sequences = np.repeat(
                     np.expand_dims(
                         np.asarray(

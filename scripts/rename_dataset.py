@@ -30,7 +30,6 @@ def rename_dataset(dataset_dir: str):
 
 
 if __name__ == "__main__":
-
     parser = argparse.ArgumentParser(
         description="Rename dataset to be consistent with V5 naming convention."
     )

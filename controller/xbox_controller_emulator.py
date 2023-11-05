@@ -119,7 +119,7 @@ class XboxControllerEmulator:
          -delay: Float, number of seconds to wait between each test
         Output:
         """
-        print(f"Testing left stick...")
+        print("Testing left stick...")
         for test_no in range(num_tests):
             lx, ly = (
                 1 - (random.random() * 2),
@@ -127,14 +127,16 @@ class XboxControllerEmulator:
             )
             print(f"LX: {lx} \t LY: {ly}")
             self.set_axis(
-                lx=lx, ly=ly,
+                lx=lx,
+                ly=ly,
             )
             time.sleep(delay)
         self.set_axis(
-            lx=0.0, ly=0.0,
+            lx=0.0,
+            ly=0.0,
         )
 
-        print(f"Testing left trigger...")
+        print("Testing left trigger...")
         for test_no in range(num_tests):
             lt = 1 - (random.random() * 2)
             print(f"LT: {lt}")
@@ -142,7 +144,7 @@ class XboxControllerEmulator:
             time.sleep(delay)
         self.set_trigger_lt(lt=0.0)
 
-        print(f"Testing right trigger...")
+        print("Testing right trigger...")
         for test_no in range(num_tests):
             rt = 1 - (random.random() * 2)
             print(f"RT: {rt}")

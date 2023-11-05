@@ -13,7 +13,7 @@ from torch.nn import functional
 from torchvision import transforms
 import numpy as np
 from transformers import SegformerFeatureExtractor, SegformerForSemanticSegmentation
-from typing import List, Dict
+from typing import List
 
 
 def cityscapes_palette():

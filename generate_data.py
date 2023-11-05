@@ -229,7 +229,6 @@ def generate_dataset(
 
 
 if __name__ == "__main__":
-
     parser = argparse.ArgumentParser(
         description="Generate training data from the game. See the README.md file for more info."
     )

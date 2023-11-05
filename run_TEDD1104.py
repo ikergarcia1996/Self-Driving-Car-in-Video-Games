@@ -24,8 +24,8 @@ except ImportError:
     _controller_available = False
     XboxControllerEmulator = None
     print(
-        f"[WARNING!] Controller emulation unavailable, see controller/setup.md for more info. "
-        f"You can ignore this warning if you will use the keyboard as controller for TEDD1104."
+        "[WARNING!] Controller emulation unavailable, see controller/setup.md for more info. "
+        "You can ignore this warning if you will use the keyboard as controller for TEDD1104."
     )
 
 if torch.cuda.is_available():
@@ -83,7 +83,7 @@ def run_ted1104(
 
     if control_mode == "controller" and not _controller_available:
         raise ModuleNotFoundError(
-            f"Controller emulation not available see controller/setup.md for more info."
+            "Controller emulation not available see controller/setup.md for more info."
         )
 
     show_what_ai_sees: bool = False
@@ -157,7 +157,6 @@ def run_ted1104(
 
             keys = key_check()
             if "J" not in keys:
-
                 x: torch.tensor = torch.stack(
                     (
                         transform(img_seq[0] / 255.0),
@@ -177,7 +176,6 @@ def run_ted1104(
                     )
 
                 if control_mode == "controller":
-
                     if model_prediction[1] > 0:
                         rt = min(1.0, float(model_prediction[1])) * 2 - 1
                         lt = -1
@@ -247,7 +245,6 @@ def run_ted1104(
                 key_push_time: float = 0.0
 
             if show_what_ai_sees:
-
                 if enable_segmentation:
                     img_seq = image_segformer.add_segmentation(images=img_seq)
 
@@ -279,7 +276,6 @@ def run_ted1104(
                     f"RT: {int(rt * 100)}%"
                 )
             else:
-
                 info_message = f"Predicted Key: {id_to_key(model_prediction)}"
 
             print(

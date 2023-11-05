@@ -81,7 +81,6 @@ def human_baseline(gold_dataset_dir: str, annotation_path: str):
 
 
 if __name__ == "__main__":
-
     parser = argparse.ArgumentParser(
         description="Shows the images from the dataset and ask the human to label them."
     )

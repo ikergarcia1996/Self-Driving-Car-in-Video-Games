@@ -15,7 +15,6 @@ class Tedd1104Dataset(Dataset):
         self,
         dataset_dir: str,
     ):
-
         self.dataset_dir = dataset_dir
 
         self.transform = torchvision.transforms.Compose(
@@ -61,7 +60,7 @@ def collate_fn(batch):
 
 
 def calculate_mean_str(dataset_dir: str):
-    dataset_files = list(glob.glob(os.path.join(dataset_dir, "*.jpeg")))
+    list(glob.glob(os.path.join(dataset_dir, "*.jpeg")))
 
     mean_sum = torch.tensor([0.0, 0.0, 0.0])
     stds_sum = torch.tensor([0.0, 0.0, 0.0])
@@ -75,7 +74,7 @@ def calculate_mean_str(dataset_dir: str):
     )
     with tqdm(
         total=len(dataloader),
-        desc=f"Reading images",
+        desc="Reading images",
     ) as pbar:
         for batch in dataloader:
             for image in batch:
