@@ -6,7 +6,7 @@
 #SBATCH --output=.slurm/video-classification-large.out.txt
 #SBATCH --error=.slurm/video-classification-large.err.txt
 
-source /ikerlariak/osainz006/venvs/collie/bin/activate
+source /ikerlariak/igarcia945/envs/pytorch2/bin/activate
 
 export LC_ALL=en_US.UTF-8
 export LANG=en_US.UTF-8
