@@ -26,10 +26,10 @@ output_dir: models/video-classification/TEDD1104-small
 overwrite_output_dir: true
 load_best_model_at_end: true
 save_strategy: "steps"
-save_steps: 1000
+save_steps: 10000
 save_total_limit: 1
 evaluation_strategy: "steps"
-eval_steps: 1000
+eval_steps: 10000
 metric_for_best_model: "acc_k1_macro"
 greater_is_better: true
 
@@ -50,7 +50,7 @@ warmup_ratio: 0.03
 
 logging_strategy: steps
 logging_first_step: true
-logging_steps: 25
+logging_steps: 100
 report_to: wandb
 run_name: "TEDD1104-small"
 disable_tqdm: false
