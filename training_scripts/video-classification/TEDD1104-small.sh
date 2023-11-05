@@ -1,6 +1,6 @@
 #!/bin/bash
 #SBATCH --job-name=video-classification-small
-#SBATCH --cpus-per-task=16
+#SBATCH --cpus-per-task=128
 #SBATCH --gres=gpu:4
 #SBATCH --mem=128G
 #SBATCH --output=.slurm/video-classification-small.out.txt
