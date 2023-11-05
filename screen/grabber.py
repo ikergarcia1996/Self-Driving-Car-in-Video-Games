@@ -118,10 +118,7 @@ class Grabber(object):
         self.closed = False
 
     def __del__(self):
-        try:
-            self.close()
-        except:
-            pass
+        self.close()
 
     def close(self):
         if self.closed:

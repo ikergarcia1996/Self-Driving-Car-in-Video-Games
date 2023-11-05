@@ -5,9 +5,9 @@ from transformers import (
     HfArgumentParser,
     TrainingArguments,
     Trainer,
-    VideoMAEForPreTraining,
-    VideoMAEForVideoClassification,
 )
+
+from modeling_videomae import VideoMAEForPreTraining, VideoMAEForVideoClassification
 
 import torch
 import logging
@@ -58,7 +58,7 @@ def train_tedd1104(
 
     model = load_fn(
         model_args.model_name_or_path,
-        torch_dtype=torch.float32,
+        torch_dtype=torch.bfloat16 if training_args.bf16 else torch.float32,
     )
 
     logging.info(f"Model dtype: {model.dtype}")
@@ -134,13 +134,18 @@ def inference_tedd1104(
             else {"load_in_8bit": True}
         )
         if model_args.quantization_inference == 4:
+            if torch.cuda.is_bf16_supported() and not training_args.fp16_full_eval:
+                bnb_4bit_compute_dtype = torch.bfloat16
+            elif training_args.fp16_full_eval:
+                bnb_4bit_compute_dtype = torch.float16
+            else:
+                bnb_4bit_compute_dtype = torch.float32
+
             bnb_config = BitsAndBytesConfig(
                 load_in_4bit=True,
                 bnb_4bit_use_double_quant=True,
                 bnb_4bit_quant_type="nf4",
-                bnb_4bit_compute_dtype=torch.float16
-                if torch.cuda.is_bf16_supported() and not training_args.fp16_full_eval
-                else torch.float32,
+                bnb_4bit_compute_dtype=bnb_4bit_compute_dtype,
             )
 
         else:
