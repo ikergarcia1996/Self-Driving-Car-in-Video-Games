@@ -14,6 +14,7 @@ export LANGUAGE=en_US.UTF-8
 export TOKENIZERS_PARALLELISM=true
 export TRANSFORMERS_NO_ADVISORY_WARNINGS=true
 export WANDB_PROJECT=TEDD1104
+export OMP_NUM_THREADS=16
 
 CONFIGS_FOLDER="configs/video-classification"
 
