@@ -34,7 +34,7 @@ evaluation_strategy: "no"
 per_device_train_batch_size: 32
 per_device_eval_batch_size: 8
 gradient_accumulation_steps: 1
-num_train_epochs: 1
+num_train_epochs: 3
 # optimizer settings
 optim: adamw_torch_fused
 learning_rate: 0.00015
