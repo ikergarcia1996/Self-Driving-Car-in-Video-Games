@@ -1,4 +1,4 @@
-model_name_or_path: models/VideoMAE-small
+model_name_or_path: models/pretrain/TEDD1104-small
 task: video-classification
 deepspeed: configs/deepspeed/deepspeed_zero3.json
 

@@ -42,7 +42,7 @@ num_train_epochs: 3
 
 # optimizer settings
 optim: adamw_torch_fused
-learning_rate: 0.00015
+learning_rate: 0.001
 weight_decay: 0.05
 adam_beta1: 0.9
 adam_beta2: 0.95
