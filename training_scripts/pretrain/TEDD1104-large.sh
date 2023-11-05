@@ -2,7 +2,7 @@
 #SBATCH --job-name=pretrain-large
 #SBATCH --cpus-per-task=128
 #SBATCH --gres=gpu:4
-#SBATCH --mem=128G
+#SBATCH --mem=480G
 #SBATCH --output=.slurm/pretrain-large.out.txt
 #SBATCH --error=.slurm/pretrain-large.err.txt
 
@@ -13,7 +13,7 @@ export LANG=en_US.UTF-8
 export LANGUAGE=en_US.UTF-8
 export TOKENIZERS_PARALLELISM=true
 export TRANSFORMERS_NO_ADVISORY_WARNINGS=true
-export WANDB_PROJECT=TEDD1104
+export WANDB_PROJECT=TEDD1104_vmae
 export OMP_NUM_THREADS=16
 
 CONFIGS_FOLDER="configs/pretrain"
