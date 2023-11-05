@@ -60,5 +60,4 @@ bf16: true
 fp16: false
 torch_compile: false
 ddp_find_unused_parameters: false
-bf16_full_eval: true
 dataloader_num_workers: 128
