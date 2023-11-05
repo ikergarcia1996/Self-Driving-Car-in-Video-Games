@@ -58,7 +58,7 @@ def train_tedd1104(
 
     model = load_fn(
         model_args.model_name_or_path,
-        # torch_dtype=torch.bfloat16 if training_args.bf16 else torch.float32,
+        torch_dtype=torch.float32,
     )
 
     logging.info(f"Model dtype: {model.dtype}")
