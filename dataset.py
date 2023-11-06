@@ -10,6 +10,7 @@ import logging
 from transformers import VideoMAEImageProcessor
 import random
 import torch.multiprocessing
+from constants import IMAGE_MEAN, IMAGE_STD
 
 torch.multiprocessing.set_sharing_strategy("file_system")
 
@@ -202,8 +203,8 @@ class Tedd1104Dataset(Dataset):
             do_center_crop=False,
             do_rescale=True,
             do_normalize=True,
-            image_mean=[0.33363932, 0.32581538, 0.31566033],
-            image_std=[0.1914285, 0.18449214, 0.1853477],
+            image_mean=IMAGE_MEAN,
+            image_std=IMAGE_STD,
         )
 
         self.dataset_files = glob.glob(os.path.join(dataset_dir, "*.jpeg"))
