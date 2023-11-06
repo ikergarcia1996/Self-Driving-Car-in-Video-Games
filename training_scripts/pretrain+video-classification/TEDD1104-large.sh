@@ -1,8 +1,8 @@
 #!/bin/bash
 #SBATCH --job-name=pretrain+video-classification-large
-#SBATCH --cpus-per-task=128
+#SBATCH --cpus-per-task=64
 #SBATCH --gres=gpu:2
-#SBATCH --mem=480G
+#SBATCH --mem=350G
 #SBATCH --output=.slurm/pretrain+video-classification-large.out.txt
 #SBATCH --error=.slurm/pretrain+video-classification-large.err.txt
 
