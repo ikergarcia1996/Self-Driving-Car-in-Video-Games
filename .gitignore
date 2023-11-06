@@ -139,3 +139,4 @@ lightning_logs/
 models/
 
 wandb/
+test_video_mae.py
