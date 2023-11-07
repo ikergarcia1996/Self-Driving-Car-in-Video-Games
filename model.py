@@ -24,7 +24,7 @@ class VideoMAEsmall:
         )
 
     def get_model(self):
-        print("Loading VideoMAE-small model")
+        print(f"Loading {self.name} model")
         return VideoMAEModel(self.config)
 
 
@@ -48,7 +48,55 @@ class VideoMAEbase:
         )
 
     def get_model(self):
-        print("Loading VideoMAE-base model")
+        print(f"Loading {self.name} model")
+        return VideoMAEModel(self.config)
+
+
+class VideoMAEbase_PS30:
+    def __init__(self):
+        self.name = "VideoMAE-base_ps30"
+        self.config = VideoMAEConfig(
+            image_size=(270, 480),
+            patch_size=30,
+            num_channels=3,
+            num_frames=5,
+            tubelet_size=1,
+            hidden_size=768,
+            num_hidden_layers=12,
+            num_attention_heads=12,
+            intermediate_size=3072,
+            decoder_num_attention_heads=6,
+            decoder_hidden_size=384,
+            decoder_num_hidden_layers=6,
+            decoder_intermediate_size=1536,
+        )
+
+    def get_model(self):
+        print(f"Loading {self.name} model")
+        return VideoMAEModel(self.config)
+
+
+class VideoMAEbase_TS5:
+    def __init__(self):
+        self.name = "VideoMAE-base_ts5"
+        self.config = VideoMAEConfig(
+            image_size=(270, 480),
+            patch_size=15,
+            num_channels=3,
+            num_frames=5,
+            tubelet_size=5,
+            hidden_size=768,
+            num_hidden_layers=12,
+            num_attention_heads=12,
+            intermediate_size=3072,
+            decoder_num_attention_heads=6,
+            decoder_hidden_size=384,
+            decoder_num_hidden_layers=6,
+            decoder_intermediate_size=1536,
+        )
+
+    def get_model(self):
+        print(f"Loading {self.name} model")
         return VideoMAEModel(self.config)
 
 
@@ -72,7 +120,7 @@ class VideoMAElarge:
         )
 
     def get_model(self):
-        print("Loading VideoMAE-large model")
+        print(f"Loading {self.name} model")
         return VideoMAEModel(self.config)
 
 
@@ -96,13 +144,20 @@ class VideoMAExxl:
         )
 
     def get_model(self):
-        print("Loading VideoMAE-xxl model")
+        print(f"Loading {self.name} model")
         return VideoMAEModel(self.config)
 
 
 def initialize_models(output_path: str):
     os.makedirs(output_path, exist_ok=True)
-    for model in [VideoMAEsmall, VideoMAEbase, VideoMAElarge, VideoMAExxl]:
+    for model in [
+        VideoMAEsmall,
+        VideoMAEbase,
+        VideoMAEbase_PS30,
+        VideoMAEbase_TS5,
+        VideoMAElarge,
+        VideoMAExxl,
+    ]:
         model_cls = model()
         model = model_cls.get_model()
         print(f"Model: {model_cls.name}")
