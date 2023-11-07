@@ -1,6 +1,5 @@
 model_name_or_path: models/VideoMAE-base
 task: video-classification
-deepspeed: configs/deepspeed/deepspeed_zero3.json
 
 do_train: true
 do_eval: true
@@ -23,7 +22,7 @@ hide_map_probability_test: 0.0
 mask_ratio: 0.9
 
 # checkpoint settings
-output_dir: models/video-classification/TEDD1104-base
+output_dir: models/video-classification/TEDD1104-base-noDeepSpeed
 overwrite_output_dir: true
 load_best_model_at_end: true
 save_strategy: "steps"
@@ -35,9 +34,9 @@ metric_for_best_model: "acc_k1_macro"
 greater_is_better: true
 
 # batch size
-per_device_train_batch_size: 16
+per_device_train_batch_size: 8
 per_device_eval_batch_size: 8
-gradient_accumulation_steps: 4
+gradient_accumulation_steps: 8
 num_train_epochs: 3
 
 # optimizer settings
@@ -53,7 +52,7 @@ logging_strategy: steps
 logging_first_step: true
 logging_steps: 100
 report_to: wandb
-run_name: "TEDD1104-base"
+run_name: "TEDD1104-base-noDeepSpeed"
 disable_tqdm: false
 
 # hub settings

@@ -12,8 +12,12 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+#
+# Changes by Iker García-Ferrero:
+# - Fixed bfloat16 training: https://github.com/huggingface/transformers/pull/27296
+# - Set MEAN and STD values for the GTAV dataset in VideoMAEForPretraining
+# - Set label_smoothing to 0.1 in VideoMAEForVideoClassification
 """ PyTorch VideoMAE (masked autoencoder) model."""
-
 
 import collections.abc
 import math
@@ -1220,7 +1224,7 @@ class VideoMAEForVideoClassification(VideoMAEPreTrainedModel):
                 else:
                     loss = loss_fct(logits, labels)
             elif self.config.problem_type == "single_label_classification":
-                loss_fct = CrossEntropyLoss()
+                loss_fct = CrossEntropyLoss(label_smoothing=0.1)
                 loss = loss_fct(logits.view(-1, self.num_labels), labels.view(-1))
             elif self.config.problem_type == "multi_label_classification":
                 loss_fct = BCEWithLogitsLoss()

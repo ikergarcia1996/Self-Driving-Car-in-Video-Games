@@ -1,10 +1,10 @@
 #!/bin/bash
-#SBATCH --job-name=video-classification-base
+#SBATCH --job-name=video-classification-base-noDeepspeed
 #SBATCH --cpus-per-task=32
 #SBATCH --gres=gpu:2
 #SBATCH --mem=300G
-#SBATCH --output=.slurm/video-classification-base.out.txt
-#SBATCH --error=.slurm/video-classification-base.err.txt
+#SBATCH --output=.slurm/video-classification-base-noDeepspeed.out.txt
+#SBATCH --error=.slurm/video-classification-base-noDeepspeed.err.txt
 
 source /ikerlariak/igarcia945/envs/pytorch2/bin/activate
 
@@ -18,4 +18,4 @@ export OMP_NUM_THREADS=16
 
 CONFIGS_FOLDER="configs/video-classification"
 
-torchrun --standalone --master_port 37227 --nproc_per_node=2 train_TEDD1104.py ${CONFIGS_FOLDER}/TEDD1104-base.yaml
+torchrun --standalone --master_port 37223 --nproc_per_node=2 train_TEDD1104.py ${CONFIGS_FOLDER}/TEDD1104-base-noDeepspeed.yaml
