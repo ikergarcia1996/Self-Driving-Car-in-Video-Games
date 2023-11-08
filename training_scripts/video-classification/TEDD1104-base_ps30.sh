@@ -1,8 +1,8 @@
 #!/bin/bash
 #SBATCH --job-name=video-classification-base_ps30
-#SBATCH --cpus-per-task=32
+#SBATCH --cpus-per-task=16
 #SBATCH --gres=gpu:2
-#SBATCH --mem=300G
+#SBATCH --mem=100G
 #SBATCH --output=.slurm/video-classification-base_ps30.out.txt
 #SBATCH --error=.slurm/video-classification-base_ps30.err.txt
 
