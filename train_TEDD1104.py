@@ -78,6 +78,8 @@ def train_tedd1104(
         dataset_dir=data_args.train_dir,
         hide_map_prob=data_args.hide_map_probability_train,
         mask_ratio=data_args.mask_ratio,
+        patch_size=model.config.patch_size,
+        tubelet_size=model.config.tubelet_size,
         task=data_args.task,
     )
 
@@ -85,6 +87,8 @@ def train_tedd1104(
         dataset_dir=data_args.validation_dir,
         hide_map_prob=data_args.hide_map_probability_validation,
         mask_ratio=data_args.mask_ratio,
+        patch_size=model.config.patch_size,
+        tubelet_size=model.config.tubelet_size,
         task=data_args.task,
     )
 
@@ -199,6 +203,8 @@ def inference_tedd1104(
             dataset_dir=test_dir,
             hide_map_prob=data_args.hide_map_probability_test,
             mask_ratio=data_args.mask_ratio,
+            patch_size=model.config.patch_size,
+            tubelet_size=model.config.tubelet_size,
             task=data_args.task,
         )
 

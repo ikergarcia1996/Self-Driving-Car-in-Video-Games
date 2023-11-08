@@ -117,15 +117,22 @@ class TubeMaskingGenerator(object):
     Adapted from: https://github.com/MCG-NJU/VideoMAE/blob/main/masking_generator.py
     """
 
-    def __init__(self, mask_ratio):
+    def __init__(self, mask_ratio, patch_size, tubelet_size):
         """
         INIT
         Args:
             mask_ratio (float): Ratio of the image to be masked
         """
-        self.mask_ratio = mask_ratio
 
-        self.seqs_to_mask = int(self.mask_ratio * 2880)
+        seq_length = 5 // tubelet_size * 270 // patch_size * 480 // patch_size
+        masked_frames = int(mask_ratio * seq_length)
+        unmasked_frames = seq_length - masked_frames
+        self.mask = np.hstack(
+            [
+                np.zeros(unmasked_frames),
+                np.ones(masked_frames),
+            ]
+        )
 
     def __call__(self):
         """
@@ -134,14 +141,9 @@ class TubeMaskingGenerator(object):
         Returns:
             torch.tensor: Tube mask
         """
-        mask = np.hstack(
-            [
-                np.zeros(2880 - self.seqs_to_mask),
-                np.ones(self.seqs_to_mask),
-            ]
-        )
-        np.random.shuffle(mask)
-        mask = torch.from_numpy(mask).to(dtype=torch.bool)
+
+        np.random.shuffle(self.mask)
+        mask = torch.from_numpy(self.mask).to(dtype=torch.bool)
         mask.requires_grad = False
         return mask
 
@@ -158,6 +160,8 @@ class Tedd1104Dataset(Dataset):
         dataset_dir: str,
         hide_map_prob: float,
         mask_ratio: float,
+        patch_size: int,
+        tubelet_size: int,
         task: str = "video-classification",
     ):
         """
@@ -166,6 +170,8 @@ class Tedd1104Dataset(Dataset):
             dataset_dir (str): Path to the dataset directory
             hide_map_prob (float): Probability of hiding the minimap
             mask_ratio (float): Ratio of the image to be masked
+            patch_size (int): Patch size
+            tubelet_size (int): Tubelet size
             task (str): Task to perform. One of: video-classification, video-masking
         """
         if not (0 <= hide_map_prob <= 1.0):
@@ -191,7 +197,9 @@ class Tedd1104Dataset(Dataset):
         self.task = task
         self.control_mode = "keyboard".lower()
         self.image_splitter = SplitImages()
-        self.mask_generator = TubeMaskingGenerator(mask_ratio=mask_ratio)
+        self.mask_generator = TubeMaskingGenerator(
+            mask_ratio=mask_ratio, patch_size=patch_size, tubelet_size=tubelet_size
+        )
 
         if self.hide_map_prob > 0:
             self.map_remover = RemoveMinimap(self.hide_map_prob)
