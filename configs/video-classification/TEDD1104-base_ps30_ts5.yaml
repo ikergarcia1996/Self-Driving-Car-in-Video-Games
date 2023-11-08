@@ -1,4 +1,4 @@
-model_name_or_path: models/VideoMAE-base_ps30_ts5
+model_name_or_path: models/VideoMAE-base
 task: video-classification
 deepspeed: configs/deepspeed/deepspeed_zero3.json
 
