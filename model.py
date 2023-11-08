@@ -100,6 +100,30 @@ class VideoMAEbase_TS5:
         return VideoMAEModel(self.config)
 
 
+class VideoMAEbase_PS30_TS5:
+    def __init__(self):
+        self.name = "VideoMAE-base_ps30_ts5"
+        self.config = VideoMAEConfig(
+            image_size=(270, 480),
+            patch_size=30,
+            num_channels=3,
+            num_frames=5,
+            tubelet_size=5,
+            hidden_size=768,
+            num_hidden_layers=12,
+            num_attention_heads=12,
+            intermediate_size=3072,
+            decoder_num_attention_heads=6,
+            decoder_hidden_size=384,
+            decoder_num_hidden_layers=6,
+            decoder_intermediate_size=1536,
+        )
+
+    def get_model(self):
+        print(f"Loading {self.name} model")
+        return VideoMAEModel(self.config)
+
+
 class VideoMAElarge:
     def __init__(self):
         self.name = "VideoMAE-large"
@@ -155,6 +179,7 @@ def initialize_models(output_path: str):
         VideoMAEbase,
         VideoMAEbase_PS30,
         VideoMAEbase_TS5,
+        VideoMAEbase_PS30_TS5,
         VideoMAElarge,
         VideoMAExxl,
     ]:
