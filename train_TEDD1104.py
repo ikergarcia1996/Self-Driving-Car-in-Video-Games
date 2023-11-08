@@ -213,10 +213,12 @@ def inference_tedd1104(
             metrics[f"test_{os.path.basename(test_dir)}_{metric}"] = value
 
     print(json.dumps(metrics, ensure_ascii=False, indent=4))
+
     with open(
         os.path.join(training_args.output_dir, "metrics.json"), "w", encoding="utf8"
     ) as output_file:
         print(json.dumps(metrics, ensure_ascii=False, indent=4), file=output_file)
+
     trainer.log(metrics)
 
 
