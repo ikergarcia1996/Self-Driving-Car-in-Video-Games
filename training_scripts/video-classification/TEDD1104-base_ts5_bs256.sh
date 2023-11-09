@@ -17,5 +17,5 @@ export WANDB_PROJECT=TEDD1104_vmae
 export OMP_NUM_THREADS=16
 
 
-torchrun --standalone --master_port 37227 --nproc_per_node=2 train_TEDD1104.py configs/video-classification/TEDD1104-base_ts5.yaml
-torchrun --standalone --master_port 37227 --nproc_per_node=2 train_TEDD1104.py configs/video-classification/eval/TEDD1104-base_ts5_epoch10.yaml
+torchrun --standalone --master_port 37227 --nproc_per_node=2 train_TEDD1104.py configs/video-classification/TEDD1104-base_ts5_bs256.yaml
+torchrun --standalone --master_port 37227 --nproc_per_node=2 train_TEDD1104.py configs/video-classification/eval/TEDD1104-base_ts5_epoch10_bs256.yaml
