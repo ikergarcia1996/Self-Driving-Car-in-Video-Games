@@ -1,10 +1,10 @@
 #!/bin/bash
-#SBATCH --job-name=video-classification-base_ts5
+#SBATCH --job-name=video-classification-base_ts5_bs256
 #SBATCH --cpus-per-task=16
 #SBATCH --gres=gpu:2
 #SBATCH --mem=100G
-#SBATCH --output=.slurm/video-classification-base_ts5.out.txt
-#SBATCH --error=.slurm/video-classification-base_ts5.err.txt
+#SBATCH --output=.slurm/video-classification-base_ts5_bs256.out.txt
+#SBATCH --error=.slurm/video-classification-base_ts5_bs256.err.txt
 
 source /ikerlariak/igarcia945/envs/pytorch2/bin/activate
 
