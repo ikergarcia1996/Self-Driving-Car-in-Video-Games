@@ -4,7 +4,7 @@ deepspeed: configs/deepspeed/deepspeed_zero3.json
 
 do_train: false
 do_eval: false
-do_predict: false
+do_predict: true
 train_dir: /ikerlariak/igarcia945/gtaai_datasets/train
 validation_dir: /ikerlariak/igarcia945/gtaai_datasets/dev
 test_dirs:
