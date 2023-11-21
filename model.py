@@ -205,7 +205,7 @@ class VideoMAExxl:
             num_channels=3,
             num_frames=5,
             tubelet_size=5,
-            hidden_size=1280,
+            hidden_size=1200,
             num_hidden_layers=24,
             num_attention_heads=24,
             intermediate_size=5120,
@@ -229,6 +229,8 @@ def initialize_models(output_path: str):
         VideoMAEbase_TS5,
         VideoMAEbase_PS30_TS5,
         VideoMAElarge,
+        VideoMAElarge_TS5,
+        VideoMAElarge_PS30_TS5,
         VideoMAExxl,
     ]:
         model_cls = model()
