@@ -148,6 +148,54 @@ class VideoMAElarge:
         return VideoMAEModel(self.config)
 
 
+class VideoMAElarge_TS5:
+    def __init__(self):
+        self.name = "VideoMAE-large_ts5"
+        self.config = VideoMAEConfig(
+            image_size=(270, 480),
+            patch_size=15,
+            num_channels=3,
+            num_frames=5,
+            tubelet_size=5,
+            hidden_size=1024,
+            num_hidden_layers=16,
+            num_attention_heads=16,
+            intermediate_size=4096,
+            decoder_num_attention_heads=8,
+            decoder_hidden_size=512,
+            decoder_num_hidden_layers=8,
+            decoder_intermediate_size=2048,
+        )
+
+    def get_model(self):
+        print(f"Loading {self.name} model")
+        return VideoMAEModel(self.config)
+
+
+class VideoMAElarge_PS30_TS5:
+    def __init__(self):
+        self.name = "VideoMAE-large_ps30_ts5"
+        self.config = VideoMAEConfig(
+            image_size=(270, 480),
+            patch_size=15,
+            num_channels=3,
+            num_frames=5,
+            tubelet_size=5,
+            hidden_size=1024,
+            num_hidden_layers=16,
+            num_attention_heads=16,
+            intermediate_size=4096,
+            decoder_num_attention_heads=8,
+            decoder_hidden_size=512,
+            decoder_num_hidden_layers=8,
+            decoder_intermediate_size=2048,
+        )
+
+    def get_model(self):
+        print(f"Loading {self.name} model")
+        return VideoMAEModel(self.config)
+
+
 class VideoMAExxl:
     def __init__(self):
         self.name = "VideoMAE-xxl"
