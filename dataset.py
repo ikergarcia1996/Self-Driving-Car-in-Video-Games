@@ -74,7 +74,7 @@ class SplitImages(object):
         image3 = image[:, width * 2 : width * 3, :]
         image4 = image[:, width * 3 : width * 4, :]
         image5 = image[:, width * 4 : width * 5, :]
-        return np.asarray([image1, image2, image3, image4, image5])
+        return [image1, image2, image3, image4, image5]
 
 
 class RemoveMinimap(object):
