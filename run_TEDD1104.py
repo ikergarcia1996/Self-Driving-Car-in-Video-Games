@@ -1,4 +1,4 @@
-from model import Tedd1104ModelPL
+from modeling_videomae import VideoMAEForVideoClassification
 from keyboard.getkeys import key_check
 import argparse
 from screen.screen_recorder import ImageSequencer
@@ -8,13 +8,15 @@ import time
 from tkinter import *
 import numpy as np
 import cv2
-from torchvision import transforms
 from utils import mse
 from keyboard.inputsHandler import select_key
 from keyboard.getkeys import id_to_key
 import math
-
 from typing import Optional
+from transformers import VideoMAEImageProcessor
+from dataset import IMAGE_MEAN, IMAGE_STD, SplitImages
+from typing import List
+from utils import IOHandler
 
 try:
     from controller.xbox_controller_emulator import XboxControllerEmulator
@@ -28,15 +30,110 @@ except ImportError:
         "You can ignore this warning if you will use the keyboard as controller for TEDD1104."
     )
 
-if torch.cuda.is_available():
-    device = torch.device("cuda:0")
-else:
-    device = torch.device("cpu")
-    logging.warning("GPU not found, using CPU, inference will be very slow.")
+
+def load_model(
+    model_name_or_path, precision: int = 16
+) -> VideoMAEForVideoClassification:
+    """
+    Load the model and set the precision for inference.
+
+    Args:
+        model_name_or_path (str): Path to the model directory or HuggingFace model name.
+        precision (int): Precision for inference. Choose from 4, 8, 16 or 32.
+
+    Returns:
+        VideoMAEForVideoClassification: The model.
+    """
+    if precision == 32:
+        model_dtype = torch.float32
+        bnb_config = None
+        quant_args = {}
+        logging.info(
+            f"Loading model with using float32. This is the slowest option. "
+            f"Use precision 16 for faster inference."
+        )
+    elif precision == 16:
+        if torch.cuda.is_available() and not torch.cuda.is_bf16_supported():
+            model_dtype = torch.float16
+
+            logging.warning(
+                f"Your GPU does not support bfloat16, using float16 instead. "
+                f"Models were trained with bfloat16, so you might encounter worse accuracy. "
+                f"If this is the case, you can use precision 32 for better accuracy, "
+                f"although inference will be slower and the model will use more memory."
+            )
+        else:
+            model_dtype = torch.bfloat16
+            logging.info("We will load the model using bfloat16.")
+        bnb_config = None
+        quant_args = {}
+    elif precision == 8:
+        logging.info("We will load the model using 8 bit quantization.")
+        try:
+            from bitsandbytes import BitsAndBytesConfig
+        except ImportError:
+            raise ModuleNotFoundError(
+                "Bits and Bytes library not found. "
+                "Install it using 'pip install bitsandbytes'."
+            )
+
+        quant_args = {"load_in_8bit": True}
+        bnb_config = BitsAndBytesConfig(
+            load_in_8bit=True,
+        )
+
+        model_dtype = (
+            torch.float32
+        )  # We will load the model in FP32 and quantize it to 8 bit
+
+    elif precision == 4:
+        logging.info("We will load the model using 4 bit quantization.")
+        try:
+            from bitsandbytes import BitsAndBytesConfig
+        except ImportError:
+            raise ModuleNotFoundError(
+                "Bits and Bytes library not found. "
+                "Install it using 'pip install bitsandbytes'."
+            )
+
+        if torch.cuda.is_available() and not torch.cuda.is_bf16_supported():
+            model_dtype = torch.float16
+            logging.warning(
+                "Your GPU does not support bfloat16, using float16 instead. "
+                "Models were trained with bfloat16, so you might encounter worse accuracy. "
+                "If you have enough memory, use 8-bit quantization instead of 4-bit quantization."
+            )
+        else:
+            model_dtype = torch.bfloat16
+
+        quant_args = {"load_in_4bit": True}
+        bnb_config = BitsAndBytesConfig(
+            load_in_4bit=True,
+            bnb_4bit_use_double_quant=True,
+            bnb_4bit_quant_type="nf4",
+            bnb_4bit_compute_dtype=model_dtype,
+        )
+
+    else:
+        raise ValueError(
+            f"Precision {precision} not supported. Choose from 4, 8, 16 or 32"
+        )
+
+    model = VideoMAEForVideoClassification.from_pretrained(
+        model_name_or_path=model_name_or_path,
+        torch_dtype=model_dtype,
+        quantization_config=bnb_config,
+        **quant_args,
+        device_map="auto",
+    )
+
+    model.eval()
+
+    return model
 
 
 def run_ted1104(
-    checkpoint_path: str,
+    model_name_or_path: str,
     enable_evasion: bool,
     show_current_control: bool,
     num_parallel_sequences: int = 2,
@@ -45,8 +142,7 @@ def run_ted1104(
     full_screen: bool = False,
     evasion_score=1000,
     control_mode: str = "keyboard",
-    enable_segmentation: str = False,
-    dtype=torch.float32,
+    precision: int = 16,
 ) -> None:
     """
     Run TEDD1104 model in Real-Time inference
@@ -60,20 +156,17 @@ def run_ted1104(
        - Run the script and let TEDD1104 Play the game!
        - Detailed instructions can be found in the README.md file.
 
-    :param str checkpoint_path: Path to the model checkpoint file.
-    :param bool enable_evasion: Enable evasion, if the vehicle gets stuck we will reverse and randomly turn left/right.
-    :param bool show_current_control: Show if TEDD or the user is driving in the screen .
-    :param int num_parallel_sequences: Number of sequences to run in parallel.
-    :param int width: Width of the game window.
-    :param int height: Height of the game window.
-    :param bool full_screen: If the game is played in full screen mode.
-    :param int evasion_score: Threshold to trigger the evasion.
-    :param str control_mode: Device that TEDD will use from driving "keyboard" or "controller" (xbox controller).
-    :param bool enable_segmentation: Experimental. Enable segmentation using segformer (It will only apply segmentation
-    to the images displayed to the user if you push the "L" key). Requires huggingface transformers to be installed
-    (https://huggingface.co/docs/transformers/index). Very GPU demanding!
-    :param dtype: Data type to use for the model. BF16 is only supported on Nvidia Ampere GPUs and requires
-    PyTorch 1.10 or higher.
+    Args:
+        model_name_or_path (str): Path to the model directory or HuggingFace model name.
+        enable_evasion (bool): Enable evasion, if the vehicle gets stuck we will reverse and randomly turn left/right.
+        show_current_control (bool): Show if TEDD or the user is driving in the screen .
+        num_parallel_sequences (int): Number of sequences to run in parallel.
+        width (int): Width of the game window.
+        height (int): Height of the game window.
+        full_screen (bool): If the game is played in full screen mode.
+        evasion_score (int): Threshold to trigger the evasion.
+        control_mode (str): Device that TEDD will use from driving "keyboard" or "controller" (xbox controller).
+        precision (int): Precision for inference. Choose from 4, 8, 16 or 32.
     """
 
     assert control_mode in [
@@ -89,30 +182,27 @@ def run_ted1104(
     show_what_ai_sees: bool = False
     fp16: bool
 
-    model = Tedd1104ModelPL.load_from_checkpoint(
-        checkpoint_path=checkpoint_path
-    )  # hparams_file=hparams_path
+    model = load_model(
+        model_name_or_path=model_name_or_path,
+        precision=precision,
+    )
 
-    model.eval()
-    model.to(dtype=dtype, device=device)
+    image_splitter = SplitImages()
+    image_processor = VideoMAEImageProcessor(
+        do_resize=False,
+        do_center_crop=False,
+        do_rescale=True,
+        do_normalize=True,
+        image_mean=IMAGE_MEAN,
+        image_std=IMAGE_STD,
+    )
 
-    image_segformer = None
-    if enable_segmentation:
-        from segmentation.segmentation_segformer import ImageSegmentation
-
-        image_segformer = ImageSegmentation(device=device)
+    io_handler = IOHandler()
 
     if control_mode == "controller":
         xbox_controller: Optional[XboxControllerEmulator] = XboxControllerEmulator()
     else:
         xbox_controller = None
-
-    transform = transforms.Compose(
-        [
-            transforms.ToTensor(),
-            transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
-        ]
-    )
 
     img_sequencer = ImageSequencer(
         width=width,
@@ -135,7 +225,7 @@ def run_ted1104(
         text_label = None
 
     last_time: float = time.time()
-    score: np.float = np.float(0)
+    score: float = 0.0
     last_num: int = 5  # The image sequence starts with images containing zeros, wait until it is filled
 
     close_app: bool = False
@@ -143,7 +233,6 @@ def run_ted1104(
 
     lt: float = 0
     rt: float = 0
-    lx: float = 0
 
     while not close_app:
         try:
@@ -157,22 +246,22 @@ def run_ted1104(
 
             keys = key_check()
             if "J" not in keys:
-                x: torch.tensor = torch.stack(
-                    (
-                        transform(img_seq[0] / 255.0),
-                        transform(img_seq[1] / 255.0),
-                        transform(img_seq[2] / 255.0),
-                        transform(img_seq[3] / 255.0),
-                        transform(img_seq[4] / 255.0),
-                    ),
-                    dim=0,
-                ).to(device=device, dtype=dtype)
-
                 with torch.no_grad():
+                    images: List[np.array] = image_splitter(img_seq)
+                    model_inputs: torch.tensor = image_processor(
+                        images=images,
+                        input_data_format="channels_last",
+                        return_tensors="pt",
+                    )
+
                     model_prediction: torch.tensor = (
-                        model(x, output_mode=control_mode, return_best=True)[0]
-                        .cpu()
-                        .numpy()
+                        model(**model_inputs)[0].cpu().numpy()
+                    )
+                    model_prediction = np.argmax(model_prediction)
+
+                    model_prediction = io_handler.input_conversion(
+                        input_value=model_prediction,
+                        output_type=control_mode,
                     )
 
                 if control_mode == "controller":
@@ -244,10 +333,6 @@ def run_ted1104(
 
                 key_push_time: float = 0.0
 
-            if show_what_ai_sees:
-                if enable_segmentation:
-                    img_seq = image_segformer.add_segmentation(images=img_seq)
-
                 cv2.imshow("window1", img_seq[0])
                 cv2.waitKey(1)
                 cv2.imshow("window2", img_seq[1])
@@ -304,10 +389,10 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
 
     parser.add_argument(
-        "--checkpoint_path",
+        "--model",
         type=str,
         required=True,
-        help="Path to the model checkpoint file.",
+        help="Path to the model directory or HuggingFace model name.",
     )
 
     parser.add_argument("--width", type=int, default=1600, help="Game window width")
@@ -316,7 +401,8 @@ if __name__ == "__main__":
     parser.add_argument(
         "--enable_evasion",
         action="store_true",
-        help="Enable evasion, if the vehicle gets stuck we will reverse and randomly turn left/right.",
+        help="Enable evasion, if the vehicle gets stuck we will reverse and randomly turn left/right. "
+        "Usefull if you want 0 human intervention. But it has a high computational cost.",
     )
 
     parser.add_argument(
@@ -356,34 +442,22 @@ if __name__ == "__main__":
     )
 
     parser.add_argument(
-        "--enable_segmentation",
-        action="store_true",
-        help="Experimental. Enable segmentation using segformer (It will only apply segmentation"
-        "to the images displayed to the user if you push the 'L' key). Requires huggingface transformers to be "
-        "installed (https://huggingface.co/docs/transformers/index). Very GPU demanding!",
-    )
-
-    parser.add_argument(
-        "--dtype",
-        choices=["32", "16", "bf16"],
-        default="32",
-        help="Use FP32, FP16 or BF16 (bfloat16) for inference. "
-        "BF16 requires a GPU with BF16 support (like Volta or Ampere) and Pytorch >= 1.10",
+        "--precision",
+        type=int,
+        choices=[32, 16, 8, 4],
+        default=16,
+        help="Precision for inference. "
+        "Choose from 4, 8, 16 or 32. 16 is the default and fastest option. For 8 and 4 bit "
+        "quantization you need to install the bitsandbytes library ('pip install bitsandbytes'). Quantization will "
+        "significantly reduce the model size and inference so it will use much less memory. Use it if your GPU has "
+        "less than 8GB of memory. 32 is the slowest option, only recommended if you have compatibility issues with "
+        "16 bit precision.",
     )
 
     args = parser.parse_args()
 
-    if args.dtype == "32":
-        dtype = torch.float32
-    elif args.dtype == "16":
-        dtype = torch.float16
-    elif args.dtype == "bf16":
-        dtype = torch.bfloat16
-    else:
-        raise ValueError(f"Invalid dtype {args.dtype}. Choose from 32, 16 or bf16")
-
     run_ted1104(
-        checkpoint_path=args.checkpoint_path,
+        model_name_or_path=args.model,
         width=args.width,
         height=args.height,
         full_screen=args.full_screen,
@@ -392,6 +466,5 @@ if __name__ == "__main__":
         num_parallel_sequences=args.num_parallel_sequences,
         evasion_score=args.evasion_score,
         control_mode=args.control_mode,
-        enable_segmentation=args.enable_segmentation,
-        dtype=dtype,
+        precision=args.precision,
     )
