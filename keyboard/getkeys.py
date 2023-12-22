@@ -1,7 +1,11 @@
 # getkeys.py
 # Citation: Box Of Hats (https://github.com/Box-Of-Hats)
 
-import win32api as wapi
+try:
+    import win32api as wapi
+except ModuleNotFoundError:
+    print("Module win32api not found. Please install it with pip install 'pip install pywin32'")
+    exit()
 
 keyList = []  # ["\b"]
 for char in "WASDJL":  # "ABCDEFGHIJKLMNOPQRSTUVWXYZ 123456789,.'APS$/\\":

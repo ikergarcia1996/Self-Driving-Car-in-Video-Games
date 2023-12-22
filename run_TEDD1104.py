@@ -14,9 +14,9 @@ from keyboard.getkeys import id_to_key
 import math
 from typing import Optional
 from transformers import VideoMAEImageProcessor
-from dataset import IMAGE_MEAN, IMAGE_STD, SplitImages
-from typing import List
-from utils import IOHandler
+from dataset import IMAGE_MEAN, IMAGE_STD
+
+from utils import IOHandler, get_trainable_parameters
 
 try:
     from controller.xbox_controller_emulator import XboxControllerEmulator
@@ -120,14 +120,22 @@ def load_model(
         )
 
     model = VideoMAEForVideoClassification.from_pretrained(
-        model_name_or_path=model_name_or_path,
+        pretrained_model_name_or_path=model_name_or_path,
         torch_dtype=model_dtype,
         quantization_config=bnb_config,
         **quant_args,
-        device_map="auto",
     )
 
+    if torch.cuda.is_available():
+        model = model.cuda()
+
     model.eval()
+
+    _, all_param, _ = get_trainable_parameters(model=model)
+    logging.info(
+        f"Model loaded from {model_name_or_path}. Dtype: {model_dtype}. "
+        f"Device: {model.device}. Model params: {all_param}"
+    )
 
     return model
 
@@ -187,7 +195,6 @@ def run_ted1104(
         precision=precision,
     )
 
-    image_splitter = SplitImages()
     image_processor = VideoMAEImageProcessor(
         do_resize=False,
         do_center_crop=False,
@@ -247,17 +254,30 @@ def run_ted1104(
             keys = key_check()
             if "J" not in keys:
                 with torch.no_grad():
-                    images: List[np.array] = image_splitter(img_seq)
-                    model_inputs: torch.tensor = image_processor(
-                        images=images,
-                        input_data_format="channels_last",
-                        return_tensors="pt",
-                    )
+                    images = list(img_seq)
+                    try:
+                        model_inputs: torch.tensor = image_processor(
+                            images=images,
+                            input_data_format="channels_last",
+                            return_tensors="pt",
+                        )
+                    except ValueError as err:
+                        print()
+                        img_sequencer.stop()
+                        if control_mode == "controller":
+                            xbox_controller.stop()
 
-                    model_prediction: torch.tensor = (
-                        model(**model_inputs)[0].cpu().numpy()
-                    )
-                    model_prediction = np.argmax(model_prediction)
+                        logging.error(
+                            f"Error processing images. Exception: {str(err)}. "
+                            f"Images: {[img.shape for img in images]}"
+                        )
+                        exit()
+
+                    model_prediction: torch.tensor = model(
+                        **model_inputs.to(device=model.device, dtype=model.dtype)
+                    )[0]
+
+                    model_prediction = torch.argmax(model_prediction).item()
 
                     model_prediction = io_handler.input_conversion(
                         input_value=model_prediction,
@@ -333,6 +353,7 @@ def run_ted1104(
 
                 key_push_time: float = 0.0
 
+            if show_what_ai_sees:
                 cv2.imshow("window1", img_seq[0])
                 cv2.waitKey(1)
                 cv2.imshow("window2", img_seq[1])
@@ -382,10 +403,13 @@ def run_ted1104(
             img_sequencer.stop()
             if control_mode == "controller":
                 xbox_controller.stop()
-            close_app = True
+            exit()
 
 
 if __name__ == "__main__":
+    # Set logging level
+    logging.basicConfig(level=logging.INFO)
+
     parser = argparse.ArgumentParser()
 
     parser.add_argument(

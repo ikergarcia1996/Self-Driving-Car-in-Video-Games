@@ -1,5 +1,4 @@
 from screen.grabber import Grabber
-from controller.xbox_controller_reader import XboxControllerReader
 import numpy as np
 import time
 import cv2
@@ -38,7 +37,6 @@ class ScreenRecorder:
     back_buffer: np.ndarray
     get_controller_input: bool
     controller_input: np.ndarray
-    controller_reader: XboxControllerReader
     img_thread: threading.Thread
 
     def __init__(
@@ -82,15 +80,16 @@ class ScreenRecorder:
 
         if get_controller_input:
             if control_mode == "keyboard":
-                self.controller_input = np.zeros(1, dtype=np.int)
+                self.controller_input = np.zeros(1, dtype=int)
             else:
-                self.controller_input = np.zeros(3, dtype=np.float32)
+                self.controller_input = np.zeros(3, dtype=float)
 
         self.stop_recording: threading.Event = threading.Event()
         self.img_thread: threading.Thread = threading.Thread(
             target=self._img_thread, args=[self.stop_recording]
         )
-        self.img_thread.setDaemon(True)
+
+        self.img_thread.deamon = True
         self.img_thread.start()
 
         for delay in range(int(total_wait_secs), 0, -1):
@@ -107,6 +106,8 @@ class ScreenRecorder:
         :param threading.Event stop_event: Event to stop the thread
         """
         if self.get_controller_input and self.control_mode == "controller":
+            from controller.xbox_controller_reader import XboxControllerReader
+
             self.controller_reader = XboxControllerReader(total_wait_secs=2)
 
         while not stop_event.is_set():
@@ -273,7 +274,7 @@ class ImageSequencer:
         self.sequence_thread: threading.Thread = threading.Thread(
             target=self._sequence_thread, args=[self.stop_recording]
         )
-        self.sequence_thread.setDaemon(True)
+        self.sequence_thread.deamon = True
         self.sequence_thread.start()
 
         for delay in range(int(total_wait_secs), 0, -1):
@@ -294,7 +295,8 @@ class ImageSequencer:
             for i in range(self.num_sequences):
                 start_time: float = time.time()
 
-                image, user_input = np.copy(self.screen_recorder.get_image())
+                image, user_input = self.screen_recorder.get_image()
+                image = image.copy()
 
                 self.image_sequences[i][0] = preprocess_image(image)
                 self.image_sequences[i] = self.image_sequences[i][[1, 2, 3, 4, 0]]

@@ -57,15 +57,15 @@ class SplitImages(object):
     Splits a sequence image file into 5 images
     """
 
-    def __call__(self, image: np.array) -> np.array:
+    def __call__(self, image: np.array) -> List[np.array]:
         """
         Applies the transformation to the sequence of images.
 
         Args:
-            image (np.array): Sequence of images. Size (270, 2400, 3)
+            image (np.array): Sequence of images. Size (5, 270, 2400, 3)
 
         Returns:
-            np.array: Transformed sequence of images. Size (5, 270, 480, 3)
+            List[np.array]: Transformed sequence of images. Size (5, 270, 480, 3)
         """
 
         width: int = int(image.shape[1] / 5)

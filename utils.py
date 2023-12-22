@@ -13,7 +13,7 @@ def init_logger():
     )
 
 
-def mse(image1: np.ndarray, image2: np.ndarray) -> np.float:
+def mse(image1: np.ndarray, image2: np.ndarray) -> float:
     """
     Mean squared error between two images (np.ndarrays).
 
