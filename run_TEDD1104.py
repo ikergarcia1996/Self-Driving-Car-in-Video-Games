@@ -13,8 +13,9 @@ from keyboard.inputsHandler import select_key
 from keyboard.getkeys import id_to_key
 import math
 from typing import Optional
-from transformers import VideoMAEImageProcessor
+from image_processing_videomae import VideoMAEImageProcessor
 from dataset import IMAGE_MEAN, IMAGE_STD
+
 
 from utils import IOHandler, get_trainable_parameters
 
@@ -69,13 +70,8 @@ def load_model(
         quant_args = {}
     elif precision == 8:
         logging.info("We will load the model using 8 bit quantization.")
-        try:
-            from bitsandbytes import BitsAndBytesConfig
-        except ImportError:
-            raise ModuleNotFoundError(
-                "Bits and Bytes library not found. "
-                "Install it using 'pip install bitsandbytes'."
-            )
+
+        from transformers import BitsAndBytesConfig
 
         quant_args = {"load_in_8bit": True}
         bnb_config = BitsAndBytesConfig(
@@ -88,13 +84,8 @@ def load_model(
 
     elif precision == 4:
         logging.info("We will load the model using 4 bit quantization.")
-        try:
-            from bitsandbytes import BitsAndBytesConfig
-        except ImportError:
-            raise ModuleNotFoundError(
-                "Bits and Bytes library not found. "
-                "Install it using 'pip install bitsandbytes'."
-            )
+
+        from transformers import BitsAndBytesConfig
 
         if torch.cuda.is_available() and not torch.cuda.is_bf16_supported():
             model_dtype = torch.float16
@@ -123,17 +114,21 @@ def load_model(
         pretrained_model_name_or_path=model_name_or_path,
         torch_dtype=model_dtype,
         quantization_config=bnb_config,
+        num_labels=9,
         **quant_args,
     )
 
-    if torch.cuda.is_available():
+    if torch.cuda.is_available() and precision not in [
+        4,
+        8,
+    ]:  # Quantified models are already loaded in Cuda
         model = model.cuda()
 
     model.eval()
 
     _, all_param, _ = get_trainable_parameters(model=model)
     logging.info(
-        f"Model loaded from {model_name_or_path}. Dtype: {model_dtype}. "
+        f"Model loaded from {model_name_or_path}. Dtype: {model.dtype}. "
         f"Device: {model.device}. Model params: {all_param}"
     )
 
@@ -159,8 +154,8 @@ def run_ted1104(
        - If you play in windowed mode move the game window to the top left corner of the primary screen.
        - If you play in full screen mode, set the full_screen parameter to True.
        - Set your game to width x height resolution specified in the parameters.
-       - If you TEDD1104 to use the keyboard for controlling the game set the control_mode parameter to "keyboard".
-       - If you TEDD1104 to use an vXbox Controller for controlling the game set the control_mode parameter to "controller".
+       - If you use the keyboard for controlling the game set the control_mode parameter to "keyboard".
+       - If you  use an vXbox Controller for controlling the game set the control_mode parameter to "controller".
        - Run the script and let TEDD1104 Play the game!
        - Detailed instructions can be found in the README.md file.
 
@@ -243,46 +238,53 @@ def run_ted1104(
 
     while not close_app:
         try:
+            # start = time.time()
             while last_num == img_sequencer.num_sequence:
                 time.sleep(0.01)
 
             last_num = img_sequencer.num_sequence
             img_seq, _ = img_sequencer.get_sequence()
+            # print(f"Time to get sequence: {time.time() - start}")
 
             init_copy_time: float = time.time()
-
             keys = key_check()
             if "J" not in keys:
                 with torch.no_grad():
+                    # start = time.time()
                     images = list(img_seq)
+                    # print(f"Time to list images: {time.time() - start}")
+                    start = time.time()
                     try:
                         model_inputs: torch.tensor = image_processor(
                             images=images,
                             input_data_format="channels_last",
                             return_tensors="pt",
                         )
-                    except ValueError as err:
+
+                    except ValueError:
                         print()
                         img_sequencer.stop()
                         if control_mode == "controller":
                             xbox_controller.stop()
-
-                        logging.error(
-                            f"Error processing images. Exception: {str(err)}. "
-                            f"Images: {[img.shape for img in images]}"
-                        )
                         exit()
 
+                    # print(f"Time to process images: {time.time() - start}")
+                    # start = time.time()
                     model_prediction: torch.tensor = model(
                         **model_inputs.to(device=model.device, dtype=model.dtype)
-                    )[0]
-
+                    ).logits[0]
+                    # print(f"Time to inference: {time.time() - start}")
+                    # print(model_prediction)
+                    # start = time.time()
                     model_prediction = torch.argmax(model_prediction).item()
 
                     model_prediction = io_handler.input_conversion(
                         input_value=model_prediction,
                         output_type=control_mode,
                     )
+                    # print(f"Time to convert input: {time.time() - start}")
+
+                # start = time.time()
 
                 if control_mode == "controller":
                     if model_prediction[1] > 0:
@@ -303,7 +305,8 @@ def run_ted1104(
                     select_key(model_prediction)
 
                 key_push_time: float = time.time()
-
+                # print(f"Time to push key: {time.time() - start}")
+                # start = time.time()
                 if show_current_control:
                     var.set("T.E.D.D. 1104 Driving")
                     text_label.config(fg="green")
@@ -395,6 +398,8 @@ def run_ted1104(
                 f"Push J to use to use manual control\n",
                 end="\r",
             )
+
+            # print(f"Time to show info: {time.time() - start}")
 
             last_time = time.time()
 

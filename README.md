@@ -115,19 +115,17 @@ Data generation and inference only work in Windows 10/11 which are the only OS s
 ## Requirements
 You can train and evaluate models on any Operating System (We use Linux for training).  
 Running real time inference (Let TEDD1104 drive in GTAV) requires Windows 10/11.
+
+For training models you will need:
 ```
-Python 3.7 or newer (3.9.7 tested)
-Pytorch (1.12.0 or newer)
-Torchvision (>=0.13.0 and < 0.15.0. Compatibility with torchvision >=0.15.0 will be added in a future release)
-PyTorch Lightning (1.6.0 or newer)
-torchmetrics
-scikit-image
-numpy
-PIL/Pillow
+Python 3.9 or newer (3.11 tested)
+Pytorch (2.1.0 or newer)
 cv2 (opencv-python)
-tkinter
+
+
+
 tabulate
-fairseq (If you want to train a model using AdaFactor)
+
 wandb or tensorboard for training (Set "--report_to" accordingly)
 win32api (PythonWin) - Only required for running real time inference (Let TEDD play the game)
                        Should be installed by default in newest Python versions for Windows. 
@@ -136,6 +134,32 @@ win32api (PythonWin) - Only required for running real time inference (Let TEDD p
 pygame - Only required if you wish to generate data using a Xbox Controller
 PYXInput - Only required if you wish to use a Vitual Xbox Controller as game controller instead of the keyboard. 
            See controller\README.md for installation instructions. 
+```
+
+For inference you will need:
+```
+Windows 10/11: The code to capture the game screen only works in Windows 10/11. 
+
+Python 3.9 or newer (3.11 tested)
+https://www.python.org/downloads/windows/
+
+Pytorch (2.1.0 or newer)
+Conda installation recommended: https://pytorch.org/get-started/locally/
+
+cv2 (opencv-python)
+pip install opencv-python
+
+transformers >= 4.33.1
+pip install transformers
+
+win32api (PythonWin)
+pip install pywin32
+
+bitsandbytes (For 8 bit and 4 bit quantization, you can skip this if you use 16 bit precision)
+You need to compile the library from source for Windows. https://github.com/TimDettmers/bitsandbytes
+This can be tricky, another option is to download the precompiled wheels for windows from this repository: https://github.com/jllllll/bitsandbytes-windows-webui
+Do it at your own risk, installing precompiled wheels from unknown sources can be dangerous.
+pip install https://github.com/jllllll/bitsandbytes-windows-webui/releases/download/wheels/bitsandbytes-0.41.2.post2-py3-none-win_amd64.whl
 ```
 
 ## Run Inference 

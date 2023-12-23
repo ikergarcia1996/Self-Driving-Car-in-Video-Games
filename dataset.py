@@ -7,7 +7,7 @@ from utils import IOHandler
 import numpy as np
 from PIL import Image
 import logging
-from transformers import VideoMAEImageProcessor
+from image_processing_videomae import VideoMAEImageProcessor
 import random
 import torch.multiprocessing
 from constants import IMAGE_MEAN, IMAGE_STD
