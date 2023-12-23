@@ -1,8 +1,8 @@
 #!/bin/bash
 #SBATCH --job-name=video-classification-large
-#SBATCH --cpus-per-task=128
+#SBATCH --cpus-per-task=64
 #SBATCH --gres=gpu:4
-#SBATCH --mem=480G
+#SBATCH --mem=420G
 #SBATCH --output=.slurm/video-classification-large.out.txt
 #SBATCH --error=.slurm/video-classification-large.err.txt
 
