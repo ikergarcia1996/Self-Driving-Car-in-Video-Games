@@ -19,7 +19,7 @@ export OMP_NUM_THREADS=16
 
 torchrun --standalone --master_port 37217 --nproc_per_node=2 train_TEDD1104.py configs/video-classification/eval/TEDD1104-large_ps30_ts5_bs256.yaml
 
-#torchrun --standalone --master_port 37217 --nproc_per_node=2 train_TEDD1104.py configs/video-classification/eval/TEDD1104-large_ts5_bs256.yaml
+#torchrun --standalone --master_port 37217 --nproc_per_node=2 train_TEDD1104.py configs/video-classification/eval/TEDD1104-large_ts5.yaml
 
-#torchrun --standalone --master_port 37217 --nproc_per_node=2 train_TEDD1104.py configs/video-classification/eval/TEDD1104-large_bs256.yaml
+#torchrun --standalone --master_port 37217 --nproc_per_node=2 train_TEDD1104.py configs/video-classification/eval/TEDD1104-large.yaml
 

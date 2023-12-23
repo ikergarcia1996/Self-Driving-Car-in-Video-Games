@@ -1,10 +1,10 @@
 #!/bin/bash
-#SBATCH --job-name=video-classification-large
+#SBATCH --job-name=video-classification-large_ts5
 #SBATCH --cpus-per-task=128
 #SBATCH --gres=gpu:4
 #SBATCH --mem=480G
-#SBATCH --output=.slurm/video-classification-large.out.txt
-#SBATCH --error=.slurm/video-classification-large.err.txt
+#SBATCH --output=.slurm/video-classification-large_ts5.out.txt
+#SBATCH --error=.slurm/video-classification-large_ts5.err.txt
 
 source /ikerlariak/igarcia945/envs/pytorch2/bin/activate
 
@@ -21,5 +21,5 @@ export WANDB__SERVICE_WAIT=300
 
 CONFIGS_FOLDER="configs/video-classification"
 
-torchrun --standalone --master_port 37223 --nproc_per_node=4 train_TEDD1104.py ${CONFIGS_FOLDER}/TEDD1104-large.yaml
-torchrun --standalone --master_port 37223 --nproc_per_node=4 train_TEDD1104.py ${CONFIGS_FOLDER}/eval/TEDD1104-large.yaml
+torchrun --standalone --master_port 37223 --nproc_per_node=4 train_TEDD1104.py ${CONFIGS_FOLDER}/TEDD1104-large_ts5.yaml
+torchrun --standalone --master_port 37223 --nproc_per_node=4 train_TEDD1104.py ${CONFIGS_FOLDER}/eval/TEDD1104-large_ts5.yaml

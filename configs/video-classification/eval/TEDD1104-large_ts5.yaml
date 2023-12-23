@@ -1,4 +1,4 @@
-model_name_or_path: models/video-classification/TEDD1104-large_ps30_ts5_epoch10_bs256
+model_name_or_path: models/video-classification/TEDD1104-large_ts5
 task: video-classification
 deepspeed: configs/deepspeed/deepspeed_zero3.json
 
@@ -23,12 +23,12 @@ hide_map_probability_test: 0.0
 mask_ratio: 0.9
 
 # checkpoint settings
-output_dir: models/video-classification/TEDD1104-large_ps30_ts5_epoch10_bs256
+output_dir: models/video-classification/TEDD1104-large_ts5
 overwrite_output_dir: true
 load_best_model_at_end: true
 save_strategy: "steps"
 save_steps: 1000
-save_total_limit: 1
+save_total_limit: 2
 evaluation_strategy: "steps"
 eval_steps: 1000
 metric_for_best_model: "acc_k1_macro"
@@ -37,23 +37,23 @@ greater_is_better: true
 # batch size
 per_device_train_batch_size: 64
 per_device_eval_batch_size: 32
-gradient_accumulation_steps: 2
+gradient_accumulation_steps: 1
 num_train_epochs: 10
 
 # optimizer settings
 optim: adamw_torch_fused
-learning_rate: 0.0001
-weight_decay: 0.01
+learning_rate: 0.00002
+weight_decay: 0.0
 adam_beta1: 0.9
 adam_beta2: 0.95
 lr_scheduler_type: cosine
-warmup_ratio: 0.03
+warmup_ratio: 0.1
 
 logging_strategy: steps
 logging_first_step: true
 logging_steps: 100
 report_to: wandb
-run_name: "TEDD1104-large_ps30_ts5_epoch10_bs256"
+run_name: "TEDD1104-large_ts5"
 disable_tqdm: false
 
 # hub settings
