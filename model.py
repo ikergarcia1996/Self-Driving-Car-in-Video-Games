@@ -132,7 +132,7 @@ class VideoMAElarge:
             patch_size=15,
             num_channels=3,
             num_frames=5,
-            tubelet_size=5,
+            tubelet_size=1,
             hidden_size=1024,
             num_hidden_layers=16,
             num_attention_heads=16,
