@@ -389,6 +389,6 @@ class VideoMAEImageProcessor(BaseImageProcessor):
         ]
         # print(f"VMAEPRINT! _preprocess_image: {time.time() - start}")
 
-        data = {"pixel_values": np.array(videos)}
+        data = {"pixel_values": np.asarray(videos)}
 
         return BatchFeature(data=data, tensor_type=return_tensors)
