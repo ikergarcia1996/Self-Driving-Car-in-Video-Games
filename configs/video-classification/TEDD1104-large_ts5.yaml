@@ -5,17 +5,17 @@ deepspeed: configs/deepspeed/deepspeed_zero3.json
 do_train: true
 do_eval: true
 do_predict: true
-train_dir: /ikerlariak/igarcia945/gtaai_datasets/train
-validation_dir: /ikerlariak/igarcia945/gtaai_datasets/dev
+train_dir: ../gtaai_datasets/train
+validation_dir: ../gtaai_datasets/dev
 test_dirs:
-    - /ikerlariak/igarcia945/gtaai_datasets/test/car_city_day_clear
-    - /ikerlariak/igarcia945/gtaai_datasets/test/car_city_day_rain
-    - /ikerlariak/igarcia945/gtaai_datasets/test/car_city_night_clear
-    - /ikerlariak/igarcia945/gtaai_datasets/test/car_city_night_rain
-    - /ikerlariak/igarcia945/gtaai_datasets/test/car_highway_day_clear
-    - /ikerlariak/igarcia945/gtaai_datasets/test/car_highway_day_rain
-    - /ikerlariak/igarcia945/gtaai_datasets/test/car_highway_night_clear
-    - /ikerlariak/igarcia945/gtaai_datasets/test/car_highway_night_rain
+    - ../gtaai_datasets/test/car_city_day_clear
+    - ../gtaai_datasets/test/car_city_day_rain
+    - ../gtaai_datasets/test/car_city_night_clear
+    - ../gtaai_datasets/test/car_city_night_rain
+    - ../gtaai_datasets/test/car_highway_day_clear
+    - ../gtaai_datasets/test/car_highway_day_rain
+    - ../gtaai_datasets/test/car_highway_night_clear
+    - ../gtaai_datasets/test/car_highway_night_rain
 
 hide_map_probability_train: 0.0
 hide_map_probability_validation: 0.0
