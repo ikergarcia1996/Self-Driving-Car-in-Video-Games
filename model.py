@@ -188,7 +188,7 @@ class VideoMAElarge_TS5:
 
 class VideoMAElarge_P30:
     def __init__(self):
-        self.name = "VideoMAE-large_p30"
+        self.name = "VideoMAE-large_ps30"
         self.config = VideoMAEConfig(
             image_size=(270, 480),
             patch_size=30,
