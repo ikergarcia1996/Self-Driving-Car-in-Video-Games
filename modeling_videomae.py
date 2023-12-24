@@ -17,6 +17,7 @@
 # - Fixed bfloat16 training: https://github.com/huggingface/transformers/pull/27296
 # - Set MEAN and STD values for the GTAV dataset in VideoMAEForPretraining
 # - Set label_smoothing to 0.1 in VideoMAEForVideoClassification
+# - Add bool_masked_pos to VideoMAEForVideoClassification to allow masking full frames during training
 """ PyTorch VideoMAE (masked autoencoder) model."""
 
 import collections.abc
