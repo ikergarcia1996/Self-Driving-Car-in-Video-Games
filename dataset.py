@@ -164,7 +164,7 @@ class ImageMaskingGenerator(object):
         self.image_length = 270 // patch_size * 480 // patch_size
         self.mask_ratio = mask_ratio
 
-        if self.tubelet_size == 5:
+        if tubelet_size == 5:
             logging.warning(
                 "You have set mask_ratio > 0, however tubelet_size is 5. "
                 "Therefore, sequences are tokenized as a single image. "
@@ -181,14 +181,14 @@ class ImageMaskingGenerator(object):
             torch.tensor: Tube mask
         """
 
-        bernolli_matrix = torch.cat(
+        bernolli_matrix: torch.tensor = torch.cat(
             ((torch.tensor([self.mask_ratio]).float()).repeat(5),),
             0,
         )
 
         bernolli_distributor = torch.distributions.Bernoulli(bernolli_matrix)
-        sample = bernolli_distributor.sample()
-        mask = sample > 0
+        sample: torch.tensor = bernolli_distributor.sample()
+        mask: torch.tensor = sample > 0
 
         mask = [
             torch.ones(self.image_length) if m else torch.zeros(self.image_length)
