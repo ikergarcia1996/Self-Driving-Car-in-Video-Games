@@ -1,12 +1,12 @@
 #!/bin/bash
 #SBATCH --account=ixa
 #SBATCH --partition=ixa
-#SBATCH --job-name=video-classification-large_ps30_ts5
+#SBATCH --job-name=video-classification-large_ps30
 #SBATCH --cpus-per-task=64
 #SBATCH --gres=gpu:a100:8
 #SBATCH --mem=900G
-#SBATCH --output=.slurm/video-classification-large_ps30_ts5.out.txt
-#SBATCH --error=.slurm/video-classification-large_ps30_ts5.err.txt
+#SBATCH --output=.slurm/video-classification-large_ps30.out.txt
+#SBATCH --error=.slurm/video-classification-large_ps30.err.txt
 
 module load Python
 source /scratch/igarcia945/venvs/transformers/bin/activate
@@ -26,5 +26,5 @@ echo CUDA_VISIBLE_DEVICES "${CUDA_VISIBLE_DEVICES}"
 
 CONFIGS_FOLDER="configs/video-classification"
 
-torchrun --standalone --master_port 37223 --nproc_per_node=8 train_TEDD1104.py ${CONFIGS_FOLDER}/TEDD1104-large_ps30_ts5.yaml
+torchrun --standalone --master_port 37223 --nproc_per_node=8 train_TEDD1104.py ${CONFIGS_FOLDER}/TEDD1104-large_ps30.yaml
 

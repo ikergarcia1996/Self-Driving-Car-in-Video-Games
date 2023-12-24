@@ -21,6 +21,8 @@ class VideoMAEsmall:
             decoder_hidden_size=192,
             decoder_num_hidden_layers=3,
             decoder_intermediate_size=1536,
+            hidden_dropout_prob=0.1,
+            attention_probs_dropout_prob=0.1,
         )
 
     def get_model(self):
@@ -45,6 +47,8 @@ class VideoMAEbase:
             decoder_hidden_size=384,
             decoder_num_hidden_layers=6,
             decoder_intermediate_size=1536,
+            hidden_dropout_prob=0.1,
+            attention_probs_dropout_prob=0.1,
         )
 
     def get_model(self):
@@ -69,6 +73,8 @@ class VideoMAEbase_PS30:
             decoder_hidden_size=384,
             decoder_num_hidden_layers=6,
             decoder_intermediate_size=1536,
+            hidden_dropout_prob=0.1,
+            attention_probs_dropout_prob=0.1,
         )
 
     def get_model(self):
@@ -93,6 +99,8 @@ class VideoMAEbase_TS5:
             decoder_hidden_size=384,
             decoder_num_hidden_layers=6,
             decoder_intermediate_size=1536,
+            hidden_dropout_prob=0.1,
+            attention_probs_dropout_prob=0.1,
         )
 
     def get_model(self):
@@ -117,6 +125,8 @@ class VideoMAEbase_PS30_TS5:
             decoder_hidden_size=384,
             decoder_num_hidden_layers=6,
             decoder_intermediate_size=1536,
+            hidden_dropout_prob=0.1,
+            attention_probs_dropout_prob=0.1,
         )
 
     def get_model(self):
@@ -141,6 +151,8 @@ class VideoMAElarge:
             decoder_hidden_size=512,
             decoder_num_hidden_layers=8,
             decoder_intermediate_size=2048,
+            hidden_dropout_prob=0.1,
+            attention_probs_dropout_prob=0.1,
         )
 
     def get_model(self):
@@ -165,6 +177,34 @@ class VideoMAElarge_TS5:
             decoder_hidden_size=512,
             decoder_num_hidden_layers=8,
             decoder_intermediate_size=2048,
+            hidden_dropout_prob=0.1,
+            attention_probs_dropout_prob=0.1,
+        )
+
+    def get_model(self):
+        print(f"Loading {self.name} model")
+        return VideoMAEModel(self.config)
+
+
+class VideoMAElarge_P30:
+    def __init__(self):
+        self.name = "VideoMAE-large_p30"
+        self.config = VideoMAEConfig(
+            image_size=(270, 480),
+            patch_size=30,
+            num_channels=3,
+            num_frames=5,
+            tubelet_size=1,
+            hidden_size=1024,
+            num_hidden_layers=16,
+            num_attention_heads=16,
+            intermediate_size=4096,
+            decoder_num_attention_heads=8,
+            decoder_hidden_size=512,
+            decoder_num_hidden_layers=8,
+            decoder_intermediate_size=2048,
+            hidden_dropout_prob=0.1,
+            attention_probs_dropout_prob=0.1,
         )
 
     def get_model(self):
@@ -189,6 +229,8 @@ class VideoMAElarge_PS30_TS5:
             decoder_hidden_size=512,
             decoder_num_hidden_layers=8,
             decoder_intermediate_size=2048,
+            hidden_dropout_prob=0.1,
+            attention_probs_dropout_prob=0.1,
         )
 
     def get_model(self):
@@ -213,6 +255,8 @@ class VideoMAExxl:
             decoder_hidden_size=640,
             decoder_num_hidden_layers=10,
             decoder_intermediate_size=2560,
+            hidden_dropout_prob=0.1,
+            attention_probs_dropout_prob=0.1,
         )
 
     def get_model(self):
@@ -225,11 +269,12 @@ def initialize_models(output_path: str):
     for model in [
         VideoMAEsmall,
         VideoMAEbase,
-        VideoMAEbase_PS30,
         VideoMAEbase_TS5,
+        VideoMAEbase_PS30,
         VideoMAEbase_PS30_TS5,
         VideoMAElarge,
         VideoMAElarge_TS5,
+        VideoMAElarge_P30,
         VideoMAElarge_PS30_TS5,
         VideoMAExxl,
     ]:

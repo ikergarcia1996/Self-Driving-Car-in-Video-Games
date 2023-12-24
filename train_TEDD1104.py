@@ -86,7 +86,7 @@ def train_tedd1104(
     validation_dataset = Tedd1104Dataset(
         dataset_dir=data_args.validation_dir,
         hide_map_prob=data_args.hide_map_probability_validation,
-        mask_ratio=data_args.mask_ratio,
+        mask_ratio=data_args.mask_ratio if data_args.task == "video-masking" else 0.0,
         patch_size=model.config.patch_size,
         tubelet_size=model.config.tubelet_size,
         task=data_args.task,
@@ -202,7 +202,9 @@ def inference_tedd1104(
         test_dataset = Tedd1104Dataset(
             dataset_dir=test_dir,
             hide_map_prob=data_args.hide_map_probability_test,
-            mask_ratio=data_args.mask_ratio,
+            mask_ratio=data_args.mask_ratio
+            if data_args.task == "video-masking"
+            else 0.0,
             patch_size=model.config.patch_size,
             tubelet_size=model.config.tubelet_size,
             task=data_args.task,

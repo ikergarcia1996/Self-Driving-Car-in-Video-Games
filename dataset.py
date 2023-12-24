@@ -148,6 +148,58 @@ class TubeMaskingGenerator(object):
         return mask
 
 
+class ImageMaskingGenerator(object):
+    """
+    Mask images in a sequence
+    """
+
+    def __init__(self, mask_ratio, patch_size, tubelet_size):
+        """
+        INIT
+        Args:
+            mask_ratio (float): Ratio of the image to be masked
+        """
+
+        self.seq_length = 5 // tubelet_size * 270 // patch_size * 480 // patch_size
+        self.image_length = 270 // patch_size * 480 // patch_size
+        self.mask_ratio = mask_ratio
+
+        if self.tubelet_size == 5:
+            logging.warning(
+                "You have set mask_ratio > 0, however tubelet_size is 5. "
+                "Therefore, sequences are tokenized as a single image. "
+                "We cannot mask the images or the whole sequence will be masked. "
+                "We will set mask_ratio to 0."
+            )
+            self.mask_ratio = 0.0
+
+    def __call__(self):
+        """
+        Generate an image mask for a sequence of images
+
+        Returns:
+            torch.tensor: Tube mask
+        """
+
+        bernolli_matrix = torch.cat(
+            ((torch.tensor([self.mask_ratio]).float()).repeat(5),),
+            0,
+        )
+
+        bernolli_distributor = torch.distributions.Bernoulli(bernolli_matrix)
+        sample = bernolli_distributor.sample()
+        mask = sample > 0
+
+        mask = [
+            torch.ones(self.image_length) if m else torch.zeros(self.image_length)
+            for m in mask
+        ]
+
+        mask = torch.vstack(mask).view(1, -1).squeeze(0)
+        mask.requires_grad = False
+        return mask
+
+
 def set_worker_sharing_strategy(worker_id: int) -> None:
     torch.multiprocessing.set_sharing_strategy("file_system")
 
@@ -169,7 +221,9 @@ class Tedd1104Dataset(Dataset):
         Args:
             dataset_dir (str): Path to the dataset directory
             hide_map_prob (float): Probability of hiding the minimap
-            mask_ratio (float): Ratio of the image to be masked
+            mask_ratio (float): Ratio of the image to be masked.
+                                In video-masking mode, we will create tubelets (https://arxiv.org/pdf/2203.12602.pdf)
+                                and mask the tubelets. In video-classification mode, we will mask whole images.
             patch_size (int): Patch size
             tubelet_size (int): Tubelet size
             task (str): Task to perform. One of: video-classification, video-masking
@@ -197,7 +251,12 @@ class Tedd1104Dataset(Dataset):
         self.task = task
         self.control_mode = "keyboard".lower()
         self.image_splitter = SplitImages()
-        self.mask_generator = TubeMaskingGenerator(
+
+        mask_fn = (
+            TubeMaskingGenerator if task == "video-masking" else ImageMaskingGenerator
+        )
+
+        self.mask_generator = mask_fn(
             mask_ratio=mask_ratio, patch_size=patch_size, tubelet_size=tubelet_size
         )
 
@@ -284,6 +343,8 @@ class Tedd1104Dataset(Dataset):
 
         if self.task == "video-classification":
             model_inputs["labels"] = torch.tensor(y, dtype=torch.long)
+            if self.mask_generator.mask_ratio > 0:
+                model_inputs["bool_masked_pos"] = self.mask_generator()
         elif self.task == "video-masking":
             model_inputs["bool_masked_pos"] = self.mask_generator()
         else:

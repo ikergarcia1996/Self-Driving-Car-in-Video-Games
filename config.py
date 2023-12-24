@@ -70,6 +70,10 @@ class DataTrainingArguments:
     )
 
     mask_ratio: Optional[float] = field(
-        default=0.9,
-        metadata={"help": "The ratio of the image to be masked."},
+        default=0.2,
+        metadata={
+            "help": "Ratio of the image to be masked. "
+            "In video-masking mode, we will create tubelets (https://arxiv.org/pdf/2203.12602.pdf) "
+            "and mask the tubelets. In video-classification mode, we will mask whole images."
+        },
     )
