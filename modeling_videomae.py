@@ -1099,6 +1099,7 @@ class VideoMAEForVideoClassification(VideoMAEPreTrainedModel):
         output_attentions: Optional[bool] = None,
         output_hidden_states: Optional[bool] = None,
         return_dict: Optional[bool] = None,
+        bool_masked_pos: Optional[torch.BoolTensor] = None,
     ) -> Union[Tuple, ImageClassifierOutput]:
         r"""
         labels (`torch.LongTensor` of shape `(batch_size,)`, *optional*):
@@ -1194,6 +1195,7 @@ class VideoMAEForVideoClassification(VideoMAEPreTrainedModel):
             output_attentions=output_attentions,
             output_hidden_states=output_hidden_states,
             return_dict=return_dict,
+            bool_masked_pos=bool_masked_pos,
         )
 
         sequence_output = outputs[0]
