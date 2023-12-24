@@ -191,7 +191,9 @@ class ImageMaskingGenerator(object):
         mask: torch.tensor = sample > 0
 
         mask = [
-            torch.ones(self.image_length) if m else torch.zeros(self.image_length)
+            torch.ones(self.image_length, dtype=torch.bool)
+            if m
+            else torch.zeros(self.image_length, dtype=torch.bool)
             for m in mask
         ]
 
