@@ -14,7 +14,7 @@ from keyboard.getkeys import id_to_key
 import math
 from typing import Optional
 from image_processing_videomae import VideoMAEImageProcessor
-from dataset import IMAGE_MEAN, IMAGE_STD
+from constants import IMAGE_MEAN, IMAGE_STD
 
 
 from utils import IOHandler, get_trainable_parameters
