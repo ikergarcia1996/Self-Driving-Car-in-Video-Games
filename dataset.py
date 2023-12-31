@@ -11,6 +11,7 @@ from image_processing_videomae import VideoMAEImageProcessor
 import random
 import torch.multiprocessing
 from constants import IMAGE_MEAN, IMAGE_STD
+from torchvision import transforms
 
 torch.multiprocessing.set_sharing_strategy("file_system")
 
@@ -69,11 +70,11 @@ class SplitImages(object):
         """
 
         width: int = int(image.shape[1] / 5)
-        image1 = image[:, 0:width, :]
-        image2 = image[:, width : width * 2, :]
-        image3 = image[:, width * 2 : width * 3, :]
-        image4 = image[:, width * 3 : width * 4, :]
-        image5 = image[:, width * 4 : width * 5, :]
+        image1 = torch.from_numpy(image[:, 0:width, :])
+        image2 = torch.from_numpy(image[:, width : width * 2, :])
+        image3 = torch.from_numpy(image[:, width * 2 : width * 3, :])
+        image4 = torch.from_numpy(image[:, width * 3 : width * 4, :])
+        image5 = torch.from_numpy(image[:, width * 4 : width * 5, :])
         return [image1, image2, image3, image4, image5]
 
 
@@ -202,6 +203,51 @@ class ImageMaskingGenerator(object):
         return mask
 
 
+def merge_masks(mask1: torch.tensor, mask2: torch.tensor) -> torch.tensor:
+    """
+    Merge two masks
+
+    Args:
+        mask1 (torch.tensor): Mask 1
+        mask2 (torch.tensor): Mask 2
+
+    Returns:
+        torch.tensor: Merged mask
+    """
+
+    mask = mask1 | mask2
+    return mask
+
+
+class SequenceColorJitter(object):
+    """
+    Randomly change the brightness, contrast and saturation of a sequence of images
+    """
+
+    def __init__(self, brightness=0.5, contrast=0.1, saturation=0.1, hue=0.5):
+        """
+        INIT
+
+        :param float brightness: Probability of changing brightness (0<=brightness<=1)
+        :param float contrast: Probability of changing contrast (0<=contrast<=1)
+        :param float saturation: Probability of changing saturation (0<=saturation<=1)
+        :param float hue: Probability of changing hue (0<=hue<=1)
+        """
+        self.jitter = transforms.ColorJitter(
+            brightness=brightness, contrast=contrast, saturation=saturation, hue=hue
+        )
+
+    def __call__(self, images: List[torch.tensor]) -> (torch.tensor, torch.tensor):
+        """
+        Applies the transformation to the sequence of images.
+
+        :param Dict[str, torch.tensor] sample: Sequence of images
+        :return: Dict[str, torch.tensor]- Transformed sequence of images
+        """
+        images = self.jitter(images)
+        return images
+
+
 def set_worker_sharing_strategy(worker_id: int) -> None:
     torch.multiprocessing.set_sharing_strategy("file_system")
 
@@ -213,22 +259,24 @@ class Tedd1104Dataset(Dataset):
         self,
         dataset_dir: str,
         hide_map_prob: float,
-        mask_ratio: float,
+        tubelet_mask_ratio: float,
+        image_mask_ratio: float,
         patch_size: int,
         tubelet_size: int,
         task: str = "video-classification",
+        inference: bool = False,
     ):
         """
         INIT
         Args:
             dataset_dir (str): Path to the dataset directory
             hide_map_prob (float): Probability of hiding the minimap
-            mask_ratio (float): Ratio of the image to be masked.
-                                In video-masking mode, we will create tubelets (https://arxiv.org/pdf/2203.12602.pdf)
-                                and mask the tubelets. In video-classification mode, we will mask whole images.
+            tubelet_mask_ratio (float): tubelets masking ratio (https://arxiv.org/pdf/2203.12602.pdf)
+            image_mask_ratio (float): whole images masking ratio
             patch_size (int): Patch size
             tubelet_size (int): Tubelet size
             task (str): Task to perform. One of: video-classification, video-masking
+            inference (bool): If True, we do not apply any transformation to the images
         """
         if not (0 <= hide_map_prob <= 1.0):
             raise ValueError(
@@ -236,10 +284,16 @@ class Tedd1104Dataset(Dataset):
                 f"hide_map_prob: {hide_map_prob}"
             )
 
-        if not (0 <= mask_ratio <= 1.0):
+        if not (0 <= tubelet_mask_ratio <= 1.0):
             raise ValueError(
-                f"mask_ratio not in 0 <= mask_ratio <= 1.0 range. "
-                f"mask_ratio: {mask_ratio}"
+                f"tubelet_mask_ratio not in 0 <= tubelet_mask_ratio <= 1.0 range. "
+                f"tubelet_mask_ratio: {tubelet_mask_ratio}"
+            )
+
+        if not (0 <= image_mask_ratio <= 1.0):
+            raise ValueError(
+                f"image_mask_ratio not in 0 <= image_mask_ratio <= 1.0 range. "
+                f"image_mask_ratio: {image_mask_ratio}"
             )
 
         if task not in ["video-classification", "video-masking"]:
@@ -248,18 +302,24 @@ class Tedd1104Dataset(Dataset):
                 f"task: {task}"
             )
 
+        self.inference = inference
         self.dataset_dir = dataset_dir
         self.hide_map_prob = hide_map_prob
         self.task = task
         self.control_mode = "keyboard".lower()
         self.image_splitter = SplitImages()
+        self.image_color_jitter = SequenceColorJitter()
 
-        mask_fn = (
-            TubeMaskingGenerator if task == "video-masking" else ImageMaskingGenerator
+        self.tubelet_mask_generator = TubeMaskingGenerator(
+            mask_ratio=0.0 if inference else tubelet_mask_ratio,
+            patch_size=patch_size,
+            tubelet_size=tubelet_size,
         )
 
-        self.mask_generator = mask_fn(
-            mask_ratio=mask_ratio, patch_size=patch_size, tubelet_size=tubelet_size
+        self.image_mask_generator = ImageMaskingGenerator(
+            mask_ratio=0.0 if inference else image_mask_ratio,
+            patch_size=patch_size,
+            tubelet_size=tubelet_size,
         )
 
         if self.hide_map_prob > 0:
@@ -287,7 +347,8 @@ class Tedd1104Dataset(Dataset):
             f"Dataset: {dataset_dir}\n"
             f"   Number of images: {len(self.dataset_files)}\n"
             f"   Hide map probability: {self.hide_map_prob}\n"
-            f"   Mask ratio: {mask_ratio}\n"
+            f"   Tubelet mask ratio: {tubelet_mask_ratio}\n"
+            f"   Image mask ratio: {image_mask_ratio}\n"
             f"   Task: {self.task}"
         )
 
@@ -321,7 +382,9 @@ class Tedd1104Dataset(Dataset):
                 image: np.array = pil_to_numpy(Image.open(img_name))
                 if self.map_remover:
                     image = self.map_remover(image)
-                images: List[np.array] = self.image_splitter(image)
+                images: List[torch.tensor] = self.image_splitter(image)
+                if not self.inference:
+                    images = self.image_color_jitter(images)
 
             except (ValueError, FileNotFoundError) as err:
                 error_message = str(err).split("\n")[-1]
@@ -343,16 +406,12 @@ class Tedd1104Dataset(Dataset):
         # Remove the batch dimension
         model_inputs["pixel_values"] = model_inputs["pixel_values"][0]
 
+        mask1 = self.tubelet_mask_generator()
+        mask2 = self.image_mask_generator()
+        mask = merge_masks(mask1, mask2)
+
+        model_inputs["bool_masked_pos"] = mask
         if self.task == "video-classification":
             model_inputs["labels"] = torch.tensor(y, dtype=torch.long)
-            if self.mask_generator.mask_ratio > 0:
-                model_inputs["bool_masked_pos"] = self.mask_generator()
-        elif self.task == "video-masking":
-            model_inputs["bool_masked_pos"] = self.mask_generator()
-        else:
-            raise ValueError(
-                f"task not in ['video-classification', 'video-masking']. "
-                f"task: {self.task}"
-            )
 
         return model_inputs

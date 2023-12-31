@@ -69,11 +69,18 @@ class DataTrainingArguments:
         metadata={"help": "The probability of hiding the map in the test data."},
     )
 
-    mask_ratio: Optional[float] = field(
+    tubelet_mask_ratio: Optional[float] = field(
         default=0.2,
         metadata={
-            "help": "Ratio of the image to be masked. "
-            "In video-masking mode, we will create tubelets (https://arxiv.org/pdf/2203.12602.pdf) "
-            "and mask the tubelets. In video-classification mode, we will mask whole images."
+            "help": "tubelets masking ratio (https://arxiv.org/pdf/2203.12602.pdf)"
         },
     )
+
+    image_mask_ratio: Optional[float] = field(
+        default=0.2,
+        metadata={
+            "help": "whole images masking ratio"
+        },
+    )
+
+

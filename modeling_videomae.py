@@ -18,13 +18,16 @@
 # - Set MEAN and STD values for the GTAV dataset in VideoMAEForPretraining
 # - Set label_smoothing to 0.1 in VideoMAEForVideoClassification
 # - Add bool_masked_pos to VideoMAEForVideoClassification to allow masking full frames during training
+# - Change VideoClasiffier to RobertaClassificationHead
+# - Remove the code copied from Vit transformers and import the ViT classes directly
+
 """ PyTorch VideoMAE (masked autoencoder) model."""
 
 import collections.abc
 import math
 from copy import deepcopy
 from dataclasses import dataclass
-from typing import Optional, Set, Tuple, Union
+from typing import Optional, Tuple, Union
 
 import numpy as np
 import torch
@@ -32,13 +35,14 @@ import torch.utils.checkpoint
 from torch import nn
 from torch.nn import BCEWithLogitsLoss, CrossEntropyLoss, MSELoss
 
-from transformers.activations import ACT2FN
+
 from transformers.modeling_outputs import BaseModelOutput, ImageClassifierOutput
 from transformers.modeling_utils import PreTrainedModel
-from transformers.pytorch_utils import (
-    find_pruneable_heads_and_indices,
-    prune_linear_layer,
-)
+
+
+from transformers.models.vit.modeling_vit import ViTEncoder as VideoMAEEncoder
+from transformers.models.vit.modeling_vit import ViTLayer as VideoMAELayer
+
 from transformers.utils import (
     ModelOutput,
     add_start_docstrings,
@@ -47,7 +51,7 @@ from transformers.utils import (
     replace_return_docstrings,
 )
 from constants import IMAGE_MEAN, IMAGE_STD
-from transformers import VideoMAEConfig
+from configuration_videomae import VideoMAEConfig
 
 
 logger = logging.get_logger(__name__)
@@ -327,222 +331,6 @@ class VideoMAESelfAttention(nn.Module):
         return outputs
 
 
-# Copied from transformers.models.vit.modeling_vit.ViTSelfOutput with ViT->VideoMAE
-class VideoMAESelfOutput(nn.Module):
-    """
-    The residual connection is defined in VideoMAELayer instead of here (as is the case with other models), due to the
-    layernorm applied before each block.
-    """
-
-    def __init__(self, config: VideoMAEConfig) -> None:
-        super().__init__()
-        self.dense = nn.Linear(config.hidden_size, config.hidden_size)
-        self.dropout = nn.Dropout(config.hidden_dropout_prob)
-
-    def forward(
-        self, hidden_states: torch.Tensor, input_tensor: torch.Tensor
-    ) -> torch.Tensor:
-        hidden_states = self.dense(hidden_states)
-        hidden_states = self.dropout(hidden_states)
-
-        return hidden_states
-
-
-# Copied from transformers.models.vit.modeling_vit.ViTAttention with ViT->VideoMAE
-class VideoMAEAttention(nn.Module):
-    def __init__(self, config: VideoMAEConfig) -> None:
-        super().__init__()
-        self.attention = VideoMAESelfAttention(config)
-        self.output = VideoMAESelfOutput(config)
-        self.pruned_heads = set()
-
-    def prune_heads(self, heads: Set[int]) -> None:
-        if len(heads) == 0:
-            return
-        heads, index = find_pruneable_heads_and_indices(
-            heads,
-            self.attention.num_attention_heads,
-            self.attention.attention_head_size,
-            self.pruned_heads,
-        )
-
-        # Prune linear layers
-        self.attention.query = prune_linear_layer(self.attention.query, index)
-        self.attention.key = prune_linear_layer(self.attention.key, index)
-        self.attention.value = prune_linear_layer(self.attention.value, index)
-        self.output.dense = prune_linear_layer(self.output.dense, index, dim=1)
-
-        # Update hyper params and store pruned heads
-        self.attention.num_attention_heads = self.attention.num_attention_heads - len(
-            heads
-        )
-        self.attention.all_head_size = (
-            self.attention.attention_head_size * self.attention.num_attention_heads
-        )
-        self.pruned_heads = self.pruned_heads.union(heads)
-
-    def forward(
-        self,
-        hidden_states: torch.Tensor,
-        head_mask: Optional[torch.Tensor] = None,
-        output_attentions: bool = False,
-    ) -> Union[Tuple[torch.Tensor, torch.Tensor], Tuple[torch.Tensor]]:
-        self_outputs = self.attention(hidden_states, head_mask, output_attentions)
-
-        attention_output = self.output(self_outputs[0], hidden_states)
-
-        outputs = (attention_output,) + self_outputs[
-            1:
-        ]  # add attentions if we output them
-        return outputs
-
-
-# Copied from transformers.models.vit.modeling_vit.ViTIntermediate ViT->VideoMAE
-class VideoMAEIntermediate(nn.Module):
-    def __init__(self, config: VideoMAEConfig) -> None:
-        super().__init__()
-        self.dense = nn.Linear(config.hidden_size, config.intermediate_size)
-        if isinstance(config.hidden_act, str):
-            self.intermediate_act_fn = ACT2FN[config.hidden_act]
-        else:
-            self.intermediate_act_fn = config.hidden_act
-
-    def forward(self, hidden_states: torch.Tensor) -> torch.Tensor:
-        hidden_states = self.dense(hidden_states)
-        hidden_states = self.intermediate_act_fn(hidden_states)
-
-        return hidden_states
-
-
-# Copied from transformers.models.vit.modeling_vit.ViTOutput ViT->VideoMAE
-class VideoMAEOutput(nn.Module):
-    def __init__(self, config: VideoMAEConfig) -> None:
-        super().__init__()
-        self.dense = nn.Linear(config.intermediate_size, config.hidden_size)
-        self.dropout = nn.Dropout(config.hidden_dropout_prob)
-
-    def forward(
-        self, hidden_states: torch.Tensor, input_tensor: torch.Tensor
-    ) -> torch.Tensor:
-        hidden_states = self.dense(hidden_states)
-        hidden_states = self.dropout(hidden_states)
-
-        hidden_states = hidden_states + input_tensor
-
-        return hidden_states
-
-
-# Copied from transformers.models.vit.modeling_vit.ViTLayer with ViT->VideoMAE
-class VideoMAELayer(nn.Module):
-    """This corresponds to the Block class in the timm implementation."""
-
-    def __init__(self, config: VideoMAEConfig) -> None:
-        super().__init__()
-        self.chunk_size_feed_forward = config.chunk_size_feed_forward
-        self.seq_len_dim = 1
-        self.attention = VideoMAEAttention(config)
-        self.intermediate = VideoMAEIntermediate(config)
-        self.output = VideoMAEOutput(config)
-        self.layernorm_before = nn.LayerNorm(
-            config.hidden_size, eps=config.layer_norm_eps
-        )
-        self.layernorm_after = nn.LayerNorm(
-            config.hidden_size, eps=config.layer_norm_eps
-        )
-
-    def forward(
-        self,
-        hidden_states: torch.Tensor,
-        head_mask: Optional[torch.Tensor] = None,
-        output_attentions: bool = False,
-    ) -> Union[Tuple[torch.Tensor, torch.Tensor], Tuple[torch.Tensor]]:
-        self_attention_outputs = self.attention(
-            self.layernorm_before(
-                hidden_states
-            ),  # in VideoMAE, layernorm is applied before self-attention
-            head_mask,
-            output_attentions=output_attentions,
-        )
-        attention_output = self_attention_outputs[0]
-        outputs = self_attention_outputs[
-            1:
-        ]  # add self attentions if we output attention weights
-
-        # first residual connection
-        hidden_states = attention_output + hidden_states
-
-        # in VideoMAE, layernorm is also applied after self-attention
-        layer_output = self.layernorm_after(hidden_states)
-        layer_output = self.intermediate(layer_output)
-
-        # second residual connection is done here
-        layer_output = self.output(layer_output, hidden_states)
-
-        outputs = (layer_output,) + outputs
-
-        return outputs
-
-
-# Copied from transformers.models.vit.modeling_vit.ViTEncoder with ViT->VideoMAE
-class VideoMAEEncoder(nn.Module):
-    def __init__(self, config: VideoMAEConfig) -> None:
-        super().__init__()
-        self.config = config
-        self.layer = nn.ModuleList(
-            [VideoMAELayer(config) for _ in range(config.num_hidden_layers)]
-        )
-        self.gradient_checkpointing = False
-
-    def forward(
-        self,
-        hidden_states: torch.Tensor,
-        head_mask: Optional[torch.Tensor] = None,
-        output_attentions: bool = False,
-        output_hidden_states: bool = False,
-        return_dict: bool = True,
-    ) -> Union[tuple, BaseModelOutput]:
-        all_hidden_states = () if output_hidden_states else None
-        all_self_attentions = () if output_attentions else None
-
-        for i, layer_module in enumerate(self.layer):
-            if output_hidden_states:
-                all_hidden_states = all_hidden_states + (hidden_states,)
-
-            layer_head_mask = head_mask[i] if head_mask is not None else None
-
-            if self.gradient_checkpointing and self.training:
-                layer_outputs = self._gradient_checkpointing_func(
-                    layer_module.__call__,
-                    hidden_states,
-                    layer_head_mask,
-                    output_attentions,
-                )
-            else:
-                layer_outputs = layer_module(
-                    hidden_states, layer_head_mask, output_attentions
-                )
-
-            hidden_states = layer_outputs[0]
-
-            if output_attentions:
-                all_self_attentions = all_self_attentions + (layer_outputs[1],)
-
-        if output_hidden_states:
-            all_hidden_states = all_hidden_states + (hidden_states,)
-
-        if not return_dict:
-            return tuple(
-                v
-                for v in [hidden_states, all_hidden_states, all_self_attentions]
-                if v is not None
-            )
-        return BaseModelOutput(
-            last_hidden_state=hidden_states,
-            hidden_states=all_hidden_states,
-            attentions=all_self_attentions,
-        )
-
-
 class VideoMAEPreTrainedModel(PreTrainedModel):
     """
     An abstract class to handle weights initialization and a simple interface for downloading and loading pretrained
@@ -652,80 +440,7 @@ class VideoMAEModel(VideoMAEPreTrainedModel):
             length is `(num_frames // tubelet_size) * (image_size // patch_size) ** 2`.
 
         Returns:
-
-        Examples:
-
-        ```python
-        >>> import av
-        >>> import numpy as np
-
-        >>> from transformers import AutoImageProcessor, VideoMAEModel
-        >>> from huggingface_hub import hf_hub_download
-
-        >>> np.random.seed(0)
-
-
-        >>> def read_video_pyav(container, indices):
-        ...     '''
-        ...     Decode the video with PyAV decoder.
-        ...     Args:
-        ...         container (`av.container.input.InputContainer`): PyAV container.
-        ...         indices (`List[int]`): List of frame indices to decode.
-        ...     Returns:
-        ...         result (np.ndarray): np array of decoded frames of shape (num_frames, height, width, 3).
-        ...     '''
-        ...     frames = []
-        ...     container.seek(0)
-        ...     start_index = indices[0]
-        ...     end_index = indices[-1]
-        ...     for i, frame in enumerate(container.decode(video=0)):
-        ...         if i > end_index:
-        ...             break
-        ...         if i >= start_index and i in indices:
-        ...             frames.append(frame)
-        ...     return np.stack([x.to_ndarray(format="rgb24") for x in frames])
-
-
-        >>> def sample_frame_indices(clip_len, frame_sample_rate, seg_len):
-        ...     '''
-        ...     Sample a given number of frame indices from the video.
-        ...     Args:
-        ...         clip_len (`int`): Total number of frames to sample.
-        ...         frame_sample_rate (`int`): Sample every n-th frame.
-        ...         seg_len (`int`): Maximum allowed index of sample's last frame.
-        ...     Returns:
-        ...         indices (`List[int]`): List of sampled frame indices
-        ...     '''
-        ...     converted_len = int(clip_len * frame_sample_rate)
-        ...     end_idx = np.random.randint(converted_len, seg_len)
-        ...     start_idx = end_idx - converted_len
-        ...     indices = np.linspace(start_idx, end_idx, num=clip_len)
-        ...     indices = np.clip(indices, start_idx, end_idx - 1).astype(np.int64)
-        ...     return indices
-
-
-        >>> # video clip consists of 300 frames (10 seconds at 30 FPS)
-        >>> file_path = hf_hub_download(
-        ...     repo_id="nielsr/video-demo", filename="eating_spaghetti.mp4", repo_type="dataset"
-        ... )
-        >>> container = av.open(file_path)
-
-        >>> # sample 16 frames
-        >>> indices = sample_frame_indices(clip_len=16, frame_sample_rate=1, seg_len=container.streams.video[0].frames)
-        >>> video = read_video_pyav(container, indices)
-
-        >>> image_processor = AutoImageProcessor.from_pretrained("MCG-NJU/videomae-base")
-        >>> model = VideoMAEModel.from_pretrained("MCG-NJU/videomae-base")
-
-        >>> # prepare video for the model
-        >>> inputs = image_processor(list(video), return_tensors="pt")
-
-        >>> # forward pass
-        >>> outputs = model(**inputs)
-        >>> last_hidden_states = outputs.last_hidden_state
-        >>> list(last_hidden_states.shape)
-        [1, 1568, 768]
-        ```"""
+        """
         output_attentions = (
             output_attentions
             if output_attentions is not None
@@ -901,28 +616,7 @@ class VideoMAEForPreTraining(VideoMAEPreTrainedModel):
             (image_size // patch_size) ** 2`.
 
         Returns:
-
-        Examples:
-        ```python
-        >>> from transformers import AutoImageProcessor, VideoMAEForPreTraining
-        >>> import numpy as np
-        >>> import torch
-
-        >>> num_frames = 16
-        >>> video = list(np.random.randint(0, 256, (num_frames, 3, 224, 224)))
-
-        >>> image_processor = AutoImageProcessor.from_pretrained("MCG-NJU/videomae-base")
-        >>> model = VideoMAEForPreTraining.from_pretrained("MCG-NJU/videomae-base")
-
-        >>> pixel_values = image_processor(video, return_tensors="pt").pixel_values
-
-        >>> num_patches_per_frame = (model.config.image_size // model.config.patch_size) ** 2
-        >>> seq_length = (num_frames // model.config.tubelet_size) * num_patches_per_frame
-        >>> bool_masked_pos = torch.randint(0, 2, (1, seq_length)).bool()
-
-        >>> outputs = model(pixel_values, bool_masked_pos=bool_masked_pos)
-        >>> loss = outputs.loss
-        ```"""
+        """
         return_dict = (
             return_dict if return_dict is not None else self.config.use_return_dict
         )
@@ -1063,6 +757,40 @@ class VideoMAEForPreTraining(VideoMAEPreTrainedModel):
         )
 
 
+class OutputLayer(nn.Module):
+    """
+    Output layer of the model
+    Based on RobertaClassificationHead:
+    https://github.com/huggingface/transformers/blob/master/src/transformers/models/roberta/modeling_roberta.py
+    """
+
+    def __init__(self, config: VideoMAEConfig):
+        super(OutputLayer, self).__init__()
+
+        self.d_model = config.hidden_size
+        self.num_classes = config.num_labels
+        self.dropout_encoder_features = config.classifier_dropout_prob
+        self.dense = nn.Linear(self.d_model, self.d_model)
+        self.dp = nn.Dropout(p=config.classifier_dropout_prob)
+        self.out_proj = nn.Linear(self.d_model, self.num_classes)
+        self.tanh = nn.Tanh()
+
+    def forward(self, x):
+        r"""
+        Args:
+            x (:obj:`torch.FloatTensor` of shape :obj:`(batch_size, hidden_size)`):
+                Sequence of hidden-states at the last layer of the model.
+        Returns:
+            :obj:`torch.FloatTensor`: Logits for each class, of shape :obj:`(batch_size, num_classes)`
+        """
+        x = self.dp(x)
+        x = self.dense(x)
+        x = torch.tanh(x)
+        x = self.dp(x)
+        x = self.out_proj(x)
+        return x
+
+
 @add_start_docstrings(
     """VideoMAE Model transformer with a video classification head on top (a linear layer on top of the average pooled hidden
     states of all tokens) e.g. for ImageNet.""",
@@ -1079,11 +807,10 @@ class VideoMAEForVideoClassification(VideoMAEPreTrainedModel):
         self.fc_norm = (
             nn.LayerNorm(config.hidden_size) if config.use_mean_pooling else None
         )
-        self.classifier = (
-            nn.Linear(config.hidden_size, config.num_labels)
-            if config.num_labels > 0
-            else nn.Identity()
-        )
+
+        self.classifier_dropout = nn.Dropout(config.classifier_dropout_prob)
+
+        self.classifier = OutputLayer(config)
 
         # Initialize weights and apply final processing
         self.post_init()
@@ -1109,83 +836,7 @@ class VideoMAEForVideoClassification(VideoMAEPreTrainedModel):
             `config.num_labels > 1` a classification loss is computed (Cross-Entropy).
 
         Returns:
-
-        Examples:
-
-        ```python
-        >>> import av
-        >>> import torch
-        >>> import numpy as np
-
-        >>> from transformers import AutoImageProcessor, VideoMAEForVideoClassification
-        >>> from huggingface_hub import hf_hub_download
-
-        >>> np.random.seed(0)
-
-
-        >>> def read_video_pyav(container, indices):
-        ...     '''
-        ...     Decode the video with PyAV decoder.
-        ...     Args:
-        ...         container (`av.container.input.InputContainer`): PyAV container.
-        ...         indices (`List[int]`): List of frame indices to decode.
-        ...     Returns:
-        ...         result (np.ndarray): np array of decoded frames of shape (num_frames, height, width, 3).
-        ...     '''
-        ...     frames = []
-        ...     container.seek(0)
-        ...     start_index = indices[0]
-        ...     end_index = indices[-1]
-        ...     for i, frame in enumerate(container.decode(video=0)):
-        ...         if i > end_index:
-        ...             break
-        ...         if i >= start_index and i in indices:
-        ...             frames.append(frame)
-        ...     return np.stack([x.to_ndarray(format="rgb24") for x in frames])
-
-
-        >>> def sample_frame_indices(clip_len, frame_sample_rate, seg_len):
-        ...     '''
-        ...     Sample a given number of frame indices from the video.
-        ...     Args:
-        ...         clip_len (`int`): Total number of frames to sample.
-        ...         frame_sample_rate (`int`): Sample every n-th frame.
-        ...         seg_len (`int`): Maximum allowed index of sample's last frame.
-        ...     Returns:
-        ...         indices (`List[int]`): List of sampled frame indices
-        ...     '''
-        ...     converted_len = int(clip_len * frame_sample_rate)
-        ...     end_idx = np.random.randint(converted_len, seg_len)
-        ...     start_idx = end_idx - converted_len
-        ...     indices = np.linspace(start_idx, end_idx, num=clip_len)
-        ...     indices = np.clip(indices, start_idx, end_idx - 1).astype(np.int64)
-        ...     return indices
-
-
-        >>> # video clip consists of 300 frames (10 seconds at 30 FPS)
-        >>> file_path = hf_hub_download(
-        ...     repo_id="nielsr/video-demo", filename="eating_spaghetti.mp4", repo_type="dataset"
-        ... )
-        >>> container = av.open(file_path)
-
-        >>> # sample 16 frames
-        >>> indices = sample_frame_indices(clip_len=16, frame_sample_rate=1, seg_len=container.streams.video[0].frames)
-        >>> video = read_video_pyav(container, indices)
-
-        >>> image_processor = AutoImageProcessor.from_pretrained("MCG-NJU/videomae-base-finetuned-kinetics")
-        >>> model = VideoMAEForVideoClassification.from_pretrained("MCG-NJU/videomae-base-finetuned-kinetics")
-
-        >>> inputs = image_processor(list(video), return_tensors="pt")
-
-        >>> with torch.no_grad():
-        ...     outputs = model(**inputs)
-        ...     logits = outputs.logits
-
-        >>> # model predicts one of the 400 Kinetics-400 classes
-        >>> predicted_label = logits.argmax(-1).item()
-        >>> print(model.config.id2label[predicted_label])
-        eating spaghetti
-        ```"""
+        """
         return_dict = (
             return_dict if return_dict is not None else self.config.use_return_dict
         )
@@ -1206,6 +857,7 @@ class VideoMAEForVideoClassification(VideoMAEPreTrainedModel):
         else:
             sequence_output = sequence_output[:, 0]
 
+        sequence_output = self.classifier_dropout(sequence_output)
         logits = self.classifier(sequence_output)
 
         loss = None

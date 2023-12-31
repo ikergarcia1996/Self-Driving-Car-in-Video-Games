@@ -20,7 +20,8 @@ test_dirs:
 hide_map_probability_train: 0.0
 hide_map_probability_validation: 0.0
 hide_map_probability_test: 0.0
-mask_ratio: 0.2
+tubelet_mask_ratio: 0.2
+image_mask_ratio: 0.2
 
 # checkpoint settings
 output_dir: models/video-classification/TEDD1104-large
@@ -35,9 +36,9 @@ metric_for_best_model: "acc_k1_macro"
 greater_is_better: true
 
 # batch size
-per_device_train_batch_size: 8
-per_device_eval_batch_size: 8
-gradient_accumulation_steps: 4
+per_device_train_batch_size: 4
+per_device_eval_batch_size: 4
+gradient_accumulation_steps: 8
 num_train_epochs: 20
 
 # optimizer settings

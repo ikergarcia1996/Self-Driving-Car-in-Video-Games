@@ -20,7 +20,8 @@ test_dirs:
 hide_map_probability_train: 0.0
 hide_map_probability_validation: 0.0
 hide_map_probability_test: 0.0
-mask_ratio: 0.2
+tubelet_mask_ratio: 0.2
+image_mask_ratio: 0.2
 
 # checkpoint settings
 output_dir: models/video-classification/TEDD1104-large_ts5

@@ -15,7 +15,7 @@
 """Image processor class for VideoMAE."""
 # Modified by Iker García-Ferrero
 # Change process function to convert list of arrays to array of arrays. This makes the code 10x faster than converting
-# list of arrays to tensor directly.
+# list of arrays to tensor directly. https://github.com/huggingface/transformers/pull/28221
 
 
 from typing import Dict, List, Optional, Union

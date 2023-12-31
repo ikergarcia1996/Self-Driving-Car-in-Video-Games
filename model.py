@@ -1,4 +1,6 @@
-from transformers import VideoMAEModel, VideoMAEConfig
+from configuration_videomae import VideoMAEConfig
+from modeling_videomae import VideoMAEModel
+
 from utils import get_trainable_parameters
 import os
 import argparse
@@ -23,6 +25,8 @@ class VideoMAEsmall:
             decoder_intermediate_size=1536,
             hidden_dropout_prob=0.1,
             attention_probs_dropout_prob=0.1,
+            hidden_act="silu",
+            classifier_dropout_prob=0.8,
         )
 
     def get_model(self):
@@ -49,6 +53,8 @@ class VideoMAEbase:
             decoder_intermediate_size=1536,
             hidden_dropout_prob=0.1,
             attention_probs_dropout_prob=0.1,
+            hidden_act="silu",
+            classifier_dropout_prob=0.8,
         )
 
     def get_model(self):
@@ -56,7 +62,7 @@ class VideoMAEbase:
         return VideoMAEModel(self.config)
 
 
-class VideoMAEbase_PS30:
+class VideoMAEbasePS30:
     def __init__(self):
         self.name = "VideoMAE-base_ps30"
         self.config = VideoMAEConfig(
@@ -75,6 +81,8 @@ class VideoMAEbase_PS30:
             decoder_intermediate_size=1536,
             hidden_dropout_prob=0.1,
             attention_probs_dropout_prob=0.1,
+            hidden_act="silu",
+            classifier_dropout_prob=0.8,
         )
 
     def get_model(self):
@@ -82,7 +90,7 @@ class VideoMAEbase_PS30:
         return VideoMAEModel(self.config)
 
 
-class VideoMAEbase_TS5:
+class VideoMAEbaseTS5:
     def __init__(self):
         self.name = "VideoMAE-base_ts5"
         self.config = VideoMAEConfig(
@@ -101,6 +109,8 @@ class VideoMAEbase_TS5:
             decoder_intermediate_size=1536,
             hidden_dropout_prob=0.1,
             attention_probs_dropout_prob=0.1,
+            hidden_act="silu",
+            classifier_dropout_prob=0.8,
         )
 
     def get_model(self):
@@ -108,7 +118,7 @@ class VideoMAEbase_TS5:
         return VideoMAEModel(self.config)
 
 
-class VideoMAEbase_PS30_TS5:
+class VideoMAEbasePS30TS5:
     def __init__(self):
         self.name = "VideoMAE-base_ps30_ts5"
         self.config = VideoMAEConfig(
@@ -127,6 +137,8 @@ class VideoMAEbase_PS30_TS5:
             decoder_intermediate_size=1536,
             hidden_dropout_prob=0.1,
             attention_probs_dropout_prob=0.1,
+            hidden_act="silu",
+            classifier_dropout_prob=0.8,
         )
 
     def get_model(self):
@@ -153,6 +165,8 @@ class VideoMAElarge:
             decoder_intermediate_size=2048,
             hidden_dropout_prob=0.1,
             attention_probs_dropout_prob=0.1,
+            hidden_act="silu",
+            classifier_dropout_prob=0.8,
         )
 
     def get_model(self):
@@ -160,7 +174,7 @@ class VideoMAElarge:
         return VideoMAEModel(self.config)
 
 
-class VideoMAElarge_TS5:
+class VideoMAElargeTS5:
     def __init__(self):
         self.name = "VideoMAE-large_ts5"
         self.config = VideoMAEConfig(
@@ -179,6 +193,8 @@ class VideoMAElarge_TS5:
             decoder_intermediate_size=2048,
             hidden_dropout_prob=0.1,
             attention_probs_dropout_prob=0.1,
+            hidden_act="silu",
+            classifier_dropout_prob=0.8,
         )
 
     def get_model(self):
@@ -186,7 +202,7 @@ class VideoMAElarge_TS5:
         return VideoMAEModel(self.config)
 
 
-class VideoMAElarge_P30:
+class VideoMAElargeP30:
     def __init__(self):
         self.name = "VideoMAE-large_ps30"
         self.config = VideoMAEConfig(
@@ -205,6 +221,8 @@ class VideoMAElarge_P30:
             decoder_intermediate_size=2048,
             hidden_dropout_prob=0.1,
             attention_probs_dropout_prob=0.1,
+            hidden_act="silu",
+            classifier_dropout_prob=0.8,
         )
 
     def get_model(self):
@@ -212,7 +230,7 @@ class VideoMAElarge_P30:
         return VideoMAEModel(self.config)
 
 
-class VideoMAElarge_PS30_TS5:
+class VideoMAElargePS30TS5:
     def __init__(self):
         self.name = "VideoMAE-large_ps30_ts5"
         self.config = VideoMAEConfig(
@@ -231,6 +249,8 @@ class VideoMAElarge_PS30_TS5:
             decoder_intermediate_size=2048,
             hidden_dropout_prob=0.1,
             attention_probs_dropout_prob=0.1,
+            hidden_act="silu",
+            classifier_dropout_prob=0.8,
         )
 
     def get_model(self):
@@ -257,6 +277,8 @@ class VideoMAExxl:
             decoder_intermediate_size=2560,
             hidden_dropout_prob=0.1,
             attention_probs_dropout_prob=0.1,
+            hidden_act="silu",
+            classifier_dropout_prob=0.8,
         )
 
     def get_model(self):
@@ -269,13 +291,13 @@ def initialize_models(output_path: str):
     for model in [
         VideoMAEsmall,
         VideoMAEbase,
-        VideoMAEbase_TS5,
-        VideoMAEbase_PS30,
-        VideoMAEbase_PS30_TS5,
+        VideoMAEbaseTS5,
+        VideoMAEbasePS30,
+        VideoMAEbasePS30TS5,
         VideoMAElarge,
-        VideoMAElarge_TS5,
-        VideoMAElarge_P30,
-        VideoMAElarge_PS30_TS5,
+        VideoMAElargeTS5,
+        VideoMAElargeP30,
+        VideoMAElargePS30TS5,
         VideoMAExxl,
     ]:
         model_cls = model()
