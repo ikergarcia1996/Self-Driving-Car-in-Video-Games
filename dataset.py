@@ -58,24 +58,29 @@ class SplitImages(object):
     Splits a sequence image file into 5 images
     """
 
-    def __call__(self, image: np.array) -> List[np.array]:
+    def __call__(self, image: np.array) -> torch.tensor:
         """
         Applies the transformation to the sequence of images.
 
         Args:
-            image (np.array): Sequence of images. Size (5, 270, 2400, 3)
+            image (np.array): Sequence of images. Size (270, 2400, 3)
 
         Returns:
-            List[np.array]: Transformed sequence of images. Size (5, 270, 480, 3)
+            torch.tensor: Transformed sequence of images. Size (5, 270, 480, 3)
         """
-
+        print(image.shape)
         width: int = int(image.shape[1] / 5)
         image1 = torch.from_numpy(image[:, 0:width, :])
+        print(image1.size())
         image2 = torch.from_numpy(image[:, width : width * 2, :])
+        print(image2.size())
         image3 = torch.from_numpy(image[:, width * 2 : width * 3, :])
+        print(image3.size())
         image4 = torch.from_numpy(image[:, width * 3 : width * 4, :])
+        print(image4.size())
         image5 = torch.from_numpy(image[:, width * 4 : width * 5, :])
-        return [image1, image2, image3, image4, image5]
+        print(image5.size())
+        return torch.stack([image1, image2, image3, image4, image5])
 
 
 class RemoveMinimap(object):
@@ -164,8 +169,9 @@ class ImageMaskingGenerator(object):
         self.seq_length = 5 // tubelet_size * 270 // patch_size * 480 // patch_size
         self.image_length = 270 // patch_size * 480 // patch_size
         self.mask_ratio = mask_ratio
+        self.tubelet_size = tubelet_size
 
-        if tubelet_size == 5:
+        if self.tubelet_size == 5:
             logging.warning(
                 "You have set mask_ratio > 0, however tubelet_size is 5. "
                 "Therefore, sequences are tokenized as a single image. "
@@ -181,6 +187,8 @@ class ImageMaskingGenerator(object):
         Returns:
             torch.tensor: Tube mask
         """
+        if self.tubelet_size > 0:
+            return torch.zeros(self.seq_length, dtype=torch.bool)
 
         bernolli_matrix: torch.tensor = torch.cat(
             ((torch.tensor([self.mask_ratio]).float()).repeat(5),),
@@ -228,23 +236,31 @@ class SequenceColorJitter(object):
         """
         INIT
 
-        :param float brightness: Probability of changing brightness (0<=brightness<=1)
-        :param float contrast: Probability of changing contrast (0<=contrast<=1)
-        :param float saturation: Probability of changing saturation (0<=saturation<=1)
-        :param float hue: Probability of changing hue (0<=hue<=1)
+        Args:
+            brightness (float): Probability of changing brightness (0<=brightness<=1)
+            contrast (float): Probability of changing contrast (0<=contrast<=1)
+            saturation (float): Probability of changing saturation (0<=saturation<=1)
+            hue (float): Probability of changing hue (0<=hue<=1)
+
         """
         self.jitter = transforms.ColorJitter(
             brightness=brightness, contrast=contrast, saturation=saturation, hue=hue
         )
 
-    def __call__(self, images: List[torch.tensor]) -> (torch.tensor, torch.tensor):
+    def __call__(self, images: torch.tensor) -> torch.tensor:
         """
         Applies the transformation to the sequence of images.
 
-        :param Dict[str, torch.tensor] sample: Sequence of images
-        :return: Dict[str, torch.tensor]- Transformed sequence of images
+        Args:
+            images (torch.tensor): Sequence of images. Size (5, 270, 480, 3)
+
+        Returns:
+            torch.tensor: Transformed sequence of images. Size (5, 270, 480, 3)
         """
+
+        images = images.permute(0, 3, 1, 2)
         images = self.jitter(images)
+        images = images.permute(0, 2, 3, 1)
         return images
 
 
@@ -401,13 +417,15 @@ class Tedd1104Dataset(Dataset):
         )
 
         model_inputs = self.image_processor(
-            images=images, input_data_format="channels_last", return_tensors="pt"
+            images=list(images), input_data_format="channels_last", return_tensors="pt"
         )
         # Remove the batch dimension
         model_inputs["pixel_values"] = model_inputs["pixel_values"][0]
 
         mask1 = self.tubelet_mask_generator()
+        print(mask1.size())
         mask2 = self.image_mask_generator()
+        print(mask2.size())
         mask = merge_masks(mask1, mask2)
 
         model_inputs["bool_masked_pos"] = mask
