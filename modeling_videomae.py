@@ -810,12 +810,12 @@ class VideoMAEForVideoClassification(VideoMAEPreTrainedModel):
 
         self.classifier_dropout = nn.Dropout(config.classifier_dropout_prob)
 
-        self.classifier = OutputLayer(config)
-        # self.classifier = (
-        #    nn.Linear(config.hidden_size, config.num_labels)
-        #    if config.num_labels > 0
-        #    else nn.Identity()
-        # )
+        # self.classifier = OutputLayer(config)
+        self.classifier = (
+            nn.Linear(config.hidden_size, config.num_labels)
+            if config.num_labels > 0
+            else nn.Identity()
+        )
 
         # Initialize weights and apply final processing
         self.post_init()
@@ -862,7 +862,7 @@ class VideoMAEForVideoClassification(VideoMAEPreTrainedModel):
         else:
             sequence_output = sequence_output[:, 0]
 
-        # sequence_output = self.classifier_dropout(sequence_output)
+        sequence_output = self.classifier_dropout(sequence_output)
         logits = self.classifier(sequence_output)
 
         loss = None
