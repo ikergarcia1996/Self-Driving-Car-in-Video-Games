@@ -68,18 +68,18 @@ class SplitImages(object):
         Returns:
             torch.tensor: Transformed sequence of images. Size (5, 270, 480, 3)
         """
-        print(image.shape)
+        # print(image.shape)
         width: int = int(image.shape[1] / 5)
         image1 = torch.from_numpy(image[:, 0:width, :])
-        print(image1.size())
+        # print(image1.size())
         image2 = torch.from_numpy(image[:, width : width * 2, :])
-        print(image2.size())
+        # print(image2.size())
         image3 = torch.from_numpy(image[:, width * 2 : width * 3, :])
-        print(image3.size())
+        # print(image3.size())
         image4 = torch.from_numpy(image[:, width * 3 : width * 4, :])
-        print(image4.size())
+        # print(image4.size())
         image5 = torch.from_numpy(image[:, width * 4 : width * 5, :])
-        print(image5.size())
+        # print(image5.size())
         return torch.stack([image1, image2, image3, image4, image5])
 
 
@@ -187,7 +187,7 @@ class ImageMaskingGenerator(object):
         Returns:
             torch.tensor: Tube mask
         """
-        if self.tubelet_size > 0:
+        if self.tubelet_size > 1:
             return torch.zeros(self.seq_length, dtype=torch.bool)
 
         bernolli_matrix: torch.tensor = torch.cat(
@@ -423,12 +423,13 @@ class Tedd1104Dataset(Dataset):
         model_inputs["pixel_values"] = model_inputs["pixel_values"][0]
 
         mask1 = self.tubelet_mask_generator()
-        print(mask1.size())
+        # print(mask1.size())
         mask2 = self.image_mask_generator()
-        print(mask2.size())
+        # print(mask2.size())
         mask = merge_masks(mask1, mask2)
 
         model_inputs["bool_masked_pos"] = mask
+
         if self.task == "video-classification":
             model_inputs["labels"] = torch.tensor(y, dtype=torch.long)
 

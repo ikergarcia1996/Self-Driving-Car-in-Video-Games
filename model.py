@@ -26,7 +26,7 @@ class VideoMAEsmall:
             hidden_dropout_prob=0.1,
             attention_probs_dropout_prob=0.1,
             hidden_act="silu",
-            classifier_dropout_prob=0.2,
+            classifier_dropout_prob=0.8,
         )
 
     def get_model(self):
@@ -54,7 +54,7 @@ class VideoMAEbase:
             hidden_dropout_prob=0.1,
             attention_probs_dropout_prob=0.1,
             hidden_act="silu",
-            classifier_dropout_prob=0.2,
+            classifier_dropout_prob=0.8,
         )
 
     def get_model(self):
@@ -82,7 +82,7 @@ class VideoMAEbasePS30:
             hidden_dropout_prob=0.1,
             attention_probs_dropout_prob=0.1,
             hidden_act="silu",
-            classifier_dropout_prob=0.2,
+            classifier_dropout_prob=0.8,
         )
 
     def get_model(self):
@@ -110,7 +110,7 @@ class VideoMAEbaseTS5:
             hidden_dropout_prob=0.1,
             attention_probs_dropout_prob=0.1,
             hidden_act="silu",
-            classifier_dropout_prob=0.2,
+            classifier_dropout_prob=0.8,
         )
 
     def get_model(self):
@@ -138,7 +138,7 @@ class VideoMAEbasePS30TS5:
             hidden_dropout_prob=0.1,
             attention_probs_dropout_prob=0.1,
             hidden_act="silu",
-            classifier_dropout_prob=0.2,
+            classifier_dropout_prob=0.8,
         )
 
     def get_model(self):
@@ -166,7 +166,7 @@ class VideoMAElarge:
             hidden_dropout_prob=0.1,
             attention_probs_dropout_prob=0.1,
             hidden_act="silu",
-            classifier_dropout_prob=0.2,
+            classifier_dropout_prob=0.8,
         )
 
     def get_model(self):
@@ -194,7 +194,7 @@ class VideoMAElargeTS5:
             hidden_dropout_prob=0.1,
             attention_probs_dropout_prob=0.1,
             hidden_act="silu",
-            classifier_dropout_prob=0.2,
+            classifier_dropout_prob=0.8,
         )
 
     def get_model(self):
@@ -222,7 +222,7 @@ class VideoMAElargeP30:
             hidden_dropout_prob=0.1,
             attention_probs_dropout_prob=0.1,
             hidden_act="silu",
-            classifier_dropout_prob=0.2,
+            classifier_dropout_prob=0.8,
         )
 
     def get_model(self):
@@ -250,7 +250,7 @@ class VideoMAElargePS30TS5:
             hidden_dropout_prob=0.1,
             attention_probs_dropout_prob=0.1,
             hidden_act="silu",
-            classifier_dropout_prob=0.2,
+            classifier_dropout_prob=0.8,
         )
 
     def get_model(self):
@@ -278,7 +278,7 @@ class VideoMAExxl:
             hidden_dropout_prob=0.1,
             attention_probs_dropout_prob=0.1,
             hidden_act="silu",
-            classifier_dropout_prob=0.2,
+            classifier_dropout_prob=0.8,
         )
 
     def get_model(self):
